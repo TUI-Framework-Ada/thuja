@@ -4,7 +4,7 @@ with Ada.Text_IO;
 package body thuja is 
    procedure log is 
    begin
-      Ada.Text_IO.Put_Line ("Hello from thuja");
+      Ada.Text_IO.Put_Line ("Hello from wip");
    end;
 
 end thuja;
