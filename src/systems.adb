@@ -22,18 +22,54 @@ package body Systems is
 
    --  Built-in systems
 --  procedure ExampleSystem(Entity_List: Entities) is
---     Search_Component_IDs: Component_ID_Vector.Vector
+--     Search_Component_IDs : Component_ID_Vector.Vector
 --       := "Component1" & "Component2";
---     Matched_Entities: Entity_ID_Vector.Vector
+--     Matched_Entities : Entity_ID_Vector.Vector
 --       := Entity_List.Get_Entities_Matching (Search_Component_IDs);
---     Component_List: Components_Access;
---     Component: ExampleComponent;
+--     Component_List : Components_Access;
+--     Component : ExampleComponent;
 --  begin
 --     for Entity_ID of Matched_Entities loop
 --        Component_List := Entity_List.Get_Entity_Components (Entity_ID);
---        Component := Component1(Component_List.Get_Component ("Component1"));
+--        Component := Component1 (
+--           Component_List.Get_Component ("Component1")
+--                                );
 --     end loop;
 --  end ExampleSystem;
+
+   procedure WidgetBackgroundSystem (Entity_List : Entities) is
+      Search_Component_IDs : Component_ID_Vector.Vector
+        := "WidgetComponent" & "BackgroundColorComponent";
+      Matched_Entities : Entity_ID_Vector.Vector
+        := Entity_List.Get_Entities_Matching (Search_Component_IDs);
+      Component_List : Components_Access;
+      Widget_C : WidgetComponent;
+      BGColor_C : BackgroundColorComponent;
+      Pos_W : Positive;
+      Pos_H : Positive;
+      BGColor : Color;
+      Px : Pixel;
+   begin
+      for Entity_ID of Matches_Entities loop
+         Component_List := Entity_List.Get_Entity_Components (Entity_ID);
+         Widget_C := WidgetComponent (
+            Component_List.Get_Component ("WidgetComponent")
+                                     );
+         BGColor_C := BackgroundColorComponent (
+            Component_List.Get_Component ("BackgroundColorComponent")
+                                               );
+         BGColor := BGColor_C.Background_Color;
+
+         for Pos_W in Positive'First .. Widget_C.Size_Width loop
+            for Pos_H in Positive'First .. Widget_C.Size_Height loop
+               Px := Widget_C.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
+
+               Px.Character := ' ';
+               Px.Background_Color := BGColor;
+            end loop;
+         end loop;
+      end loop;
+   end WidgetBackgroundSystem;
 
    procedure TextRenderSystem (Entity_List : Entities) is
       Search_Component_IDs : Component_ID_Vector.Vector
