@@ -63,10 +63,13 @@ package body Systems is
 
          for Pos_W in Positive'First .. Widget_C.Size_Width loop
             for Pos_H in Positive'First .. Widget_C.Size_Height loop
+               --  returns a copy of the buffer's pixel
                Px := Widget_C.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
-
+               --  edit values of the copy
                Px.Character := ' ';
                Px.Background_Color := BGColor;
+               --  pass back to update in the buffer
+               Widget_C.Render_Buffer.Set_Pixel (Pos_W, Pos_H, Px);
             end loop;
          end loop;
       end loop;
@@ -104,6 +107,7 @@ package body Systems is
             Px := Widget_C.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
             Px.Character := Char;
             Px.Text_Color := Text_C.Text_Color;
+            Widget_C.Render_Buffer.Set_Pixel (Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
@@ -130,17 +134,13 @@ package body Systems is
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in Positive'First .. Parent.Size_Width loop
             for Pos_H in Positive'First .. Parent.Size_Height loop
+               --  Might need to be changed to Get_Pixel(Render_Buffer, ...)
                Parent_Pixel := Parent.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
-               --  Might need to be changed to Get_Pixel(Framebuffer, ...)
-               --    if subprograms cannot be run upon non-tagged records
-               FB_Pixel := Framebuffer.Get_Pixel (
-                  Parent.Position_X + Pos_W - 1, Parent.Position_Y + Pos_H - 1
-                                                 );
                --  Copy values from parent to framebuffer
-               FB_Pixel.Character := Parent_Pixel.Character;
-               FB_Pixel.Text_Color := Parent_Pixel.Text_Color;
-               FB_Pixel.Background_Color := Parent_Pixel.Background_Color;
-               FB_Pixel.Is_Bold := Parent_Pixel.Is_Bold;
+               Framebuffer.Set_Pixel (
+                  Parent.Position_X + Pos_W - 1, Parent.Position_Y + Pos_H - 1,
+                  Parent_Pixel
+                                     );
             end loop;
          end loop;
 
@@ -235,18 +235,12 @@ package body Systems is
                if RI.Framebuffer.Get_Pixel (X, Y) /=
                  RI.Backbuffer.Get_Pixel (X, Y)
                then
-                  --  Draw to terminal
-                  Ada.Wide_Wide_Text_IO.Put (ConvertWW (
-                     RI.Framebuffer.Get_Pixel (X, Y), Y, X)
-                                            );
                   --  Fetch buffer pixels
                   FB_Pixel := RI.Framebuffer.Get_Pixel (X, Y);
-                  BB_Pixel := RI.Backbuffer.Get_Pixel (X, Y);
+                  --  Draw to terminal
+                  Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
                   --  Copy values into backbuffer's pixel
-                  BB_Pixel.Character := FB_Pixel.Character;
-                  BB_Pixel.Text_Color := FB_Pixel.Character;
-                  BB_Pixel.Background_Color := FB_Pixel.Background_Color;
-                  BB_Pixel.Is_Bold := FB_Pixel.Is_Bold;
+                  RI.Backbuffer.Set_Pixel (X, Y, FB_Pixel);
                end if;
             end loop;
          end loop;
