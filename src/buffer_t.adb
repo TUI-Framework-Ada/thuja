@@ -12,8 +12,8 @@ package body Buffer_T is
                     return Buffer_T
    is
 
-      -- Declares variable to be returned using Buffer
-      New_Buffer : Buffer;                
+      -- Declares variable to be returned using Buffer_T
+      New_Buffer : Buffer_T;                
 
       -- Defines the dimensions for the allocated array
       subtype Actual_X_Index is TUI_Width range 1 .. Width;
@@ -35,14 +35,14 @@ package body Buffer_T is
    end Create;
 
    -- Destructor - reclaims memory allocated for the 2D array of pixels
-   procedure Destroy (B : in out Buffer) is
+   procedure Destroy (B : in out Buffer_T) is
    begin
       -- Pointer of B.Data to null, detatches Buffer_T record's data from array it was pointed to
       B.Data := null;
    end Destroy;
 
    -- Writes a new pixel value into the buffer at the (X,Y) coordinates
-   procedure Set_Pixel (B : in out Buffer;
+   procedure Set_Pixel (B : in out Buffer_T;
                         X : in TUI_Width;
                         Y : in TUI_Height;
                         P : in Pixel)
@@ -53,7 +53,7 @@ package body Buffer_T is
    end Set_Pixel;
 
    -- Reads and returns the pixel value from the buffer at the (X, Y) coordinates
-   function Get_Pixel (B : in Buffer;
+   function Get_Pixel (B : in Buffer_T;
                        X : in TUI_Width;
                        Y : in TUI_Height)
                        return Pixel
