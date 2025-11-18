@@ -29,7 +29,7 @@ package Buffer_T is
    -- Accessor - Observes state of Pixel
    function Get_Pixel (B : in Buffer_T;
                        X : TUI_Width;
-                       Y : TUI_Height;)
+                       Y : TUI_Height)
                        return Pixel;
 
 private
