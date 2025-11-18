@@ -9,25 +9,25 @@ package Buffer_T is
    type TUI_Width is new Integer range 1 .. 50;
    type TUI_ Height is new Integer range 1 .. 50;
 
-   -- Declares a private Buffer object
-   type Buffer is private;
+   -- Declares a private Buffer_T object
+   type Buffer_T is private;
 
    -- Constructor to create and initialize buffer instance
    function create (Width : in TUI_Width;
                      Height: in TUI_Height)
-                     return Buffer;
+                     return Buffer_T;
 
    -- Destructor
-   procedure Destroy (B : in out Buffer);
+   procedure Destroy (B : in out Buffer_T);
 
    -- Mutator - Changes state of Pixel
-   procedure Set_Pixel (B : in out Buffer;
+   procedure Set_Pixel (B : in out Buffer_T;
                         X : in TUI_Width;
                         Y : in TUI_Height;
                         P : in Pixel);
 
    -- Accessor - Observes state of Pixel
-   function Get_Pixel (B : in Buffer;
+   function Get_Pixel (B : in Buffer_T;
                        X : TUI_Width;
                        Y : TUI_Height;)
                        return Pixel;
@@ -41,8 +41,8 @@ private
    -- Defines two-dimensional array of type Pixel that holds the pixels
    type Pixel_Array is array (X_Index, Y_Index) of Pixel;
 
-   -- Buffer is a record that holds the pixel data and its size
-   type Buffer is record
+   -- Buffer_T is a record that holds the pixel data and its size
+   type Buffer_T is record
       Width : TUI_Width;
       Height : TUI_Height;
       Data : access Pixel_Array;
