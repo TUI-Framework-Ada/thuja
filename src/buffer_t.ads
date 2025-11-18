@@ -7,7 +7,7 @@ package Buffer_T is
 
    -- Maximum resolution for the display (Change later)
    type TUI_Width is new Integer range 1 .. 50;
-   type TUI_ Height is new Integer range 1 .. 50;
+   type TUI_Height is new Integer range 1 .. 50;
 
    -- Declares a private Buffer_T object
    type Buffer_T is private;
