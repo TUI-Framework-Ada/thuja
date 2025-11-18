@@ -131,6 +131,8 @@ package body Systems is
          for Pos_W in Positive'First .. Parent.Size_Width loop
             for Pos_H in Positive'First .. Parent.Size_Height loop
                Parent_Pixel := Parent.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
+               --  Might need to be changed to Get_Pixel(Framebuffer, ...)
+               --    if subprograms cannot be run upon non-tagged records
                FB_Pixel := Framebuffer.Get_Pixel (
                   Parent.Position_X + Pos_W - 1, Parent.Position_Y + Pos_H - 1
                                                  );
