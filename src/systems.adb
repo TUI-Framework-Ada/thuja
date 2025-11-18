@@ -1,11 +1,12 @@
 with Ada.Characters.Conversions;
 with Ada.Wide_Wide_Text_IO;
 --  Entities and Components classes
-with ECS; use ECS;
+--  with ECS; use ECS;
 --  Implemented components (e.g. RenderInfo, WidgetComponent, etc.)
-with ComponentsImpl; use ComponentsImpl;
+--  with ComponentsImpl; use ComponentsImpl;
 --  Helper types (e.g. Buffer_T, Pixel, Color, etc.)
-with Helpers; use Helpers;
+--  with Helpers; use Helpers;
+with Buffer_T; use Buffer_T;
 
 package body Systems is
    --  Making some local type stuff, should be moved out of Systems later
