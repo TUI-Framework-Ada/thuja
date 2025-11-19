@@ -1,4 +1,5 @@
 with Ada.Strings.Unbounded;
+with Buffer_T;
 
 package Full_Component is
 
@@ -15,6 +16,7 @@ package Full_Component is
 
    --  Example color types, remove these later once Color and Pixel are pushed
    type Color is (Red, Green, Blue);
+   type Color_Ptr is access Color;
 
 
 
@@ -25,8 +27,8 @@ package Full_Component is
    type Render_Info_Component_T is new Component_T with record
 
       --  Data Fields
-      BackBuffer      : Buffer_T;
-      FrameBuffer     : Buffer_T;
+      BackBuffer      : Buffer_T.Buffer_T;
+      FrameBuffer     : Buffer_T.Buffer_T;
       Terminal_Width  : Integer;
       Terminal_Height : Integer;
 
@@ -47,7 +49,7 @@ package Full_Component is
       Has_Focus  : Boolean := False; --  Set to false as all widgets cannot be in focus at
       --  same time
 
-      Render_Buffer : Buffer_T; --  The buffer the widget renders its contents to
+      Render_Buffer : Buffer_T.Buffer_T; --  The buffer the widget renders its contents to
       Children      : Entity_ID_Array (1 .. 0); --  Flexible array for children widgets, initial length 0
 
    end record;
