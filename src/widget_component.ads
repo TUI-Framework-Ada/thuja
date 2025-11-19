@@ -1,3 +1,6 @@
+with Component_T;
+use Component_T;
+
 package Widget_Component is
 
    -- Dining types for identifiers
@@ -13,7 +16,7 @@ private
    -- indicates unconstrained array
    type Entity_ID_Array is array (Positive range <>) of Entity_ID;
 
-   type Widget_Component_T is limited record
+   type Widget_Component_T is new Component_T with record
 
       -- Position and Size
       Position_X : Integer := 0; -- Just set integers to default 0 values?
