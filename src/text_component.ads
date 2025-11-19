@@ -1,15 +1,16 @@
 with Component_T;
-use Component_T;
+with Ada.Strings.Unbounded;
 
 package Text_Component is
+
+   package SU renames Ada.Strings.Unbounded;
 
    type Color is (Red, Green, Blue); -- Example color types
 
    -- Define data fields with public access
-   type Text_Component_T is new Component_T with record
+   type Text_Component_T is new Component_T.Component_T with record
 
-      Text      : String(1 .. 256); -- Fixed size string (Should this not be fixed, use
-      -- unbounded string)?
+      Text      : SU.Unbounded_String; --  Unbounded string
       Text_Color : Color;
 
    end record;

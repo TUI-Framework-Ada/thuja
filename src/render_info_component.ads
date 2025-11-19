@@ -1,9 +1,8 @@
 with Component_T;
-use Component_T;
 
 package Render_Info_Component is
 
-   type Render_Info_Component_T is new Component_T with record
+   type Render_Info_Component_T is new Component_T.Component_T with record
 
       -- Data Fields
       BackBuffer      : Buffer_T;
