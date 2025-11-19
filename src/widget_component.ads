@@ -6,12 +6,6 @@ package Widget_Component is
    -- Dining types for identifiers
    type Entity_ID is range 0 .. 99; -- Example ID (Change later)
 
-   type Buffer_T is private; -- Defines type for render buffer
-
-   type Widget_Component_T is limited private;
-
-private
-
    -- Defines a type within the record to hold a list of child entity IDs "<>"
    -- indicates unconstrained array
    type Entity_ID_Array is array (Positive range <>) of Entity_ID;
