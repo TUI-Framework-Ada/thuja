@@ -22,7 +22,7 @@ package Full_Component is
    type Component_T is abstract tagged limited null record;
 
    --  RenderInfoComponent
-   type Render_Info_Component_T is new Component_T.Component_T with record
+   type Render_Info_Component_T is new Component_T with record
 
       --  Data Fields
       BackBuffer      : Buffer_T;
@@ -33,7 +33,7 @@ package Full_Component is
    end record;
 
    --  WidgetComponent
-   type Widget_Component_T is new Component_T.Component_T with record
+   type Widget_Component_T is new Component_T with record
 
       -- Position and Size
       Position_X : Integer := 0; --  Just set integers to default 0 values?
@@ -53,7 +53,7 @@ package Full_Component is
    end record;
 
    --  TextComponent
-   type Text_Component_T is new Component_T.Component_T with record
+   type Text_Component_T is new Component_T with record
 
       Text      : SU.Unbounded_String; --  Unbounded string
       Text_Color : Color_Ptr; --  Color reference
