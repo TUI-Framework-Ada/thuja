@@ -1,20 +1,54 @@
 package graphics is 
 
    type u8 is mod 2**8 with size => 8;
-   type Color is record 
+   type Color_t is record 
       Red : u8 := 0;
       Green : u8 := 0;
       Blue : u8 := 0;
    end record;
 
-   Black : constant Color := (0,0,0);
-   White : constant Color := (255,255,255);
-   Red : Color := (Red => 255, Green => 0, Blue => 0);
+   ------------------------------------------------------------
+   --  STANDARD COLOR PALETTE
+   ------------------------------------------------------------
 
-   type Pixel is record
+   Black        : constant Color_t := (0,   0,   0);
+   White        : constant Color_t := (255, 255, 255);
+   Gray         : constant Color_t := (128, 128, 128);
+   Silver       : constant Color_t := (192, 192, 192);
+   Maroon       : constant Color_t := (128, 0,   0);
+   Red          : constant Color_t := (255, 0,   0);
+   Olive        : constant Color_t := (128, 128, 0);
+   Yellow       : constant Color_t := (255, 255, 0);
+   Green        : constant Color_t := (0,   128, 0);
+   Lime         : constant Color_t := (0,   255, 0);
+   Teal         : constant Color_t := (0,   128, 128);
+   Cyan         : constant Color_t := (0,   255, 255);
+   Navy         : constant Color_t := (0,   0,   128);
+   Blue         : constant Color_t := (0,   0,   255);
+   Purple       : constant Color_t := (128, 0,   128);
+   Magenta      : constant Color_t := (255, 0,   255);
+   Orange       : constant Color_t := (255, 165, 0);
+   Brown        : constant Color_t := (165, 42,  42);
+   Chocolate    : constant Color_t := (210, 105, 30);
+   Gold         : constant Color_t := (255, 215, 0);
+   Pink         : constant Color_t := (255, 192, 203);
+   Hot_Pink     : constant Color_t := (255, 105, 180);
+   Light_Blue   : constant Color_t := (173, 216, 230);
+   Sky_Blue     : constant Color_t := (135, 206, 235);
+   Deep_Sky_Blue: constant Color_t := (0,   191, 255);
+   Steel_Blue   : constant Color_t := (70,  130, 180);
+   Violet       : constant Color_t := (238, 130, 238);
+   Indigo       : constant Color_t := (75,  0,   130);
+   Turquoise    : constant Color_t := (64,  224, 208);
+   Spring_Green : constant Color_t := (0,   255, 127);
+   Chartreuse   : constant Color_t := (127, 255, 0);
+   Forest_Green : constant Color_t := (34,  139, 34);
+
+
+   type Pixel_t is record
       Char             : Character   := ' ';
-      Char_Color       : Color := Black;
-      Background_Color : Color := White;
+      Char_Color       : Color       := White;
+      Background_Color : Color       := Black;
       Is_Bold          : Boolean     := False;
    end record;
 
