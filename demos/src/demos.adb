@@ -24,4 +24,3 @@ begin
      ("After destroy: E1 alive? "
        & Boolean'Image (Entities.Is_Alive (E1)));
 end Demos;
-
