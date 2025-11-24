@@ -1,58 +1,80 @@
---Vector-based implementation of entity management
-with Ada.Containers.Vectors;
+with Ada.Strings.Hash;
+with Ada.Containers.Indefinite_Hashed_Maps;
 
 package body Entities is
 
-   -- Use Natural for IDs but Positive for vector indexes.
-   -- Think of it as the bank for Widget ID's.
-   package Bool_Vector is new Ada.Containers.Vectors
-     (Index_Type   => Positive,
-      Element_Type => Boolean);
-
-   Alive   : Bool_Vector.Vector; -- Tricks which entities are alive.
-   Next_Id : Entity_Id := 1; -- Next available entity ID.
-
-   -- Creates a new entity and returns its ID.
-   function Create return Entity_Id is
-      Id : constant Entity_Id := Next_Id;
+   ------------------------------------------------------------------
+   -- HASH FUNCTION FOR ENTITY IDS
+   ------------------------------------------------------------------
+   -- Added was forgoetten from UML: Entity_Components : HashMap<Entity_ID, *Components>
+   function Hash_Id (Key : Entity_Id) return Ada.Containers.Hash_Type is
    begin
-      -- Extend container until index Id exists
-      -- If Id > Last_Index, that entity was never created.
-      -- Ensure the vector is large enough.
-      while Alive.Last_Index < Positive(Id) loop
-         Alive.Append (False);
+      return Ada.Strings.Hash (Key);
+   end Hash_Id;
+
+   package Entity_Map is new Ada.Containers.Indefinite_Hashed_Maps
+     (Key_Type        => Entity_Id,
+      Element_Type    => Components_Access,
+      Hash            => Hash_Id,
+      Equivalent_Keys => "=");
+
+   Entity_Components : Entity_Map.Map; -- Store components in a map rather than bools
+
+   ---------------------------------------
+   -- Add_Entity
+   ---------------------------------------
+   function Add_Entity (Id : Entity_Id) return Components_Access is
+      New_Components : Components_Access := new Components;
+   begin
+      if Entity_Components.Contains (Id) then
+         raise Program_Error with "Entity already exists: " & Id; --Prevent duplicates
+      end if;
+
+      Entity_Components.Insert (Id, New_Components); -- Add new entity with empty components
+      return New_Components;
+   end Add_Entity;
+
+   ---------------------------------------
+   -- Remove_Entity
+   ---------------------------------------
+   procedure Remove_Entity (Id : Entity_Id) is
+   begin
+      if Entity_Components.Contains (Id) then
+         Entity_Components.Delete (Id);
+      end if;
+   end Remove_Entity;
+
+   ---------------------------------------
+   -- Get_Entity_Components
+   ---------------------------------------
+   function Get_Entity_Components (Id : Entity_Id)
+      return Components_Access
+   is
+   begin
+      if Entity_Components.Contains (Id) then
+         return Entity_Components.Element (Id);
+      else
+         return null;
+      end if;
+   end Get_Entity_Components;
+
+   ---------------------------------------
+   -- Get_Entities_Matching
+   ---------------------------------------
+   function Get_Entities_Matching
+     (Required : Ada.Containers.Indefinite_Vectors.Vector)
+      return Ada.Containers.Indefinite_Vectors.Vector
+   is
+      Result : Ada.Containers.Indefinite_Vectors.Vector;
+   begin
+      -- Placeholder for ECS logic
+      -- This would test each entity's Components against Required list
+
+      for Cursor in Entity_Components.Iterate loop
+         Result.Append (Entity_Map.Key (Cursor));
       end loop;
 
-      Alive.Replace_Element (Positive(Id), True);
+      return Result;
+   end Get_Entities_Matching;
 
-      Next_Id := Next_Id + 1; -- Increment for next entity.
-      return Id;
-   end Create;
-
-   -- Destroy a widget by marking it as not alive.
-   procedure Destroy (Id : Entity_Id) is
-   begin
-
-   -- Only modify the vector if the entity index exists.
-   -- If Id > Last_Index, that entity was never created.
-
-      if Positive(Id) <= Alive.Last_Index then
-         Alive.Replace_Element (Positive(Id), False); --Marks Dead
-      end if;
-   end Destroy;
-
-   -- Is_Alive
-   function Is_Alive (Id : Entity_Id) return Boolean is
-   begin
-
-   -- Check if the entity index exists.
-   -- If it does, return the stored Boolean.
-   -- Should at somepoint prevent renderer from drawing deleted widgets.
-
-      if Positive(Id) <= Alive.Last_Index then
-         return Alive.Element (Positive(Id));
-      else
-         return False;
-      end if;
-   end Is_Alive;
 end Entities;
