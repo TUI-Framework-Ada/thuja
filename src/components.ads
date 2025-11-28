@@ -1,7 +1,7 @@
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
 
-package Full_Component is
+package Components is
 
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
@@ -58,4 +58,4 @@ package Full_Component is
 
    end record;
 
-end Full_Component;
+end Components;
