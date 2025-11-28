@@ -17,7 +17,7 @@ package Components is
 
 
    --  Abstract component superclass
-   type Component_T is abstract tagged limited null record;
+   type Component_T is abstract tagged null record;
 
    --  RenderInfoComponent
    type Render_Info_Component_T is new Component_T with record
