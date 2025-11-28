@@ -15,7 +15,7 @@ project Thuja is
    for Library_Kind use Library_Type;
 
    package Compiler is
-      for Default_Switches ("Ada") use Thuja_Config.Ada_Compiler_Switches;
+      for Default_Switches ("Ada") use Thuja_Config.Ada_Compiler_Switches & ("-gnat2022");
    end Compiler;
 
    package Binder is
