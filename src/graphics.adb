@@ -25,7 +25,7 @@ package body Graphics is
    procedure Set_Buffer_Pixel (B : in out Buffer_T;
                                X : in TUI_Width;
                                Y : in TUI_Height;
-                               P : in Pixel)
+                               P : in Pixel_t)
    is
    begin
       -- Writes new pixel into buffer "P" being the value Pixel
@@ -36,7 +36,7 @@ package body Graphics is
    function Get_Buffer_Pixel (B : in Buffer_T;
                               X : in TUI_Width;
                               Y : in TUI_Height)
-                              return Pixel
+                              return Pixel_t
    is
    begin
       -- Returns value read from the array

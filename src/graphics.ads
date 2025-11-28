@@ -47,8 +47,8 @@ package graphics is
 
    type Pixel_t is record
       Char             : Character   := ' ';
-      Char_Color       : Color       := White;
-      Background_Color : Color       := Black;
+      Char_Color       : Color_t     := White;
+      Background_Color : Color_t     := Black;
       Is_Bold          : Boolean     := False;
    end record;
 
@@ -57,7 +57,7 @@ package graphics is
    type TUI_Height is new Integer range 1 .. 50;
 
    --  Defines two-dimensional array of type Pixel that holds the pixels
-   type Pixel_Array is array (TUI_Width, TUI_Height) of Pixel;
+   type Pixel_Array is array (TUI_Width, TUI_Height) of Pixel_t;
    type Pixel_Array_Ptr is access Pixel_Array;
 
    -- Buffer_T is a record that holds the pixel data and its size
@@ -77,12 +77,12 @@ package graphics is
    procedure Set_Buffer_Pixel (B : in out Buffer_T;
                                X : in TUI_Width;
                                Y : in TUI_Height;
-                               P : in Pixel);
+                               P : in Pixel_t);
 
    --  Accessor - Observes state of Pixel
    function Get_Buffer_Pixel (B : in Buffer_T;
                               X : in TUI_Width;
                               Y : in TUI_Height)
-                              return Pixel;
+                              return Pixel_t;
 
 end graphics;
