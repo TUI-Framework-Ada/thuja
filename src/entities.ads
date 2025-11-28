@@ -1,30 +1,35 @@
 with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Containers.Indefinite_Vectors;
+with ECS; use ECS;
 
 package Entities is
 
    type Entity_Id is new String; -- -- UML requires Entity_ID to be String, not Natural (Corrected)
    type Component_Id is new String; -- Component identifiers (for system queries later)
 
-   type Components is tagged private; -- Base type for all component data
-   type Components_Access is access all Components; -- Easy access type for component storage
+   function Hash_Id (Key : Entity_Id) return Ada.Containers.Hash_Type;
+
+   package Entity_ID_Vector is new
+     Ada.Containers.Indefinite_Vectors
+       (Index_Type => Natural,
+        Element_Type => Entity_Id);
 
    -- Add / Remove UML
-   function Add_Entity (Id : Entity_Id) return Components_Access;
+   function Add_Entity (Id : Entity_Id) return Components_Ptr;
    procedure Remove_Entity (Id : Entity_Id);
 
-   
-   
-   function Get_Entity_Components (Id : Entity_Id) return Components_Access; -- UML Get components for an entity
+   function Get_Entity_Components (Id : Entity_Id) return Components_Ptr; -- UML Get components for an entity
 
    function Get_Entities_Matching -- UML Get all entities with matching components
-     (Required : Ada.Containers.Indefinite_Vectors.Vector)
-      return Ada.Containers.Indefinite_Vectors.Vector;
+     (Required : Component_ID_Vector.Vector)
+      return Entity_ID_Vector.Vector;
 
-private
+   package Entity_Map is new Ada.Containers.Indefinite_Hashed_Maps
+     (Key_Type        => Entity_Id,
+      Element_Type    => Components_Ptr,
+      Hash            => Hash_Id,
+      Equivalent_Keys => "=");
 
-   type Components is tagged record
-   -- Placeholder for Position, Render, Input, etc.
-      null;
-   end record;
+   Entity_Components : Entity_Map.Map; -- Store components in a map rather than bools
 
 end Entities;

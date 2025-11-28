@@ -1,5 +1,4 @@
 with Ada.Strings.Hash;
-with Ada.Containers.Indefinite_Hashed_Maps;
 
 package body Entities is
 
@@ -9,25 +8,17 @@ package body Entities is
    -- Added was forgoetten from UML: Entity_Components : HashMap<Entity_ID, *Components>
    function Hash_Id (Key : Entity_Id) return Ada.Containers.Hash_Type is
    begin
-      return Ada.Strings.Hash (Key);
+      return Ada.Strings.Hash (String (Key));
    end Hash_Id;
-
-   package Entity_Map is new Ada.Containers.Indefinite_Hashed_Maps
-     (Key_Type        => Entity_Id,
-      Element_Type    => Components_Access,
-      Hash            => Hash_Id,
-      Equivalent_Keys => "=");
-
-   Entity_Components : Entity_Map.Map; -- Store components in a map rather than bools
 
    ---------------------------------------
    -- Add_Entity
    ---------------------------------------
-   function Add_Entity (Id : Entity_Id) return Components_Access is
-      New_Components : Components_Access := new Components;
+   function Add_Entity (Id : Entity_Id) return Components_Ptr is
+      New_Components : constant Components_Ptr := new Components;
    begin
       if Entity_Components.Contains (Id) then
-         raise Program_Error with "Entity already exists: " & Id; --Prevent duplicates
+         raise Program_Error with "Entity already exists: " & String (Id); --Prevent duplicates
       end if;
 
       Entity_Components.Insert (Id, New_Components); -- Add new entity with empty components
@@ -48,7 +39,7 @@ package body Entities is
    -- Get_Entity_Components
    ---------------------------------------
    function Get_Entity_Components (Id : Entity_Id)
-      return Components_Access
+      return Components_Ptr
    is
    begin
       if Entity_Components.Contains (Id) then
@@ -62,10 +53,10 @@ package body Entities is
    -- Get_Entities_Matching
    ---------------------------------------
    function Get_Entities_Matching
-     (Required : Ada.Containers.Indefinite_Vectors.Vector)
-      return Ada.Containers.Indefinite_Vectors.Vector
+     (Required : Component_ID_Vector.Vector)
+      return Entity_ID_Vector.Vector
    is
-      Result : Ada.Containers.Indefinite_Vectors.Vector;
+      Result : Entity_ID_Vector.Vector;
    begin
       -- Placeholder for ECS logic
       -- This would test each entity's Components against Required list

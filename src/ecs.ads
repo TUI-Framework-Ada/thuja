@@ -1,4 +1,5 @@
 with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings;
 with Ada.Strings.Hash;
 with Graphics; use Graphics;
@@ -6,18 +7,10 @@ with Components; use Components;
 
 package ECS is
 
-   --  debug for testing compilation
-
-   --  abstract superclass Component_T
--- type Component_T is abstract tagged null record;
-   --  example subclass component
--- type ClickCounterComponent is new Component_T with record
---    No_Of_Clicks : Integer := 0;
--- end record;
-   --  public Component_T access type (should be defined in a common place)
--- type Component_T_Ptr is access Component_T;
-
-   --  end debug for testing compilation
+   package Component_ID_Vector is new
+     Ada.Containers.Indefinite_Vectors
+       (Index_Type => Natural,
+        Element_Type => String);
 
    package Component_Map_Pkg is new
      Ada.Containers.Indefinite_Hashed_Maps
@@ -31,7 +24,7 @@ package ECS is
    type Components is record
       Components_Map : Component_Map;
    end record;
-   type Components_Ptr is access Components;
+   type Components_Ptr is access all Components;
 
    procedure Add_Component (Self : in out Components;
                             Component_ID : in String;
