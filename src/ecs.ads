@@ -36,4 +36,7 @@ package ECS is
    function Get_Component (Self : in Components;
                            Component_ID : in String) return Component_T'Class;
 
+   function Has_Component (Self : in Components;
+                           Component_ID : in String) return Boolean;
+
 end ECS;

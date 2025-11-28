@@ -20,4 +20,10 @@ package body ECS is
       return Self.Components_Map (Component_ID);
    end Get_Component;
 
+   function Has_Component (Self : in Components;
+                           Component_ID : in String) return Boolean is
+   begin
+      return Self.Components_Map.Contains (Component_ID);
+   end Has_Component;
+
 end ECS;
