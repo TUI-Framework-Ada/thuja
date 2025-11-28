@@ -1,39 +1,44 @@
 package body ECS is
 
+   function Hash_Component (Key : Component_Id) return Ada.Containers.Hash_Type is
+   begin
+      return Ada.Strings.Unbounded.Hash (Ada.Strings.Unbounded.Unbounded_String (Key));
+   end Hash_Component;
+
    procedure Add_Component (Self : in out Components;
-                            Component_ID : in String;
+                            Component : in Component_Id;
                             Component_Struct : in Component_T'Class) is
    begin
-      Self.Components_Map.Include (Component_ID, Component_Struct);
+      Self.Components_Map.Include (Component, Component_Struct);
    end Add_Component;
 
    procedure Remove_Component (Self : in out Components;
-                               Component_ID : in String) is
+                               Component : in Component_Id) is
    begin
-      Self.Components_Map.Exclude (Component_ID);
+      Self.Components_Map.Exclude (Component);
    end Remove_Component;
 
    function Get_Component (Self : in Components;
-                           Component_ID : in String)
+                           Component : in Component_Id)
                            return Component_T'Class is
    begin
-      return Self.Components_Map (Component_ID);
+      return Self.Components_Map (Component);
    end Get_Component;
 
    function Has_Component (Self : in Components;
-                           Component_ID : in String) return Boolean is
+                           Component : in Component_Id) return Boolean is
    begin
-      return Self.Components_Map.Contains (Component_ID);
+      return Self.Components_Map.Contains (Component);
    end Has_Component;
 
    ------------------------------------------------------------------
    -- HASH FUNCTION FOR ENTITY IDS
    ------------------------------------------------------------------
    -- Added was forgoetten from UML: Entity_Components : HashMap<Entity_ID, *Components>
-   function Hash_Id (Key : Entity_Id) return Ada.Containers.Hash_Type is
+   function Hash_Entity (Key : Entity_Id) return Ada.Containers.Hash_Type is
    begin
       return Ada.Strings.Unbounded.Hash (Ada.Strings.Unbounded.Unbounded_String (Key));
-   end Hash_Id;
+   end Hash_Entity;
 
    ---------------------------------------
    -- Add_Entity

@@ -1,24 +1,26 @@
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings;
-with Ada.Strings.Hash;
 with Ada.Strings.Unbounded;
 with Ada.Strings.Unbounded.Hash;
-with Graphics; use Graphics;
 with Components; use Components;
 
 package ECS is
 
+   type Component_Id is new Ada.Strings.Unbounded.Unbounded_String; -- Component identifiers (for system queries later)
+
+   function Hash_Component (Key : Component_Id) return Ada.Containers.Hash_Type;
+
    package Component_ID_Vector is new
      Ada.Containers.Indefinite_Vectors
        (Index_Type => Natural,
-        Element_Type => String);
+        Element_Type => Component_Id);
 
    package Component_Map_Pkg is new
      Ada.Containers.Indefinite_Hashed_Maps
-       (Key_Type => String,
+       (Key_Type => Component_Id,
         Element_Type => Component_T'Class,
-        Hash => Ada.Strings.Hash,
+        Hash => Hash_Component,
         Equivalent_Keys => "=");
    subtype Component_Map is Component_Map_Pkg.Map;
    type Component_Map_Ptr is access Component_Map;
@@ -29,29 +31,28 @@ package ECS is
    type Components_Ptr is access all Components;
 
    type Entity_Id is new Ada.Strings.Unbounded.Unbounded_String; -- -- UML requires Entity_ID to be String, not Natural (Corrected)
-   type Component_Id is new String; -- Component identifiers (for system queries later)
 
 
 
    procedure Add_Component (Self : in out Components;
-                            Component_ID : in String;
+                            Component : in Component_Id;
                             Component_Struct : in Component_T'Class);
 
    procedure Remove_Component (Self : in out Components;
-                               Component_ID : in String);
+                               Component : in Component_Id);
 
    function Get_Component (Self : in Components;
-                           Component_ID : in String) return Component_T'Class;
+                           Component : in Component_Id) return Component_T'Class;
 
    function Has_Component (Self : in Components;
-                           Component_ID : in String) return Boolean;
+                           Component : in Component_Id) return Boolean;
 
-   function Hash_Id (Key : Entity_Id) return Ada.Containers.Hash_Type;
+   function Hash_Entity (Key : Entity_Id) return Ada.Containers.Hash_Type;
 
    package Entity_Map is new Ada.Containers.Indefinite_Hashed_Maps
      (Key_Type        => Entity_Id,
       Element_Type    => Components_Ptr,
-      Hash            => Hash_Id,
+      Hash            => Hash_Entity,
       Equivalent_Keys => "=");
    subtype Entity_Components is Entity_Map.Map;
 
