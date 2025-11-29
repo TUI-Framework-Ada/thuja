@@ -4,6 +4,8 @@ with Ada.Wide_Wide_Text_IO;
 with Components; use Components;
 --  Helper types (e.g. Buffer_T, Pixel, Color, etc.)
 with Graphics; use Graphics;
+--  ID types
+with IDs; use IDs;
 
 package body Systems is
 

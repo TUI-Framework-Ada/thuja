@@ -4,10 +4,9 @@ with Ada.Strings;
 with Ada.Strings.Unbounded;
 with Ada.Strings.Unbounded.Hash;
 with Components; use Components;
+with IDs; use IDs;
 
 package ECS is
-
-   type Component_Id is new Ada.Strings.Unbounded.Unbounded_String; -- Component identifiers (for system queries later)
 
    function Hash_Component (Key : Component_Id) return Ada.Containers.Hash_Type;
 
@@ -29,8 +28,6 @@ package ECS is
       Components_Map : Component_Map;
    end record;
    type Components_Ptr is access all Components;
-
-   type Entity_Id is new Ada.Strings.Unbounded.Unbounded_String; -- -- UML requires Entity_ID to be String, not Natural (Corrected)
 
 
 

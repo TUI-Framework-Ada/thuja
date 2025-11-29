@@ -1,6 +1,6 @@
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
-with ECS; use ECS;
+with IDs; use IDs;
 
 package Components is
 
