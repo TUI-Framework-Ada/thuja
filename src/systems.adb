@@ -1,27 +1,12 @@
 with Ada.Characters.Conversions;
 with Ada.Wide_Wide_Text_IO;
---  Entities and Components classes
---  with ECS; use ECS;
 --  Implemented components (e.g. RenderInfo, WidgetComponent, etc.)
---  with ComponentsImpl; use ComponentsImpl;
+with Components; use Components;
 --  Helper types (e.g. Buffer_T, Pixel, Color, etc.)
---  with Helpers; use Helpers;
-with Buffer_T; use Buffer_T;
+with Graphics; use Graphics;
 
 package body Systems is
-   --  Making some local type stuff, should be moved out of Systems later
-   package Entity_ID_Vector is new
-     Ada.Containers.Vectors
-       (Index_Type => Natural,
-        Element_Type => String);
-   use Entity_ID_Vector;
-   package Component_ID_Vector is new
-     Ada.Containers.Vectors
-       (Index_Type => Natural,
-        Element_Type => String);
-   use Component_ID_Vector;
 
-   --  Built-in systems
 --  procedure ExampleSystem(Entity_List: Entities) is
 --     Search_Component_IDs : Component_ID_Vector.Vector
 --       := "Component1" & "Component2";
@@ -37,6 +22,8 @@ package body Systems is
 --                                );
 --     end loop;
 --  end ExampleSystem;
+
+   --  Built-in systems
 
    procedure WidgetBackgroundSystem (Entity_List : Entities) is
       Search_Component_IDs : Component_ID_Vector.Vector

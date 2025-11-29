@@ -1,14 +1,11 @@
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
+with ECS; use ECS;
 
 package Components is
 
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
-
-   --  Entity_ID and an array type, remove these later once Entities and Components are merged
-   --  Dining types for identifiers
-   type Entity_ID is range 0 .. 99; -- Example ID (Change later)
 
    --  Defines a type within the record to hold a list of child entity IDs "<>"
    --  indicates unconstrained array
