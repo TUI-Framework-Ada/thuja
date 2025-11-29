@@ -9,7 +9,7 @@ package Components is
 
    --  Defines a type within the record to hold a list of child entity IDs "<>"
    --  indicates unconstrained array
-   type Entity_ID_Array is array (Positive range <>) of Entity_ID;
+   --type Entity_ID_Array is array (Positive range <>) of Entity_ID;
 
 
 
@@ -43,7 +43,8 @@ package Components is
       --  same time
 
       Render_Buffer : Buffer_T; --  The buffer the widget renders its contents to
-      Children      : Entity_ID_Array (1 .. 0); --  Flexible array for children widgets, initial length 0
+      --Children      : Entity_ID_Array (1 .. 0); --  Array for children widgets, length 0
+      Children : Entity_ID_Vector.Vector;
 
    end record;
 
