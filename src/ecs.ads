@@ -1,7 +1,6 @@
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings;
-with Ada.Strings.Unbounded;
 with Ada.Strings.Unbounded.Hash;
 with Components; use Components;
 with IDs; use IDs;
@@ -67,5 +66,11 @@ package ECS is
    function Get_Entities_Matching -- UML Get all entities with matching components
      (Self : in Entity_Components; Required : Component_ID_Vector.Vector)
       return Entity_ID_Vector.Vector;
+
+   --  Built-in systems
+   procedure WidgetBackgroundSystem (Entity_List : Entity_Components);
+   procedure TextRenderSystem (Entity_List : Entity_Components);
+   procedure BufferCopySystem (Entity_List : Entity_Components);
+   procedure BufferDrawSystem (Entity_List : Entity_Components);
 
 end ECS;
