@@ -33,8 +33,8 @@ package Components is
       -- Position and Size
       Position_X : Integer := 0; --  Just set integers to default 0 values?
       Position_Y : Integer := 0;
-      Size_Width : Integer := 0;
-      Size_Height: Integer := 0;
+      Size_Width : TUI_Width := TUI_Width'First;
+      Size_Height: TUI_Height := TUI_Height'First;
 
       --  State flags
       Is_Visible : Boolean := True; --  Set to true so it can be seen
@@ -53,6 +53,16 @@ package Components is
       Text      : SU.Unbounded_String; --  Unbounded string
       Text_Color : Color_t; --  Color instance (copied, not referenced)
 
+   end record;
+
+   --  RootWidgetComponent
+   type Root_Widget_Component_T is new Component_T with record
+      null;
+   end record;
+
+   --  BackgroundColorComponent
+   type Background_Color_Component_T is new Component_T with record
+      Background_Color : Color_t;
    end record;
 
 end Components;

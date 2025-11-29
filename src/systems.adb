@@ -9,62 +9,61 @@ with IDs; use IDs;
 
 package body Systems is
 
---  procedure ExampleSystem(Entity_List: Entities) is
+--  procedure ExampleSystem (Entity_List : Entity_Components) is
 --     Search_Component_IDs : Component_ID_Vector.Vector
 --       := "Component1" & "Component2";
 --     Matched_Entities : Entity_ID_Vector.Vector
---       := Entity_List.Get_Entities_Matching (Search_Component_IDs);
---     Component_List : Components_Access;
---     Component : ExampleComponent;
+--       := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+--     Component_List : Components_Ptr;
+--     Component : Component1;
 --  begin
---     for Entity_ID of Matched_Entities loop
---        Component_List := Entity_List.Get_Entity_Components (Entity_ID);
+--     for EID of Matched_Entities loop
+--        Component_List := Get_Entity_Components (Entity_List, EID);
 --        Component := Component1 (
---           Component_List.Get_Component ("Component1")
+--           Get_Component (Component_List, "Component1")
 --                                );
 --     end loop;
 --  end ExampleSystem;
 
    --  Built-in systems
 
-   procedure WidgetBackgroundSystem (Entity_List : Entities) is
-      Search_Component_IDs : Component_ID_Vector.Vector
-        := "WidgetComponent" & "BackgroundColorComponent";
-      Matched_Entities : Entity_ID_Vector.Vector
-        := Entity_List.Get_Entities_Matching (Search_Component_IDs);
-      Component_List : Components_Access;
-      Widget_C : WidgetComponent;
-      BGColor_C : BackgroundColorComponent;
-      Pos_W : Positive;
-      Pos_H : Positive;
-      BGColor : Color;
-      Px : Pixel;
+   procedure WidgetBackgroundSystem (Entity_List : Entity_Components) is
+      Search_Component_IDs : Component_ID_Vector.Vector;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+      Widget_C : Widget_Component_T;
+      BGColor_C : Background_Color_Component_T;
+      BGColor : Color_t;
+      Px : Pixel_t;
    begin
-      for Entity_ID of Matches_Entities loop
-         Component_List := Entity_List.Get_Entity_Components (Entity_ID);
-         Widget_C := WidgetComponent (
-            Component_List.Get_Component ("WidgetComponent")
+      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+      Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      for Entity_ID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List, Entity_ID);
+         Widget_C := Widget_Component_T (
+            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
                                      );
-         BGColor_C := BackgroundColorComponent (
-            Component_List.Get_Component ("BackgroundColorComponent")
+         BGColor_C := Background_Color_Component_T (
+            Get_Component (Component_List.all, To_CID ("BackgroundColorComponent"))
                                                );
          BGColor := BGColor_C.Background_Color;
 
-         for Pos_W in Positive'First .. Widget_C.Size_Width loop
-            for Pos_H in Positive'First .. Widget_C.Size_Height loop
+         for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
+            for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
                --  returns a copy of the buffer's pixel
-               Px := Widget_C.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
+               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
                --  edit values of the copy
-               Px.Character := ' ';
+               Px.Char := ' ';
                Px.Background_Color := BGColor;
                --  pass back to update in the buffer
-               Widget_C.Render_Buffer.Set_Pixel (Pos_W, Pos_H, Px);
+               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
       end loop;
    end WidgetBackgroundSystem;
 
-   procedure TextRenderSystem (Entity_List : Entities) is
+   procedure TextRenderSystem (Entity_List : Entity_Components) is
       Search_Component_IDs : Component_ID_Vector.Vector
         := "WidgetComponent" & "TextComponent";
       Matched_Entities : Entity_ID_Vector.Vector
@@ -110,7 +109,7 @@ package body Systems is
       end loop;
    end TextRenderSystem;
 
-   procedure BufferCopySystem (Entity_List : Entities) is
+   procedure BufferCopySystem (Entity_List : Entity_Components) is
       procedure RecursiveBufferCopy (Framebuffer : Buffer_T;
                                      Parent : WidgetComponent) is
          Child_Component_List : Components_Access;
@@ -177,7 +176,7 @@ package body Systems is
       end loop;
    end BufferCopySystem;
 
-   procedure BufferDrawSystem (Entity_List : Entities) is
+   procedure BufferDrawSystem (Entity_List : Entity_Components) is
       --  Both pixel rendering and ANSI codes
       CSI : constant String := Character'Val (16#1B#) & '[';
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
