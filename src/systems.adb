@@ -25,8 +25,17 @@ package body Systems is
 --     for EID of Matched_Entities loop
 --        Component_List := Get_Entity_Components (Entity_List, EID);
 --        Component := Component1 (
---           Get_Component (Component_List, "Component1")
+--           Get_Component (Component_List.all, "Component1")
 --                                );
+--           ...
+--        --  Pass updated vals back to the Components instance
+--        --  Required to run Get_Entity_Components again to avoid issues with
+--        --    copy-by-value
+--        Add_Component (
+--           Get_Entity_Components (Entity_List, EID).all,
+--           To_CID ("Component1"),
+--           Component
+--                      );
 --     end loop;
 --  end ExampleSystem;
 
@@ -44,8 +53,8 @@ package body Systems is
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
-      for Entity_ID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, Entity_ID);
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List, EID);
          Widget_C := Widget_Component_T (
             Get_Component (Component_List.all, To_CID ("WidgetComponent"))
                                      );
@@ -65,6 +74,17 @@ package body Systems is
                Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
+         --  Update components
+         Add_Component (
+                        Get_Entity_Components (Entity_List, EID).all,
+                        To_CID ("WidgetComponent"),
+                        Widget_C
+                       );
+         Add_Component (
+                        Get_Entity_Components (Entity_List, EID).all,
+                        To_CID ("BackgroundColorComponent"),
+                        BGColor_C
+                       );
       end loop;
    end WidgetBackgroundSystem;
 
@@ -83,8 +103,8 @@ package body Systems is
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
-      for Entity_ID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, Entity_ID);
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List, EID);
          Widget_C := Widget_Component_T (
             Get_Component (Component_List.all, To_CID ("WidgetComponent"))
                                         );
@@ -112,6 +132,17 @@ package body Systems is
             --  If out of bounds, break
             exit when Pos_H > Widget_C.Size_Height;
          end loop;
+         --  Update components
+         Add_Component (
+                        Get_Entity_Components (Entity_List, EID).all,
+                        To_CID ("WidgetComponent"),
+                        Widget_C
+                       );
+         Add_Component (
+                        Get_Entity_Components (Entity_List, EID).all,
+                        To_CID ("TextComponent"),
+                        Text_C
+                       );
       end loop;
    end TextRenderSystem;
 
@@ -220,8 +251,8 @@ package body Systems is
    begin
       Search_Components.Append (To_CID ("RenderInfo"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Components);
-      for Entity_ID of Matched_Entities loop
-         RI_Component_List := Get_Entity_Components (Entity_List, Entity_ID);
+      for EID of Matched_Entities loop
+         RI_Component_List := Get_Entity_Components (Entity_List, EID);
          RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
          --  Begin comparing FB to BB and drawing
          for Y in TUI_Height'First .. RI.Terminal_Height loop
@@ -238,6 +269,12 @@ package body Systems is
                end if;
             end loop;
          end loop;
+         --  Update components
+         Add_Component (
+                        Get_Entity_Components (Entity_List, EID).all,
+                        To_CID ("RenderInfo"),
+                        RI
+                       );
       end loop;
    end BufferDrawSystem;
 end Systems;
