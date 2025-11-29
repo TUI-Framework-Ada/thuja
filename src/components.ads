@@ -22,8 +22,8 @@ package Components is
       --  Data Fields
       BackBuffer      : Buffer_T;
       FrameBuffer     : Buffer_T;
-      Terminal_Width  : Integer;
-      Terminal_Height : Integer;
+      Terminal_Width  : TUI_Width;
+      Terminal_Height : TUI_Height;
 
    end record;
 

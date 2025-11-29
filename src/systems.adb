@@ -187,55 +187,54 @@ package body Systems is
       --  Both pixel rendering and ANSI codes
       CSI : constant String := Character'Val (16#1B#) & '[';
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
-      function FG (P : Pixel) return String is
-        (CSI & "38;2;" & Trim (P.Text_Color.Red'Image) & ";"
-             & Trim (P.Text_Color.Green'Image) & ";"
-             & Trim (P.Text_Color.Blue'Image) & "m");
-      function BG (P : Pixel) return String is
+      function FG (P : Pixel_t) return String is
+        (CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
+             & Trim (P.Char_Color.Green'Image) & ";"
+             & Trim (P.Char_Color.Blue'Image) & "m");
+      function BG (P : Pixel_t) return String is
         (CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
              & Trim (P.Background_Color.Green'Image) & ";"
              & Trim (P.Background_Color.Blue'Image) & "m");
-      function Bold (P : Pixel) return String is
+      function Bold (P : Pixel_t) return String is
         (CSI & (if P.Is_Bold then "1m" else "0m"));
-      function Format (P : Pixel) return String is
+      function Format (P : Pixel_t) return String is
         (FG (P) & BG (P) & Bold (P));
-      function Move (Row : Positive; Col : Positive) return String is
+      function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
-      function ConvertWW (P : Pixel; Row : Positive;
-                          Col : Positive) return Wide_Wide_String is
-        (Move (Row, Col) &
-           Ada.Characters.Conversions.To_Wide_Wide_String (Format (P)) &
-           Wide_Wide_Character (P.Character));
-      RESET : constant String := CSI & "0m";
+      function ConvertWW (P : Pixel_t; Row : TUI_Height;
+                          Col : TUI_Width) return Wide_Wide_String is
+        (Ada.Characters.Conversions.To_Wide_Wide_String (
+         Move (Row, Col) &
+           Format (P)) &
+           Ada.Characters.Conversions.To_Wide_Wide_Character (P.Char));
 
       --  Real stuff begins
-      Search_Components : Component_ID_Vector.Vector := "RenderInfo";
-      Matched_Entities : Entity_ID_Vector.Vector
-        := Entity_List.Get_Entities_Matching (Search_Components);
+      Search_Components : Component_ID_Vector.Vector;
+      Matched_Entities : Entity_ID_Vector.Vector;
       --  Pointer to Components instance
-      RI_Component_List : Components_Access;
+      RI_Component_List : Components_Ptr;
       --  RenderInfo component
-      RI : RenderInfo;
+      RI : Render_Info_Component_T;
       --  Framebuffer pixel
-      FB_Pixel : Pixel;
-      --  Backbuffer pixel
-      BB_Pixel : Pixel;
+      FB_Pixel : Pixel_t;
    begin
+      Search_Components.Append (To_CID ("RenderInfo"));
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Components);
       for Entity_ID of Matched_Entities loop
-         RI_Component_List := Entity_List.Get_Entity_Components (Entity_ID);
-         RI := RenderInfo (RI_Component_List.Get_Component ("RenderInfo"));
+         RI_Component_List := Get_Entity_Components (Entity_List, Entity_ID);
+         RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
          --  Begin comparing FB to BB and drawing
-         for Y in 1 .. RI.Terminal_Height loop
-            for X in 1 .. RI.Terminal_Width loop
-               if RI.Framebuffer.Get_Pixel (X, Y) /=
-                 RI.Backbuffer.Get_Pixel (X, Y)
+         for Y in TUI_Height'First .. RI.Terminal_Height loop
+            for X in TUI_Width'First .. RI.Terminal_Width loop
+               if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /=
+                 Get_Buffer_Pixel (RI.Backbuffer, X, Y)
                then
                   --  Fetch buffer pixels
-                  FB_Pixel := RI.Framebuffer.Get_Pixel (X, Y);
+                  FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
                   --  Draw to terminal
                   Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
                   --  Copy values into backbuffer's pixel
-                  RI.Backbuffer.Set_Pixel (X, Y, FB_Pixel);
+                  Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
                end if;
             end loop;
          end loop;
