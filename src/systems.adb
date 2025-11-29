@@ -1,4 +1,5 @@
 with Ada.Characters.Conversions;
+with Ada.Strings.Unbounded;
 with Ada.Wide_Wide_Text_IO;
 --  Implemented components (e.g. RenderInfo, WidgetComponent, etc.)
 with Components; use Components;
@@ -9,14 +10,18 @@ with IDs; use IDs;
 
 package body Systems is
 
+   --  Easy access to unbounded strings
+   package SU renames Ada.Strings.Unbounded;
+
 --  procedure ExampleSystem (Entity_List : Entity_Components) is
---     Search_Component_IDs : Component_ID_Vector.Vector
---       := "Component1" & "Component2";
---     Matched_Entities : Entity_ID_Vector.Vector
---       := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+--     Search_Component_IDs : Component_ID_Vector.Vector;
+--     Matched_Entities : Entity_ID_Vector.Vector;
 --     Component_List : Components_Ptr;
 --     Component : Component1;
 --  begin
+--  Search_Component_IDs.Append (To_CID ("Component1"));
+--  Search_Component_IDs.Append (To_CID ("Component2"));
+--  Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
 --     for EID of Matched_Entities loop
 --        Component_List := Get_Entity_Components (Entity_List, EID);
 --        Component := Component1 (
@@ -64,38 +69,39 @@ package body Systems is
    end WidgetBackgroundSystem;
 
    procedure TextRenderSystem (Entity_List : Entity_Components) is
-      Search_Component_IDs : Component_ID_Vector.Vector
-        := "WidgetComponent" & "TextComponent";
-      Matched_Entities : Entity_ID_Vector.Vector
-        := Entity_List.Get_Entities_Matching (Search_Component_IDs);
-      Component_List : Components_Access;
-      Widget_C : WidgetComponent;
-      Text_C : TextComponent;
-      Pos_W : Positive;
-      Pos_H : Positive;
-      Text : String;
+      Search_Component_IDs : Component_ID_Vector.Vector;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+      Widget_C : Widget_Component_T;
+      Text_C : Text_Component_T;
+      Pos_W : TUI_Width;
+      Pos_H : TUI_Height;
+      Text : SU.Unbounded_String;
       Char : Character;
-      Px : Pixel;
+      Px : Pixel_t;
    begin
+      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+      Search_Component_IDs.Append (To_CID ("TextComponent"));
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
       for Entity_ID of Matched_Entities loop
-         Component_List := Entity_List.Get_Entity_Components (Entity_ID);
-         Widget_C := WidgetComponent (
-            Component_List.Get_Component ("WidgetComponent")
-                                     );
-         Text_C := TextComponent (
-            Component_List.Get_Component ("TextComponent")
-                                 );
+         Component_List := Get_Entity_Components (Entity_List, Entity_ID);
+         Widget_C := Widget_Component_T (
+            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
+                                        );
+         Text_C := Text_Component_T (
+            Get_Component (Component_List.all, To_CID ("TextComponent"))
+                                    );
          Text := Text_C.Text;
 
-         Pos_W := Positive'First;
-         Pos_H := Positive'First;
-         for Text_Index in Positive'First .. Text.Length loop
+         Pos_W := TUI_Width'First;
+         Pos_H := TUI_Height'First;
+         for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
-            Char := Text (Text_Index);
-            Px := Widget_C.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
-            Px.Character := Char;
-            Px.Text_Color := Text_C.Text_Color;
-            Widget_C.Render_Buffer.Set_Pixel (Pos_W, Pos_H, Px);
+            Char := SU.Element (Text, Text_Index);
+            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+            Px.Char := Char;
+            Px.Char_Color := Text_C.Text_Color;
+            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
