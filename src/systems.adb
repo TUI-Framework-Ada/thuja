@@ -116,65 +116,66 @@ package body Systems is
    end TextRenderSystem;
 
    procedure BufferCopySystem (Entity_List : Entity_Components) is
-      procedure RecursiveBufferCopy (Framebuffer : Buffer_T;
-                                     Parent : WidgetComponent) is
-         Child_Component_List : Components_Access;
-         Child_Widget : WidgetComponent;
-         Parent_Pixel : Pixel;
-         FB_Pixel : Pixel;
+      procedure RecursiveBufferCopy (Framebuffer : in out Buffer_T;
+                                     Parent : Widget_Component_T) is
+         Child_Component_List : Components_Ptr;
+         Child_Widget : Widget_Component_T;
+         Parent_Pixel : Pixel_t;
       begin
          --  For each pixel of Render_Buffer,
          --    only within the bounds of the widget
          --  Assuming 1-indexed Buffer_T and Position_X/Y
-         for Pos_W in Positive'First .. Parent.Size_Width loop
-            for Pos_H in Positive'First .. Parent.Size_Height loop
-               --  Might need to be changed to Get_Pixel(Render_Buffer, ...)
-               Parent_Pixel := Parent.Render_Buffer.Get_Pixel (Pos_W, Pos_H);
+         for Pos_W in TUI_Width'First .. Parent.Size_Width loop
+            for Pos_H in TUI_Height'First .. Parent.Size_Height loop
+               Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
                --  Copy values from parent to framebuffer
-               Framebuffer.Set_Pixel (
-                  Parent.Position_X + Pos_W - 1, Parent.Position_Y + Pos_H - 1,
+               Set_Buffer_Pixel (
+                  Framebuffer,
+                  Parent.Position_X + Pos_W - TUI_Width (1), Parent.Position_Y + Pos_H - TUI_Height (1),
                   Parent_Pixel
-                                     );
+                         );
             end loop;
          end loop;
 
          --  For the parent's children
          for Child_Entity_ID of Parent.Children loop
             --  Fetch the child's WidgetComponent
-            Child_Component_List := Entity_List.Get_Entity_Components (
-               Child_Entity_ID
-                                                                      );
-            Child_Widget := WidgetComponent (
-               Child_Component_List.Get_Component ("WidgetComponent")
-                                            );
+            Child_Component_List := Get_Entity_Components (
+               Entity_List, Child_Entity_ID
+                                                          );
+            Child_Widget := Widget_Component_T (
+               Get_Component (Child_Component_List.all, To_CID ("WidgetComponent"))
+                                               );
             --  Loop again over the children
             RecursiveBufferCopy (Framebuffer, Child_Widget);
          end loop;
       end RecursiveBufferCopy;
 
-      RI_Component_IDs : Component_ID_Vector.Vector := "RenderInfo";
-      Root_Component_IDs : Component_ID_Vector.Vector := "RootWidget";
-      Matched_RIs : Entity_ID_Vector.Vector
-        := Entity_List.Get_Entities_Matching (RI_Component_IDs);
-      Matched_Roots : Entity_ID_Vector.Vector
-        := Entity_List.Get_Entities_Matching (Root_Component_IDs);
-      RI_Components : Components_Access;
-      Root_Components : Components_Access;
-      RenderInfo_C : RenderInfo;
-      Root : WidgetComponent;
+      RI_Component_IDs : Component_ID_Vector.Vector;
+      Root_Component_IDs : Component_ID_Vector.Vector;
+      Matched_RIs : Entity_ID_Vector.Vector;
+      Matched_Roots : Entity_ID_Vector.Vector;
+      RI_Components : Components_Ptr;
+      Root_Components : Components_Ptr;
+      RenderInfo_C : Render_Info_Component_T;
+      Root : Widget_Component_T;
    begin
+      RI_Component_IDs.Append (To_CID ("RenderInfo"));
+      Root_Component_IDs.Append (To_CID ("RootWidget"));
+      Matched_RIs := Get_Entities_Matching (Entity_List, RI_Component_IDs);
+      Matched_Roots := Get_Entities_Matching (Entity_List, Root_Component_IDs);
       --  For each entity with RenderInfo
       for RI_Entity_ID of Matched_RIs loop
-         RI_Components := Entity_List.Get_Entity_Components (RI_Entity_ID);
-         RenderInfo_C := RenderInfo (
-            RI_Components.Get_Component ("RenderInfo")
-                                    );
+         RI_Components := Get_Entity_Components (Entity_List, RI_Entity_ID);
+         RenderInfo_C := Render_Info_Component_T (
+            Get_Component (RI_Components.all, To_CID ("RenderInfo"))
+                                                 );
          --  For each root
          for R_Entity_ID of Matched_Roots loop
-            Root_Components := Entity_List.Get_Entity_Components (R_Entity_ID);
-            Root := WidgetComponent (
-               Root_Components.Get_Component ("WidgetComponent")
-                                    );
+            Root_Components := Get_Entity_Components (Entity_List, R_Entity_ID);
+            Root := Widget_Component_T (
+               Get_Component (Root_Components.all, To_CID ("WidgetComponent"))
+                                       );
 
             --  For it and its children
             RecursiveBufferCopy (RenderInfo_C.Framebuffer, Root);

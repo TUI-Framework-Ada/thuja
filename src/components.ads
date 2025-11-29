@@ -31,8 +31,8 @@ package Components is
    type Widget_Component_T is new Component_T with record
 
       -- Position and Size
-      Position_X : Integer := 0; --  Just set integers to default 0 values?
-      Position_Y : Integer := 0;
+      Position_X : TUI_Width := TUI_Width'First; --  Just set integers to default minimum values?
+      Position_Y : TUI_Height := TUI_Height'First;
       Size_Width : TUI_Width := TUI_Width'First;
       Size_Height: TUI_Height := TUI_Height'First;
 
