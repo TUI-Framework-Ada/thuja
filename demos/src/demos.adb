@@ -22,9 +22,12 @@ procedure Demos is
    E2_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E2_ID);
    E3_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E3_ID);
    --  Components of entity E1 (render info)
-   E1_RIC : constant Components.Render_Info_Component_T := (Terminal_Width => 80,
-                                                   Terminal_Height => 24,
-                                                   others => <>);
+   E1_RIC : constant Components.Render_Info_Component_T := (
+      Terminal_Width => 80,
+      Terminal_Height => 24,
+      Framebuffer => (Width => 80, Height => 24, Data => <>),
+      Backbuffer => (Width => 80, Height => 24, Data => <>)
+                                                           );
    --  Components of entity E2 (root widget)
    E2_WC : constant Components.Widget_Component_T := (
       Size_Width => 80,
@@ -60,6 +63,9 @@ begin
    ECS.Add_Component (E3_C.all, IDs.To_CID ("WidgetComponent"), E3_WC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("BackgroundColorComponent"), E3_BCC);
 
+   --  Remaining Thuja init
+   Graphics.Clear_Screen;
+
    --  Main loop
 
    for Loop_Index in Positive'First .. Loop_Count loop
@@ -74,6 +80,7 @@ begin
       delay Duration (0.1);
    end loop;
 
-   --  Print success line on demo end
+   --  Fix screen & print success line on demo end
+   Graphics.Clear_Screen;
    Ada.Text_IO.Put_Line ("Thank you for using the Thuja demo");
 end Demos;

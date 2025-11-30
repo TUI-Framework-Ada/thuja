@@ -142,7 +142,8 @@ package body ECS is
 --            ...
 --         --  Pass updated vals back to the Components instance
 --         --  Required to run Get_Entity_Components again to avoid issues with
---         --    copy-by-value
+--
+--         --    Update components
 --         Add_Component (
 --            Get_Entity_Components (Entity_List, EID).all,
 --            To_CID ("Component1"),
@@ -186,6 +187,7 @@ package body ECS is
                Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
+
          --  Update components
          Add_Component (
                         Get_Entity_Components (Entity_List, EID).all,
@@ -244,6 +246,7 @@ package body ECS is
             --  If out of bounds, break
             exit when Pos_H > Widget_C.Size_Height;
          end loop;
+
          --  Update components
          Add_Component (
                         Get_Entity_Components (Entity_List, EID).all,
@@ -323,6 +326,13 @@ package body ECS is
             --  For it and its children
             RecursiveBufferCopy (RenderInfo_C.Framebuffer, Root);
          end loop;
+
+         --  Update components
+         Add_Component (
+                        Get_Entity_Components (Entity_List, RI_Entity_ID).all,
+                        To_CID ("RenderInfo"),
+                        RenderInfo_C
+                       );
       end loop;
    end BufferCopySystem;
 
@@ -339,9 +349,9 @@ package body ECS is
              & Trim (P.Background_Color.Green'Image) & ";"
              & Trim (P.Background_Color.Blue'Image) & "m");
       function Bold (P : Pixel_t) return String is
-        (CSI & (if P.Is_Bold then "1m" else "0m"));
+        (CSI & (if P.Is_Bold then "1m" else "22m"));
       function Format (P : Pixel_t) return String is
-        (FG (P) & BG (P) & Bold (P));
+         (FG (P) & BG (P) & Bold (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       function ConvertWW (P : Pixel_t; Row : TUI_Height;
@@ -381,6 +391,7 @@ package body ECS is
                end if;
             end loop;
          end loop;
+
          --  Update components
          Add_Component (
                         Get_Entity_Components (Entity_List, EID).all,
