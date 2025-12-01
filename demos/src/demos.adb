@@ -140,6 +140,7 @@ begin
    -- Draw changed pixels to terminal
    BufferDrawSystem (Entity_List);
 
+   Put_Line (""); Put_Line (""); --  Line break
    Put_Line ("TC-005 Complete: Child widget (RED) should be drawn on top of Parent widget (BLUE)");
 
 end demos;
