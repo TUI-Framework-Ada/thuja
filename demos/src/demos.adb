@@ -96,7 +96,7 @@ begin
 
    Child_Widget.Position_X  := 16;   -- Overlaps inside parent region
    Child_Widget.Position_Y  := 8;
-   Child_Widget.Size_Width  := 12;
+   Child_Widget.Size_Width  := 40; --  Larger than parent
    Child_Widget.Size_Height := 5;
    Child_Widget.Render_Buffer := Create_Buffer (12, 5);
 
@@ -141,6 +141,6 @@ begin
    BufferDrawSystem (Entity_List);
 
    Put_Line (""); Put_Line (""); --  Line break
-   Put_Line ("TC-005 Complete: Child widget (RED) should be drawn on top of Parent widget (BLUE)");
+   Put_Line ("TC-005 Complete: Child widget (RED) should not be drawn outside of Parent widget (BLUE)");
 
 end demos;
