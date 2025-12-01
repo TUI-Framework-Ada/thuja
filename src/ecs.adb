@@ -263,21 +263,40 @@ package body ECS is
 
    procedure BufferCopySystem (Entity_List : Entity_Components) is
       procedure RecursiveBufferCopy (Framebuffer : in out Buffer_T;
+                                     Root : Widget_Component_T;
                                      Parent : Widget_Component_T) is
          Child_Component_List : Components_Ptr;
          Child_Widget : Widget_Component_T;
          Parent_Pixel : Pixel_t;
+         Root_Left, Root_Right, Parent_X : TUI_Width;
+         Root_Top, Root_Bottom, Parent_Y : TUI_Height;
       begin
+         --  Calc root edges
+         Root_Left := Root.Position_X;
+         Root_Right := Root.Position_X + Root.Size_Width - TUI_Width (1);
+         Root_Top := Root.Position_Y;
+         Root_Bottom := Root.Position_Y + Root.Size_Height - TUI_Height (1);
          --  For each pixel of Render_Buffer,
          --    only within the bounds of the widget
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in TUI_Width'First .. Parent.Size_Width loop
             for Pos_H in TUI_Height'First .. Parent.Size_Height loop
                Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
+               --  Calc X
+               Parent_X := Parent.Position_X + Pos_W - TUI_Width (1);
+               --  Calc Y
+               Parent_Y := Parent.Position_Y + Pos_H - TUI_Height (1);
+               --  In-bounds check
+               if (Parent_X < Root_Left) or
+                 (Parent_X > Root_Right) or
+                 (Parent_Y < Root_Top) or
+                 (Parent_Y > Root_Bottom) then
+                  exit;
+               end if;
                --  Copy values from parent to framebuffer
                Set_Buffer_Pixel (
                   Framebuffer,
-                  Parent.Position_X + Pos_W - TUI_Width (1), Parent.Position_Y + Pos_H - TUI_Height (1),
+                  Parent_X, Parent_Y,
                   Parent_Pixel
                          );
             end loop;
@@ -293,7 +312,7 @@ package body ECS is
                Get_Component (Child_Component_List.all, To_CID ("WidgetComponent"))
                                                );
             --  Loop again over the children
-            RecursiveBufferCopy (Framebuffer, Child_Widget);
+            RecursiveBufferCopy (Framebuffer, Parent, Child_Widget);
          end loop;
       end RecursiveBufferCopy;
 
@@ -324,7 +343,7 @@ package body ECS is
                                        );
 
             --  For it and its children
-            RecursiveBufferCopy (RenderInfo_C.Framebuffer, Root);
+            RecursiveBufferCopy (RenderInfo_C.Framebuffer, Root, Root);
          end loop;
 
          --  Update components
