@@ -1,4 +1,3 @@
-with Ada.Text_IO;
 with Components;
 with ECS;
 with Graphics;
@@ -6,8 +5,10 @@ with IDs;
 
 procedure Demos is
 
-   --  Number of times main loop should iterate
-   Loop_Count : constant Positive := 20; --  Loop 20 times
+   --  Backbuffer starting string
+   BB_Text : constant String := "Hello worl ";
+   --  Framebuffer starting string
+   FB_Text : constant String := "Hello world";
 
    --  Variables for Thuja
 
@@ -15,40 +16,15 @@ procedure Demos is
    Entities : ECS.Entity_Components;
    --  Instantiate entity IDs for registering with Entities
    E1_ID : constant IDs.Entity_Id := IDs.To_EID ("Render info");
-   E2_ID : constant IDs.Entity_Id := IDs.To_EID ("Root widget");
-   E3_ID : constant IDs.Entity_Id := IDs.To_EID ("Green box");
    --  Register each entity and store pointers to their Components instances
    E1_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E1_ID);
-   E2_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E2_ID);
-   E3_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E3_ID);
    --  Components of entity E1 (render info)
-   E1_RIC : constant Components.Render_Info_Component_T := (
-      Terminal_Width => 80,
-      Terminal_Height => 24,
-      Framebuffer => (Width => 80, Height => 24, Data => <>),
-      Backbuffer => (Width => 80, Height => 24, Data => <>)
+   E1_RIC : Components.Render_Info_Component_T := (
+      Terminal_Width => 11,
+      Terminal_Height => 1,
+      Framebuffer => (Width => 11, Height => 1, Data => <>),
+      Backbuffer => (Width => 11, Height => 1, Data => <>)
                                                            );
-   --  Components of entity E2 (root widget)
-   E2_WC : constant Components.Widget_Component_T := (
-      Size_Width => 80,
-      Size_Height => 24,
-      Children => [E3_ID],
-      others => <>
-                                                     );
-   --  The compiler doesn't like the redundant "others" assignment here,
-   --    but not including will make it never be initialized (or just error)
-   E2_RWC : constant Components.Root_Widget_Component_T := (others => <>);
-   --  Components of entity E3 (a green box)
-   E3_WC : constant Components.Widget_Component_T := (
-      Position_X => 5,
-      Position_Y => 3,
-      Size_Width => 10,
-      Size_Height => 5,
-      Has_Focus => True,
-      others => <>
-                                            );
-   E3_BCC : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Green);
 begin
 
    --  Continue setup of components
@@ -56,31 +32,36 @@ begin
    --  The Entity_Components instance will need to remain visible, and the entity IDs should too
    --  Those last two can be handled by instantiating them statically in a user library to avoid clutter
 
-   --  For now, the component IDs need to be exact values for the systems to acknowledge them
-   ECS.Add_Component (E1_C.all, IDs.To_CID ("RenderInfo"), E1_RIC);
-   ECS.Add_Component (E2_C.all, IDs.To_CID ("WidgetComponent"), E2_WC);
-   ECS.Add_Component (E2_C.all, IDs.To_CID ("RootWidget"), E2_RWC);
-   ECS.Add_Component (E3_C.all, IDs.To_CID ("WidgetComponent"), E3_WC);
-   ECS.Add_Component (E3_C.all, IDs.To_CID ("BackgroundColorComponent"), E3_BCC);
-
-   --  Remaining Thuja init
-   Graphics.Clear_Screen;
-
-   --  Main loop
-
-   for Loop_Index in Positive'First .. Loop_Count loop
-
-      --  Execute systems (in correct order)
-      ECS.WidgetBackgroundSystem (Entities);
-      ECS.TextRenderSystem (Entities);
-      ECS.BufferCopySystem (Entities);
-      ECS.BufferDrawSystem (Entities);
-
-      --  Sleep for 0.1 seconds
-      delay Duration (0.1);
+   --  Assign starting strings
+   for BB_Index in Graphics.TUI_Width'First .. BB_Text'Length loop
+      Graphics.Set_Buffer_Pixel (E1_RIC.Backbuffer,
+                                 BB_Index,
+                                 Graphics.TUI_Height'First,
+                                 (
+                                  BB_Text (Integer (BB_Index)),
+                                  Graphics.White,
+                                  Graphics.Black,
+                                  False
+                                 ));
    end loop;
 
-   --  Fix screen & print success line on demo end
-   Graphics.Clear_Screen;
-   Ada.Text_IO.Put_Line ("Thank you for using the Thuja demo");
+   for FB_Index in Graphics.TUI_Width'First .. FB_Text'Length loop
+      Graphics.Set_Buffer_Pixel (E1_RIC.Framebuffer,
+                                 FB_Index,
+                                 Graphics.TUI_Height'First,
+                                 (
+                                  FB_Text (Integer (FB_Index)),
+                                  Graphics.White,
+                                  Graphics.Black,
+                                  False
+                                 ));
+   end loop;
+
+   --  For now, the component IDs need to be exact values for the systems to acknowledge them
+   ECS.Add_Component (E1_C.all, IDs.To_CID ("RenderInfo"), E1_RIC);
+
+   --  Run only BufferDrawSystem, and just once
+   ECS.BufferDrawSystem (Entities);
+   --  There should now be a singular new pixel rendered to the terminal ('d')
+
 end Demos;
