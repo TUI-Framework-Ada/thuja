@@ -1,86 +1,145 @@
-with Ada.Text_IO;
-with Components;
-with ECS;
-with Graphics;
-with IDs;
+with Ada.Text_IO; use Ada.Text_IO;
+with IDs; use IDs;
+with ECS; use ECS;
+with Components; use Components;
+with Graphics; use Graphics;
 
-procedure Demos is
+procedure demos is
 
-   --  Number of times main loop should iterate
-   Loop_Count : constant Positive := 20; --  Loop 20 times
+   Entity_List : Entity_Components;
 
-   --  Variables for Thuja
+   -- Helper: create an entity with ID
+   function Make (Name : String) return Components_Ptr is
+   begin
+      return Add_Entity (Entity_List, To_EID (Name));
+   end Make;
 
-   --  Instance of Entity_Components
-   Entities : ECS.Entity_Components;
-   --  Instantiate entity IDs for registering with Entities
-   E1_ID : constant IDs.Entity_Id := IDs.To_EID ("Render info");
-   E2_ID : constant IDs.Entity_Id := IDs.To_EID ("Root widget");
-   E3_ID : constant IDs.Entity_Id := IDs.To_EID ("Green box");
-   --  Register each entity and store pointers to their Components instances
-   E1_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E1_ID);
-   E2_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E2_ID);
-   E3_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E3_ID);
-   --  Components of entity E1 (render info)
-   E1_RIC : constant Components.Render_Info_Component_T := (
-      Terminal_Width => 80,
-      Terminal_Height => 24,
-      Framebuffer => (Width => 80, Height => 24, Data => <>),
-      Backbuffer => (Width => 80, Height => 24, Data => <>)
-                                                           );
-   --  Components of entity E2 (root widget)
-   E2_WC : constant Components.Widget_Component_T := (
-      Size_Width => 80,
-      Size_Height => 24,
-      Children => [E3_ID],
-      others => <>
-                                                     );
-   --  The compiler doesn't like the redundant "others" assignment here,
-   --    but not including will make it never be initialized (or just error)
-   E2_RWC : constant Components.Root_Widget_Component_T := (others => <>);
-   --  Components of entity E3 (a green box)
-   E3_WC : constant Components.Widget_Component_T := (
-      Position_X => 5,
-      Position_Y => 3,
-      Size_Width => 10,
-      Size_Height => 5,
-      Has_Focus => True,
-      others => <>
-                                            );
-   E3_BCC : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Green);
+   -- Helper: allocate a widget of given size & position
+   function Make_Widget
+     (X, Width : TUI_Width; Y, Height : TUI_Height)
+      return Widget_Component_T
+   is
+      W : Widget_Component_T;
+   begin
+      W.Position_X   := X;
+      W.Position_Y   := Y;
+      W.Size_Width   := X + Width - 1;
+      W.Size_Height  := Y + Height - 1;
+      W.Render_Buffer := Create_Buffer (Width, Height);
+      return W;
+   end Make_Widget;
+
+   -- Background color helper
+   function Make_BG (Color : Color_t) return Background_Color_Component_T is
+      BG : Background_Color_Component_T;
+   begin
+      BG.Background_Color := Color;
+      return BG;
+   end Make_BG;
+
+   Root_Ptr, Parent_Ptr, Child_Ptr : Components_Ptr;
+
+   Root_Widget   : Widget_Component_T;
+   Parent_Widget : Widget_Component_T;
+   Child_Widget  : Widget_Component_T;
+
+   RI_Ptr : Components_Ptr;
+   RI     : Render_Info_Component_T;
+
 begin
+   Put_Line ("TC-005: Child Layering Demo");
 
-   --  Continue setup of components
-   --  Initialization and assigning of components can be delegated into an independent block (components are updated by copy)
-   --  The Entity_Components instance will need to remain visible, and the entity IDs should too
-   --  Those last two can be handled by instantiating them statically in a user library to avoid clutter
+   --------------------------------------------------------------------
+   -- Setup RenderInfo entity
+   --------------------------------------------------------------------
+   RI_Ptr := Make ("RenderInfo");
+   RI.Terminal_Width  := 80;
+   RI.Terminal_Height := 30;
+   RI.BackBuffer  := Create_Buffer (80, 30);
+   RI.FrameBuffer := Create_Buffer (80, 30);
 
-   --  For now, the component IDs need to be exact values for the systems to acknowledge them
-   ECS.Add_Component (E1_C.all, IDs.To_CID ("RenderInfo"), E1_RIC);
-   ECS.Add_Component (E2_C.all, IDs.To_CID ("WidgetComponent"), E2_WC);
-   ECS.Add_Component (E2_C.all, IDs.To_CID ("RootWidget"), E2_RWC);
-   ECS.Add_Component (E3_C.all, IDs.To_CID ("WidgetComponent"), E3_WC);
-   ECS.Add_Component (E3_C.all, IDs.To_CID ("BackgroundColorComponent"), E3_BCC);
+   Add_Component (RI_Ptr.all, To_CID ("RenderInfo"), RI);
 
-   --  Remaining Thuja init
+   --------------------------------------------------------------------
+   -- Create Root widget
+   --------------------------------------------------------------------
+   Root_Ptr := Make ("Root");
+
+   Root_Widget.Position_X  := 1;
+   Root_Widget.Position_Y  := 1;
+   Root_Widget.Size_Width  := 80;
+   Root_Widget.Size_Height := 30;
+   Root_Widget.Render_Buffer := Create_Buffer (80, 30);
+
+   Add_Component (Root_Ptr.all, To_CID ("WidgetComponent"), Root_Widget);
+   Add_Component (Root_Ptr.all, To_CID ("RootWidget"), Root_Widget);
+
+   --------------------------------------------------------------------
+   -- Create Parent widget (blue background)
+   --------------------------------------------------------------------
+   Parent_Ptr := Make ("Parent");
+
+   Parent_Widget.Position_X  := 10;
+   Parent_Widget.Position_Y  := 5;
+   Parent_Widget.Size_Width  := 30;
+   Parent_Widget.Size_Height := 10;
+   Parent_Widget.Render_Buffer := Create_Buffer (30, 10);
+
+   Add_Component (Parent_Ptr.all, To_CID ("WidgetComponent"), Parent_Widget);
+   Add_Component (Parent_Ptr.all, To_CID ("BackgroundColorComponent"),
+                  Make_BG (Blue));
+
+   --------------------------------------------------------------------
+   -- Create Child widget (red background, overlaps parent)
+   --------------------------------------------------------------------
+   Child_Ptr := Make ("Child");
+
+   Child_Widget.Position_X  := 16;   -- Overlaps inside parent region
+   Child_Widget.Position_Y  := 8;
+   Child_Widget.Size_Width  := 12;
+   Child_Widget.Size_Height := 5;
+   Child_Widget.Render_Buffer := Create_Buffer (12, 5);
+
+   Add_Component (Child_Ptr.all, To_CID ("WidgetComponent"), Child_Widget);
+   Add_Component (Child_Ptr.all, To_CID ("BackgroundColorComponent"),
+                  Make_BG (Red));
+
+   --------------------------------------------------------------------
+   -- Build Hierarchy: Root → Parent → Child
+   --------------------------------------------------------------------
+   declare
+      R : Widget_Component_T :=
+        Widget_Component_T (Get_Component (Root_Ptr.all, To_CID ("WidgetComponent")));
+
+      P : Widget_Component_T :=
+        Widget_Component_T (Get_Component (Parent_Ptr.all, To_CID ("WidgetComponent")));
+   begin
+      -- Root owns Parent
+      R.Children.Append (To_EID ("Parent"));
+      Add_Component (Root_Ptr.all, To_CID ("WidgetComponent"), R);
+
+      -- Parent owns Child
+      P.Children.Append (To_EID ("Child"));
+      Add_Component (Parent_Ptr.all, To_CID ("WidgetComponent"), P);
+   end;
+
+   --------------------------------------------------------------------
+   -- Run built-in ECS systems
+   --------------------------------------------------------------------
    Graphics.Clear_Screen;
 
-   --  Main loop
+   -- Fill widget backgrounds
+   WidgetBackgroundSystem (Entity_List);
 
-   for Loop_Index in Positive'First .. Loop_Count loop
+   -- Fill text / content if any
+   TextRenderSystem (Entity_List);
 
-      --  Execute systems (in correct order)
-      ECS.WidgetBackgroundSystem (Entities);
-      ECS.TextRenderSystem (Entities);
-      ECS.BufferCopySystem (Entities);
-      ECS.BufferDrawSystem (Entities);
+   -- Copy buffers parent → child → framebuffer
+   BufferCopySystem (Entity_List);
 
-      --  Sleep for 0.1 seconds
-      delay Duration (0.1);
-   end loop;
+   -- Draw changed pixels to terminal
+   BufferDrawSystem (Entity_List);
 
-   --  Fix screen & print success line on demo end
-   Graphics.Clear_Screen;
-   Ada.Text_IO.Put_Line ("Thank you for using the Thuja demo");
-end Demos;
+   Put_Line ("TC-005 Complete: Child widget (RED) should be drawn on top of Parent widget (BLUE)");
+
+end demos;
