@@ -54,32 +54,29 @@ procedure Demos is
       Text => SU.To_Unbounded_String ("This text will shift through colors!"),
       Text_Color => Graphics.Red
                                                    );
-   E3_CC : constant User_Library.Custom_Component := (Hue_Change_Speed => 60);
+   E3_CC : constant User_Library.RainbowTextComponent := (Hue_Change_Speed => 60);
 begin
 
    --  Continue setup of components
-   --  Initialization and assigning of components can be delegated into an independent block (components are updated by copy)
-   --  The Entity_Components instance will need to remain visible, and the entity IDs should too
-   --  Those last two can be handled by instantiating them statically in a user library to avoid clutter
 
-   --  For now, the component IDs need to be exact values for the systems to acknowledge them
    ECS.Add_Component (E1_C.all, IDs.To_CID ("RenderInfo"), E1_RIC);
    ECS.Add_Component (E2_C.all, IDs.To_CID ("WidgetComponent"), E2_WC);
    ECS.Add_Component (E2_C.all, IDs.To_CID ("RootWidget"), E2_RWC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("WidgetComponent"), E3_WC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("BackgroundColorComponent"), E3_BCC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("TextComponent"), E3_TC);
-   ECS.Add_Component (E3_C.all, IDs.To_CID ("Custom_Component"), E3_CC);
+   ECS.Add_Component (E3_C.all, IDs.To_CID ("RainbowTextComponent"), E3_CC);
 
    --  Remaining Thuja init
    Graphics.Clear_Screen;
 
    --  Main loop
 
+   --  Loop forever
    loop
 
-      --  Custom system
-      User_Library.Custom_System (Entities);
+      --  Rainbow text system
+      User_Library.RainbowTextSystem (Entities);
 
       --  Execute systems (in correct order)
       ECS.WidgetBackgroundSystem (Entities);
