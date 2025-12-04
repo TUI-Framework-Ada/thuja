@@ -1,3 +1,4 @@
+--ids.adb
 package body IDs is
 
    function To_CID (ID : String) return Component_Id is
