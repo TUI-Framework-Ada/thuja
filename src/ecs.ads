@@ -1,3 +1,4 @@
+--ecs.ads
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings;
 with Ada.Strings.Unbounded.Hash;
