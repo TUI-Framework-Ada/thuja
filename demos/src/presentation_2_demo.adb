@@ -13,7 +13,7 @@ with ECS; use ECS;
 with IDs; use IDs;
 with User_Library; use User_Library;
 
-procedure Multi_Progress_Demo is
+procedure Presentation_2_Demo is
 
    --  Entity storage
    Entities : Entity_Components;
@@ -138,4 +138,4 @@ begin
    Ada.Text_IO.New_Line (3);
    Ada.Text_IO.Put_Line ("Demo complete!");
 
-end Multi_Progress_Demo;
+end Presentation_2_Demo;
