@@ -59,17 +59,15 @@ package body Graphics is
    --  This should be run once before any of the systems.
    procedure Clear_Screen is
    begin
-      --  Clear formatting, clear screen, move cursor to top-left, hide cursor
+      --  Clear formatting, clear screen, move cursor to top-left
       Ada.Text_IO.Put (CSI & "0m" & CSI & "2J" & CSI & "1;1H");
-      Hide_Cursor;
    end Clear_Screen;
 
-   --  Resets terminal to normal state (shows cursor, resets colors)
-   procedure Reset_Terminal is
+   --  Resets terminal to normal state (resets colors and typefaces)
+   procedure Reset_Styling is
    begin
-      --  Reset all attributes, show cursor
+      --  Reset all styling / attributes
       Ada.Text_IO.Put (CSI & "0m");
-      Show_Cursor;
-   end Reset_Terminal;
+   end Reset_Styling;
 
 end Graphics;

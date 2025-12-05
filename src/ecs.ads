@@ -62,5 +62,8 @@ package ECS is
    procedure TextRenderSystem (Entity_List : Entity_Components);
    procedure BufferCopySystem (Entity_List : Entity_Components);
    procedure BufferDrawSystem (Entity_List : Entity_Components);
+   --  Renders all progress bar widgets to their buffers.
+   --  Should be called after WidgetBackgroundSystem and before BufferCopySystem.
+   procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components);
 
 end ECS;

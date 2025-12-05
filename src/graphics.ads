@@ -96,6 +96,6 @@ package Graphics is
 
    --  Resets terminal to normal state (shows cursor, resets colors).
    --  Call this before program exit.
-   procedure Reset_Terminal;
+   procedure Reset_Styling;
 
 end Graphics;

@@ -9,7 +9,7 @@ with Graphics; use Graphics;
 with Components; use Components;
 with ECS; use ECS;
 with IDs; use IDs;
-with Thuja; use Thuja;
+with User_Library; use User_Library;
 
 procedure Progress_Bar_Demo is
 
@@ -85,6 +85,7 @@ procedure Progress_Bar_Demo is
 
 begin
    --  Clear terminal and print header
+   Hide_Cursor;
    Clear_Screen;
    Ada.Text_IO.Put_Line ("=== Thuja Progress Bar Demo ===");
    Ada.Text_IO.Put_Line ("Progress bar will fill over 5 seconds...");
@@ -127,6 +128,7 @@ begin
    Ada.Text_IO.Put_Line ("Demo complete!");
 
    --  Reset terminal to normal state (show cursor, reset colors)
-   Reset_Terminal;
+   Reset_Styling;
+   Show_Cursor;
 
 end Progress_Bar_Demo;
