@@ -85,4 +85,7 @@ package graphics is
                               Y : in TUI_Height)
                               return Pixel_t;
 
+   --  Sends ANSI code to the terminal to wipe the screen. This should be run, once, before any of the systems.
+   procedure Clear_Screen;
+
 end graphics;

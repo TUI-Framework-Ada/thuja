@@ -1,4 +1,5 @@
 -- Package Body for Graphics
+with Ada.Text_IO;
 
 
 package body Graphics is
@@ -42,5 +43,13 @@ package body Graphics is
       -- Returns value read from the array
       return B.Data (X, Y);
    end Get_Buffer_Pixel;
+
+   --  Sends ANSI code to the terminal to wipe the screen. This should be run, once, before any of the systems.
+   procedure Clear_Screen is
+      CSI : constant String := Character'Val (16#1B#) & '[';
+   begin
+      --  Clear formatting, clear screen, move cursor to top-left
+      Ada.Text_IO.Put (CSI & "0m" & CSI & "2J" & CSI & "1;1H");
+   end Clear_Screen;
 
 end Graphics;
