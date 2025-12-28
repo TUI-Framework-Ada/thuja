@@ -1,17 +1,12 @@
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
 with IDs; use IDs;
+with Flexbox; use Flexbox;
 
 package Components is
 
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
-
-   --  Defines a type within the record to hold a list of child entity IDs "<>"
-   --  indicates unconstrained array
-   --type Entity_ID_Array is array (Positive range <>) of Entity_ID;
-
-
 
    --  Abstract component superclass
    type Component_T is abstract tagged null record;
@@ -27,10 +22,19 @@ package Components is
 
    end record;
 
+   -- FLEXBOX INTEGRATION: New component that attaches flexbox layout rules to an entity
+   -- Entities with this component will have their positions/sizes computed by the flexbox algorithm
+   -- The Is_Dirty flag prevents unnecessary recalculation every frame
+   type Flex_Layout_Component_T is new Component_T with record
+      Flex_Container : Flexbox.Flex_Container;  -- Holds flexbox layout configuration and items
+      Is_Dirty : Boolean := True;               -- Marks if layout needs recalculation
+   end record;
+
    --  WidgetComponent
    type Widget_Component_T is new Component_T with record
 
-      -- Position and Size
+      -- FLEXBOX INTEGRATION: Position_X/Y and Size_Width/Height are now computed by FlexLayoutSystem
+      -- instead of being hardcoded, making layouts dynamic and responsive
       Position_X : TUI_Width := TUI_Width'First; --  Just set integers to default minimum values?
       Position_Y : TUI_Height := TUI_Height'First;
       Size_Width : TUI_Width := TUI_Width'First;

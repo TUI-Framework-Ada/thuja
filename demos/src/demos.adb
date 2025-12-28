@@ -71,6 +71,9 @@ begin
    for Loop_Index in Positive'First .. Loop_Count loop
 
       --  Execute systems (in correct order)
+      -- FLEXBOX INTEGRATION: FlexLayoutSystem MUST run first to compute widget positions/sizes
+      -- This ensures all subsequent rendering systems use the correct layout
+      ECS.FlexLayoutSystem (Entities);
       ECS.WidgetBackgroundSystem (Entities);
       ECS.TextRenderSystem (Entities);
       ECS.BufferCopySystem (Entities);

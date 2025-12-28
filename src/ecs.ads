@@ -57,6 +57,8 @@ package ECS is
       return Entity_ID_Vector.Vector;
 
    --  Built-in systems
+   -- FLEXBOX INTEGRATION: New layout system that must run before rendering systems
+   procedure FlexLayoutSystem (Entity_List : Entity_Components);
    procedure WidgetBackgroundSystem (Entity_List : Entity_Components);
    procedure TextRenderSystem (Entity_List : Entity_Components);
    procedure BufferCopySystem (Entity_List : Entity_Components);

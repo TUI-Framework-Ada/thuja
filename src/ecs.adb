@@ -2,6 +2,8 @@ with Ada.Characters.Conversions;
 with Ada.Strings.Unbounded;
 with Ada.Wide_Wide_Text_IO;
 with Graphics; use Graphics;
+-- FLEXBOX INTEGRATION: Import flexbox package for layout calculations
+with Flexbox; use Flexbox;
 
 package body ECS is
 
@@ -153,6 +155,54 @@ package body ECS is
 --   end ExampleSystem;
 
    --  Built-in systems
+   
+   -- FLEXBOX INTEGRATION: New system that computes widget layouts using flexbox algorithm
+   -- This system must run BEFORE rendering systems (WidgetBackgroundSystem, TextRenderSystem, etc.)
+   -- It queries for entities with both FlexLayoutComponent and WidgetComponent, then:
+   --   1. Calls the flexbox layout algorithm if the layout is dirty (marked for recalculation)
+   --   2. Copies computed positions and sizes from flexbox into the Widget component
+   --   3. Marks the layout as clean to avoid recalculating every frame
+   procedure FlexLayoutSystem (Entity_List : Entity_Components) is
+      Search_Component_IDs : Component_ID_Vector.Vector;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+      Flex_C : Flex_Layout_Component_T;
+      Widget_C : Widget_Component_T;
+   begin
+      Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
+      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List, EID);
+         Flex_C := Flex_Layout_Component_T (
+            Get_Component (Component_List.all, To_CID ("FlexLayoutComponent"))
+         );
+         Widget_C := Widget_Component_T (
+            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
+         );
+
+         -- Only recalculate layout if marked dirty (performance optimization)
+         if Flex_C.Is_Dirty then
+            -- FLEXBOX INTEGRATION: Call the flexbox layout algorithm
+            Flexbox.Layout (Flex_C.Flex_Container);
+            Flex_C.Is_Dirty := False;
+
+            -- FLEXBOX INTEGRATION: Copy flexbox-computed positions into widget component
+            -- This ensures widgets are positioned based on flexbox rules, not manual hardcoding
+            if Flex_C.Flex_Container.Items /= null and
+               Flex_C.Flex_Container.Item_Count > 0
+            then
+               Widget_C.Position_X := TUI_Width (Flex_C.Flex_Container.Items(1).Position_X);
+               Widget_C.Position_Y := TUI_Height (Flex_C.Flex_Container.Items(1).Position_Y);
+               Widget_C.Size_Width := TUI_Width (Flex_C.Flex_Container.Items(1).Computed_Size);
+            end if;
+         end if;
+
+         Add_Component (Component_List.all, To_CID ("FlexLayoutComponent"), Flex_C);
+         Add_Component (Component_List.all, To_CID ("WidgetComponent"), Widget_C);
+      end loop;
+   end FlexLayoutSystem;
 
    procedure WidgetBackgroundSystem (Entity_List : Entity_Components) is
       Search_Component_IDs : Component_ID_Vector.Vector;
