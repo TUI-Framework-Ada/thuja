@@ -156,51 +156,91 @@ package body ECS is
 
    --  Built-in systems
    
-   -- FLEXBOX INTEGRATION: New system that computes widget layouts using flexbox algorithm
-   -- This system must run BEFORE rendering systems (WidgetBackgroundSystem, TextRenderSystem, etc.)
-   -- It queries for entities with both FlexLayoutComponent and WidgetComponent, then:
-   --   1. Calls the flexbox layout algorithm if the layout is dirty (marked for recalculation)
-   --   2. Copies computed positions and sizes from flexbox into the Widget component
-   --   3. Marks the layout as clean to avoid recalculating every frame
+  
+-- FLEXBOX INTEGRATION: Corrected System
+   -- Fixes Constraint_Error by using standard Integers for intermediate math.
    procedure FlexLayoutSystem (Entity_List : Entity_Components) is
       Search_Component_IDs : Component_ID_Vector.Vector;
-      Matched_Entities : Entity_ID_Vector.Vector;
-      Component_List : Components_Ptr;
-      Flex_C : Flex_Layout_Component_T;
-      Widget_C : Widget_Component_T;
+      Matched_Entities     : Entity_ID_Vector.Vector;
+      
+      -- Containers for the Parent (The Flex Container)
+      Parent_Comps         : Components_Ptr;
+      Flex_C               : Flex_Layout_Component_T;
+      Parent_Widget_C      : Widget_Component_T;
+      
+      -- Containers for the Children (The Items)
+      Child_Comps          : Components_Ptr;
+      Child_Widget_C       : Widget_Component_T;
+      Child_Id             : Entity_Id;
+
+      -- Temporary integers for safe calculation
+      Calc_X, Calc_Y, Calc_W, Calc_H : Integer;
    begin
       Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+      
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
       
-      for EID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, EID);
+      for Parent_EID of Matched_Entities loop
+         Parent_Comps := Get_Entity_Components (Entity_List, Parent_EID);
+         
          Flex_C := Flex_Layout_Component_T (
-            Get_Component (Component_List.all, To_CID ("FlexLayoutComponent"))
+            Get_Component (Parent_Comps.all, To_CID ("FlexLayoutComponent"))
          );
-         Widget_C := Widget_Component_T (
-            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
+         Parent_Widget_C := Widget_Component_T (
+            Get_Component (Parent_Comps.all, To_CID ("WidgetComponent"))
          );
 
-         -- Only recalculate layout if marked dirty (performance optimization)
+         -- 1. Sync Flex Container size with the Parent Widget size
+         Flex_C.Flex_Container.Width := Integer (Parent_Widget_C.Size_Width);
+         Flex_C.Flex_Container.Height := Integer (Parent_Widget_C.Size_Height);
+
+         -- 2. Run Layout Algorithm
          if Flex_C.Is_Dirty then
-            -- FLEXBOX INTEGRATION: Call the flexbox layout algorithm
             Flexbox.Layout (Flex_C.Flex_Container);
             Flex_C.Is_Dirty := False;
-
-            -- FLEXBOX INTEGRATION: Copy flexbox-computed positions into widget component
-            -- This ensures widgets are positioned based on flexbox rules, not manual hardcoding
-            if Flex_C.Flex_Container.Items /= null and
-               Flex_C.Flex_Container.Item_Count > 0
-            then
-               Widget_C.Position_X := TUI_Width (Flex_C.Flex_Container.Items(1).Position_X);
-               Widget_C.Position_Y := TUI_Height (Flex_C.Flex_Container.Items(1).Position_Y);
-               Widget_C.Size_Width := TUI_Width (Flex_C.Flex_Container.Items(1).Computed_Size);
-            end if;
+            Add_Component (Parent_Comps.all, To_CID ("FlexLayoutComponent"), Flex_C);
          end if;
 
-         Add_Component (Component_List.all, To_CID ("FlexLayoutComponent"), Flex_C);
-         Add_Component (Component_List.all, To_CID ("WidgetComponent"), Widget_C);
+         -- 3. Apply Calculated Positions to Child Entities
+         if Flex_C.Flex_Container.Items /= null then
+            for I in 1 .. Flex_C.Flex_Container.Item_Count loop
+               
+               Child_Id := Flex_C.Flex_Container.Items(I).Related_Entity;
+               Child_Comps := Get_Entity_Components(Entity_List, Child_Id);
+               
+               if Child_Comps /= null and then Has_Component(Child_Comps.all, To_CID("WidgetComponent")) then
+                  Child_Widget_C := Widget_Component_T (
+                     Get_Component (Child_Comps.all, To_CID ("WidgetComponent"))
+                  );
+
+                  -- FIX: Use Integer math first to allow 0 offsets, then cast to TUI type
+                  -- Parent (1) + Offset (0) = 1 (Valid TUI_Width)
+                  Calc_X := Integer(Parent_Widget_C.Position_X) + Flex_C.Flex_Container.Items(I).Position_X;
+                  Calc_Y := Integer(Parent_Widget_C.Position_Y) + Flex_C.Flex_Container.Items(I).Position_Y;
+
+                  Child_Widget_C.Position_X := TUI_Width(Calc_X);
+                  Child_Widget_C.Position_Y := TUI_Height(Calc_Y);
+                  
+                  -- UPDATE SIZE:
+                  -- We also use Integer'Max(1, ...) to ensure size never hits 0 and crashes
+                  if Flex_C.Flex_Container.Direction = Row then
+                     Calc_W := Integer'Max(1, Flex_C.Flex_Container.Items(I).Computed_Size);
+                     Calc_H := Integer'Max(1, Flex_C.Flex_Container.Items(I).Cross_Size);
+                  else
+                     Calc_H := Integer'Max(1, Flex_C.Flex_Container.Items(I).Computed_Size);
+                     Calc_W := Integer'Max(1, Flex_C.Flex_Container.Items(I).Cross_Size);
+                  end if;
+
+                  Child_Widget_C.Size_Width := TUI_Width(Calc_W);
+                  Child_Widget_C.Size_Height := TUI_Height(Calc_H);
+
+                  -- Save Child Widget back to ECS
+                  Add_Component (Child_Comps.all, To_CID ("WidgetComponent"), Child_Widget_C);
+               end if;
+            end loop;
+         end if;
+
       end loop;
    end FlexLayoutSystem;
 
