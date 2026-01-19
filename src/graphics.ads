@@ -49,6 +49,8 @@ package Graphics is
       Char_Color       : Color_t   := White;
       Background_Color : Color_t   := Black;
       Is_Bold          : Boolean   := False;
+      Is_Italic        : Boolean   := False;
+      Is_Underline     : Boolean   := False;
    end record;
 
    --  Maximum resolution for the display (Change later)

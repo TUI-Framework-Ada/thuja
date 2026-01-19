@@ -53,6 +53,15 @@ package Components is
       Text       : SU.Unbounded_String;  --  Unbounded string
       Text_Color : Color_t;              --  Color instance (copied, not referenced)
 
+      -- Text Position Fields for relative offset from parent widget (WIP)
+      -- Text_Pos_X  :  TUI_Width   := TUI_Width'First;
+      -- Text_Pos_Y  :  TUI_Height  := TUI_Height'First;
+
+      -- Formatting Flags (WIP)
+      Is_Bold          : Boolean := False;
+      Is_Italic        : Boolean := False;
+      Is_Underline     : Boolean := False;
+
    end record;
 
    --  RootWidgetComponent
