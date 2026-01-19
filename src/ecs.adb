@@ -238,9 +238,10 @@ package body ECS is
             Px.Char_Color := Text_C.Text_Color;
 
             -- For text stylization
-            Px.Is_Bold        := Text_C.Is_Bold;
-            Px.Is_Italic      := Text_C.Is_Italic;
-            Px.Is_Underline   := Text_C.Is_Underline;
+            Px.Is_Bold           := Text_C.Is_Bold;
+            Px.Is_Italic         := Text_C.Is_Italic;
+            Px.Is_Underline      := Text_C.Is_Underline;
+            Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
             Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
@@ -383,9 +384,12 @@ package body ECS is
       -- 4m sets Underline, 24m sets Underline off
       function Underline (P : Pixel_t) return String is
         (CSI & (if P.Is_Underline then "4m" else "24m"));
+      -- 9m sets Strikethrough, 29 sets Strikethrough off
+      function Strikethrough (P : Pixel_t) return String is
+        (CSI & (if P.Is_Strikethrough then "9m" else "29m"));
       -- Format function to include format styles
       function Format (P : Pixel_t) return String is
-         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P));
+         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       function ConvertWW (P : Pixel_t; Row : TUI_Height;

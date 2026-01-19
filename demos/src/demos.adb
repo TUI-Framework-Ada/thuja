@@ -54,7 +54,7 @@ procedure Demos is
    E3_TC : constant Components.Text_Component_T := (
       Text => SU.To_Unbounded_String ("This text will shift through colors!"),
       Text_Color => Graphics.Red,
-      -- Formatting Flags (TESTING)
+      -- Formatting Flags for text stylization for the above string
       Is_Bold => True,
       Is_Italic => True,
       Is_Underline => True,

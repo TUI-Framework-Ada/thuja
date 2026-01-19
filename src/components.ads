@@ -57,10 +57,11 @@ package Components is
       -- Text_Pos_X  :  TUI_Width   := TUI_Width'First;
       -- Text_Pos_Y  :  TUI_Height  := TUI_Height'First;
 
-      -- Formatting Flags (WIP)
+      -- Formatting flags for text stylization
       Is_Bold          : Boolean := False;
       Is_Italic        : Boolean := False;
       Is_Underline     : Boolean := False;
+      Is_Strikethrough : Boolean := False;
 
    end record;
 

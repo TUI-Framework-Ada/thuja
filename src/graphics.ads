@@ -51,6 +51,7 @@ package Graphics is
       Is_Bold          : Boolean   := False;
       Is_Italic        : Boolean   := False;
       Is_Underline     : Boolean   := False;
+      Is_Strikethrough : Boolean   := False;
    end record;
 
    --  Maximum resolution for the display (Change later)
