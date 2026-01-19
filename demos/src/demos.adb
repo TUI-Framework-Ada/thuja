@@ -58,6 +58,7 @@ procedure Demos is
       Is_Bold => True,
       Is_Italic => True,
       Is_Underline => True,
+      Is_Strikethrough => True,
       others => <>
                                                    );
    E3_CC : constant User_Library.RainbowTextComponent := (Hue_Change_Speed => 60);
