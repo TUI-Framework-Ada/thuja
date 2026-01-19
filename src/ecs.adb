@@ -236,6 +236,12 @@ package body ECS is
             Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
             Px.Char := Char;
             Px.Char_Color := Text_C.Text_Color;
+
+            -- For text stylization
+            Px.Is_Bold        := Text_C.Is_Bold;
+            Px.Is_Italic      := Text_C.Is_Italic;
+            Px.Is_Underline   := Text_C.Is_Underline;
+
             Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
@@ -368,10 +374,18 @@ package body ECS is
         (CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
              & Trim (P.Background_Color.Green'Image) & ";"
              & Trim (P.Background_Color.Blue'Image) & "m");
+      -- 1m sets Bold, 22m sets Bold off
       function Bold (P : Pixel_t) return String is
         (CSI & (if P.Is_Bold then "1m" else "22m"));
+      -- 3m sets Italic, 23m sets Italic off
+      function Italic (P : Pixel_t) return String is
+        (CSI & (if P.Is_Italic then "3m" else "23m"));
+      -- 4m sets Underline, 24m sets Underline off
+      function Underline (P : Pixel_t) return String is
+        (CSI & (if P.Is_Underline then "4m" else "24m"));
+      -- Format function to include format styles
       function Format (P : Pixel_t) return String is
-         (FG (P) & BG (P) & Bold (P));
+         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       function ConvertWW (P : Pixel_t; Row : TUI_Height;
