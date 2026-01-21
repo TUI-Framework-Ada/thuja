@@ -215,7 +215,8 @@ package body User_Library is
             ("=== Multi Progress Bar Demo ===" &
                "                                       " &
                "Simulating a multi-stage installation..."),
-         Text_Color => Graphics.White);
+         Text_Color => Graphics.White,
+         others => <>);
    begin
       Comp_Ptr := Add_Entity (Entities, Root_ID);
       Widget_C.Position_X := TUI_Width'First;
@@ -270,7 +271,8 @@ package body User_Library is
         (Background_Color => (96, 96, 96));
       Text_C : constant Text_Component_T :=
         (Text => SU.To_Unbounded_String ("This text will shift through colors!"),
-         Text_Color => (128, 0, 0));
+         Text_Color => (128, 0, 0),
+         others => <>);
       Rainbow_Text_C : constant RainbowTextComponent :=
         (Hue_Change_Speed => 20);
    begin

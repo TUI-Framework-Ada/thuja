@@ -43,16 +43,23 @@ procedure Demos is
    E3_WC : constant Components.Widget_Component_T := (
       Position_X => 5,
       Position_Y => 3,
-      Size_Width => 10,
+      Size_Width => 20,
       Size_Height => 5,
       Has_Focus => True,
       others => <>
                                                      );
    E3_BCC : constant Components.Background_Color_Component_T := (
       Background_Color => (64, 64, 64));
+
    E3_TC : constant Components.Text_Component_T := (
       Text => SU.To_Unbounded_String ("This text will shift through colors!"),
-      Text_Color => Graphics.Red
+      Text_Color => Graphics.Red,
+      -- Formatting Flags for text stylization for the above string
+      Is_Bold => True,
+      Is_Italic => True,
+      Is_Underline => True,
+      Is_Strikethrough => True,
+      others => <>
                                                    );
    E3_CC : constant User_Library.RainbowTextComponent := (Hue_Change_Speed => 60);
 

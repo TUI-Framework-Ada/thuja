@@ -11,7 +11,8 @@ package body Thuja is
    ---------------------------------------------------------------------------
 
    procedure Log is
-      Pix : constant Pixel_t := ('A', Red, Black, True);
+      -- Added "others" to parameters for text stylization implementation
+      Pix : constant Pixel_t := ('A', Red, Black, True, others => <>);
    begin
       Ada.Text_IO.Put_Line (Pix'Image);
    end Log;
