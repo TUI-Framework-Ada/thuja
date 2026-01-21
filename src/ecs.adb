@@ -251,7 +251,6 @@ package body ECS is
             Px.Is_Underline      := Text_C.Is_Underline;
             Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
             Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
