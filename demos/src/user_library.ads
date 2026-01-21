@@ -61,6 +61,8 @@ package User_Library is
                                 Term_Height : TUI_Height;
                                 Child_IDs : Entity_ID_Vector.Vector);
 
+   procedure Run_Render_Systems (Entities : in out Entity_Components);
+
    procedure Run_Systems (Entities : in out Entity_Components);
 
    procedure Setup_Animation (Entities : in out Entity_Components;

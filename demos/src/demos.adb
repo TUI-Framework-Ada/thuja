@@ -55,6 +55,23 @@ procedure Demos is
       Text_Color => Graphics.Red
                                                    );
    E3_CC : constant User_Library.RainbowTextComponent := (Hue_Change_Speed => 60);
+
+
+
+   --  Render thread declaration
+   --  The main body doesn't end, so it's fine that this doesn't either
+   task Render_Thread;
+
+   task body Render_Thread is
+   begin
+      loop
+         ECS.BufferCopySystem (Entities);
+         ECS.BufferDrawSystem (Entities);
+
+         --  30 FPS
+         delay Duration (1.0 / 30.0);
+      end loop;
+   end Render_Thread;
 begin
 
    --  Continue setup of components
@@ -81,8 +98,6 @@ begin
       --  Execute systems (in correct order)
       ECS.WidgetBackgroundSystem (Entities);
       ECS.TextRenderSystem (Entities);
-      ECS.BufferCopySystem (Entities);
-      ECS.BufferDrawSystem (Entities);
 
       --  30 FPS
       delay Duration (1.0 / 30.0);
