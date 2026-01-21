@@ -39,6 +39,40 @@ procedure Presentation_2_Demo is
    P2_Value : Float := 0.0;
    P3_Value : Float := 0.0;
 
+
+
+   --  Thread stopping flag
+   protected Thread_Flag is
+      procedure Stop;
+      function Check return Boolean;
+      private
+         Should_End : Boolean := False;
+   end Thread_Flag;
+
+   protected body Thread_Flag is
+      procedure Stop is
+      begin
+         Should_End := True;
+      end Stop;
+
+      function Check return Boolean is
+      begin
+         return Should_End;
+      end Check;
+   end Thread_Flag;
+
+   --  Render thread declaration
+   task Render_Thread_T;
+
+   task body Render_Thread_T is
+   begin
+      loop
+         Run_Render_Systems (Entities);
+         delay Frame_Duration;
+         exit when Thread_Flag.Check;
+      end loop;
+   end Render_Thread_T;
+
 begin
    Hide_Cursor;
    Clear_Screen;
@@ -88,7 +122,7 @@ begin
    --  Animated text
    Setup_Animation (Entities, Animation_ID);
 
-   --  Initial render
+   --  Initial systems pass
    Run_Systems (Entities);
 
    --  Main loop, simulating non-system data hooking
@@ -129,6 +163,11 @@ begin
 
       delay Frame_Duration;
    end loop;
+
+   --  Signal render thread to end
+   --  This doesn't rendezvous, so it's possible that another render happens
+   --    after the following lines. Regardless, it will end.
+   Thread_Flag.Stop;
 
    --  Reset terminal to normal state (show cursor, reset colors)
    Reset_Styling;

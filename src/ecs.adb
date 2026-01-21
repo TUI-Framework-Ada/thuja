@@ -163,6 +163,7 @@ package body ECS is
       BGColor_C : Background_Color_Component_T;
       BGColor : Color_t;
       Px : Pixel_t;
+      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
@@ -177,17 +178,21 @@ package body ECS is
                                                );
          BGColor := BGColor_C.Background_Color;
 
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
             for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
                --  returns a copy of the buffer's pixel
-               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+               Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
                --  edit values of the copy
                Px.Char := ' ';
                Px.Background_Color := BGColor;
-               --  pass back to update in the buffer
-               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               --  pass back to update in the temp buffer
+               Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -214,6 +219,7 @@ package body ECS is
       Text : SU.Unbounded_String;
       Char : Character;
       Px : Pixel_t;
+      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
@@ -230,10 +236,12 @@ package body ECS is
 
          Pos_W := TUI_Width'First;
          Pos_H := TUI_Height'First;
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
             Char := SU.Element (Text, Text_Index);
-            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+            Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
             Px.Char := Char;
             Px.Char_Color := Text_C.Text_Color;
 
@@ -244,6 +252,7 @@ package body ECS is
             Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
             Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+            Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
@@ -254,6 +263,8 @@ package body ECS is
             --  If out of bounds, break
             exit when Pos_H > Widget_C.Size_Height;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -278,18 +289,22 @@ package body ECS is
          Parent_Pixel : Pixel_t;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
+         Temp_Buffer : Buffer_T;
       begin
          --  Calc root edges
          Root_Left := Root.Position_X;
          Root_Right := Root.Position_X + Root.Size_Width - TUI_Width (1);
          Root_Top := Root.Position_Y;
          Root_Bottom := Root.Position_Y + Root.Size_Height - TUI_Height (1);
+
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Parent.Protected_Buffer.Get;
          --  For each pixel of Render_Buffer,
          --    only within the bounds of the widget
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in TUI_Width'First .. Parent.Size_Width loop
             for Pos_H in TUI_Height'First .. Parent.Size_Height loop
-               Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
+               Parent_Pixel := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
                --  Calc X
                Parent_X := Parent.Position_X + Pos_W - TUI_Width (1);
                --  Calc Y
@@ -309,6 +324,8 @@ package body ECS is
                          );
             end loop;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Parent.Protected_Buffer.Set (Temp_Buffer);
 
          --  For the parent's children
          for Child_Entity_ID of Parent.Children loop
@@ -458,6 +475,7 @@ package body ECS is
       Pos_Index            : Natural;
       Current_Char         : Character;
       Has_BG               : Boolean;
+      Temp_Buffer          : Buffer_T;
    begin
       --  Query for entities with WidgetComponent and ProgressBarComponent
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
@@ -525,11 +543,13 @@ package body ECS is
             end if;
          end;
 
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          --  Render to buffer (first row only for single-line progress bar)
          Pos_Index := 0;
          for X in TUI_Width'First .. Widget_C.Size_Width loop
             Pos_Index := Pos_Index + 1;
-            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First);
+            Px := Get_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First);
 
             --  Set background color if available
             if Has_BG then
@@ -584,22 +604,24 @@ package body ECS is
             end if;
 
             Px.Char := Current_Char;
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First, Px);
+            Set_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First, Px);
          end loop;
 
          --  Fill remaining rows with background (for multi-row widgets)
          if Widget_C.Size_Height > TUI_Height'First then
             for Y in TUI_Height'First + 1 .. Widget_C.Size_Height loop
                for X in TUI_Width'First .. Widget_C.Size_Width loop
-                  Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, Y);
+                  Px := Get_Buffer_Pixel (Temp_Buffer, X, Y);
                   Px.Char := ' ';
                   if Has_BG then
                      Px.Background_Color := BG_C.Background_Color;
                   end if;
-                  Set_Buffer_Pixel (Widget_C.Render_Buffer, X, Y, Px);
+                  Set_Buffer_Pixel (Temp_Buffer, X, Y, Px);
                end loop;
             end loop;
          end if;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components back to entity
          Add_Component (Comp_Ptr.all, To_CID ("WidgetComponent"), Widget_C);
