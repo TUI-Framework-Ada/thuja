@@ -54,8 +54,8 @@ package Components is
       Text_Color : Color_t;              --  Color instance (copied, not referenced)
 
       -- Text Position Fields for relative offset from parent widget (WIP)
-      -- Text_Pos_X  :  TUI_Width   := TUI_Width'First;
-      -- Text_Pos_Y  :  TUI_Height  := TUI_Height'First;
+      Offset_X  :  TUI_Width  := TUI_Width'First;
+      Offset_Y  :  TUI_Height := TUI_Height'First;
 
       -- Formatting flags for text stylization
       Is_Bold          : Boolean := False;

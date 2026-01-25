@@ -218,8 +218,10 @@ package body ECS is
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List, EID);
+
          Widget_C := Widget_Component_T (
             Get_Component (Component_List.all, To_CID ("WidgetComponent"))
                                         );
@@ -228,8 +230,11 @@ package body ECS is
                                     );
          Text := Text_C.Text;
 
-         Pos_W := TUI_Width'First;
-         Pos_H := TUI_Height'First;
+         -- Initiatize drawing position using text offsets
+         -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
+         Pos_W := TUI_Width (Text_C.Offset_X);
+         Pos_H := TUI_Height (Text_C.Offset_Y);
+
          for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
             Char := SU.Element (Text, Text_Index);
