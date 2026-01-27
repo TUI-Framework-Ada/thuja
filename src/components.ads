@@ -53,7 +53,7 @@ package Components is
       Text       : SU.Unbounded_String;  --  Unbounded string
       Text_Color : Color_t;              --  Color instance (copied, not referenced)
 
-      -- Text Position Fields for relative offset from parent widget (WIP)
+      -- Text Position Fields for relative offset from parent widget
       Offset_X  :  TUI_Width  := TUI_Width'First;
       Offset_Y  :  TUI_Height := TUI_Height'First;
 

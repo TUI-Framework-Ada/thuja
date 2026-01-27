@@ -232,8 +232,8 @@ package body ECS is
 
          -- Initiatize drawing position using text offsets
          -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
-         Pos_W := TUI_Width (Text_C.Offset_X);
-         Pos_H := TUI_Height (Text_C.Offset_Y);
+         Pos_W := Text_C.Offset_X;
+         Pos_H := Text_C.Offset_Y;
 
          for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
