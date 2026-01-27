@@ -50,7 +50,7 @@ with ECS;
 with Graphics;
 with IDs;
 -- FLEXBOX INTEGRATION: Import Flexbox to configure the layout
-with Flexbox; 
+with Flexbox;
 
 procedure Demos is
 
@@ -64,7 +64,7 @@ procedure Demos is
    -- 1. DEFINE ENTITIES
    --------------------------------------------------------
    E1_ID : constant IDs.Entity_Id := IDs.To_EID ("Render info");
-   E2_ID : constant IDs.Entity_Id := IDs.To_EID ("Root widget"); 
+   E2_ID : constant IDs.Entity_Id := IDs.To_EID ("Root widget");
    E3_ID : constant IDs.Entity_Id := IDs.To_EID ("Green Sidebar");
    E4_ID : constant IDs.Entity_Id := IDs.To_EID ("Red Content");
 
@@ -77,12 +77,14 @@ procedure Demos is
    --------------------------------------------------------
    -- 2. DEFINE COMPONENTS
    --------------------------------------------------------
-   
+
    -- E1: Render Info (Standard)
    E1_RIC : constant Components.Render_Info_Component_T := (
       Terminal_Width => 80,
       Terminal_Height => 24,
-      Framebuffer => (Width => 80, Height => 24, Data => <>),
+      Framebuffer_1 => (Width => 80, Height => 24, Data => <>),
+      Framebuffer_2 => (Width => 80, Height => 24, Data => <>),
+      Drawing_FB => new Graphics.Protected_DB,
       Backbuffer => (Width => 80, Height => 24, Data => <>)
    );
 
@@ -97,18 +99,18 @@ procedure Demos is
       Is_Visible => True,    -- Required Field
       Is_Enabled => True     -- Required Field
    );
-   
+
    -- We can use others => <> here if the type has defaults for everything else
    E2_RWC : constant Components.Root_Widget_Component_T := (others => <>);
 
    -- FLEXBOX INTEGRATION: Define the Layout Logic
-   -- PROOF OF WORK: 
+   -- PROOF OF WORK:
    -- 1. Changed Direction to 'Column' (Vertical stacking)
    -- 2. Changed Flex_Basis of Item 1 to '5'. In Column mode, this now means HEIGHT.
    -- 3. Green box should now be a header bar across the top.
    E2_FC : constant Components.Flex_Layout_Component_T := (
       Flex_Container => (
-         Width      => 80, 
+         Width      => 80,
          Height     => 24,
          Direction  => Flexbox.Column,        -- CHANGED: Stack items vertically
          Justify    => Flexbox.Flex_Start,
@@ -117,24 +119,24 @@ procedure Demos is
          Items      => new Flexbox.Flex_Item_Array'(
             -- ITEM 1 (The Green Header)
             1 => (
-               Related_Entity => E3_ID, 
+               Related_Entity => E3_ID,
                Flex_Basis     => 5,     -- CHANGED: Fixed HEIGHT of 5 rows
                Flex_Grow      => 0.0,   -- Do not grow
                Flex_Shrink    => 0.0,
                Computed_Size  => 5,     -- Safe default
                Cross_Size     => 80,    -- Safe default (Will be overwritten by Stretch)
-               Position_X     => 0, 
+               Position_X     => 0,
                Position_Y     => 0
             ),
             -- ITEM 2 (The Red Content Body)
             2 => (
-               Related_Entity => E4_ID, 
-               Flex_Basis     => 0,     
+               Related_Entity => E4_ID,
+               Flex_Basis     => 0,
                Flex_Grow      => 1.0,   -- Grow to fill remaining HEIGHT (24 - 5 = 19)
                Flex_Shrink    => 0.0,
-               Computed_Size  => 1,     
-               Cross_Size     => 1,     
-               Position_X     => 0, 
+               Computed_Size  => 1,
+               Cross_Size     => 1,
+               Position_X     => 0,
                Position_Y     => 0
             )
          )
@@ -145,7 +147,7 @@ procedure Demos is
    -- E3: Green Box (The Sidebar)
    -- FIX: Added Is_Visible and Is_Enabled
    E3_WC : constant Components.Widget_Component_T := (
-      Position_X => 1, Position_Y => 1, 
+      Position_X => 1, Position_Y => 1,
       Size_Width => 1, Size_Height => 1,
       Has_Focus => True,
       Render_Buffer => (Width => 20, Height => 24, Data => <>),
@@ -160,8 +162,8 @@ procedure Demos is
    -- E4: Red Box (The Content Area)
    -- FIX: Added Is_Visible and Is_Enabled
    E4_WC : constant Components.Widget_Component_T := (
-      Position_X => 1, Position_Y => 1, 
-      Size_Width => 1, Size_Height => 1, 
+      Position_X => 1, Position_Y => 1,
+      Size_Width => 1, Size_Height => 1,
       Has_Focus => False,
       Render_Buffer => (Width => 60, Height => 24, Data => <>),
       Children => [],
@@ -172,10 +174,24 @@ procedure Demos is
       Background_Color => Graphics.Red
    );
 
+
+   --  Render thread declaration
+   --  The main body doesn't end, so it's fine that this doesn't either
+   task Render_Thread;
+
+   task body Render_Thread is
+   begin
+      loop
+         ECS.BufferDrawSystem (Entities);
+
+         --  30 FPS
+         delay Duration (1.0 / 30.0);
+      end loop;
+   end Render_Thread;
 begin
 
    ECS.Add_Component (E1_C.all, IDs.To_CID ("RenderInfo"), E1_RIC);
-   
+
    -- Root Widget Components
    ECS.Add_Component (E2_C.all, IDs.To_CID ("WidgetComponent"), E2_WC);
    ECS.Add_Component (E2_C.all, IDs.To_CID ("RootWidget"), E2_RWC);
@@ -200,6 +216,8 @@ begin
       ECS.FlexLayoutSystem (Entities);
       ECS.WidgetBackgroundSystem (Entities);
       ECS.TextRenderSystem (Entities);
+      ECS.BufferCopySystem (Entities);
+      ECS.DoubleBufferFlagSystem (Entities);
 
       delay Duration (0.1);
    end loop;

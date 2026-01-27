@@ -69,6 +69,18 @@ package Graphics is
       --  No default value needed, because Pixel already has defaults
       Data   : aliased Pixel_Array;
    end record;
+   type Buffer_Ptr is access Buffer_T;
+
+   --  Protected object for double-buffering, for thread-safe access to Buffer_Ptr
+   protected type Protected_DB is
+      entry Wait (V : out Boolean);
+      entry Post;
+      procedure Swap;
+   private
+      Draw_From_1 : Boolean := True;
+      Changing : Boolean := False;
+   end Protected_DB;
+   type Protected_DB_Ptr is access Protected_DB;
 
    --  Constructor to create and initialize buffer instance
    function Create_Buffer (Width  : in TUI_Width;

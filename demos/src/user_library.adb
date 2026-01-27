@@ -96,7 +96,7 @@ package body User_Library is
       Widget_C.Is_Visible := True;
       Widget_C.Is_Enabled := True;
       Widget_C.Has_Focus := False;
-      Widget_C.Protected_Buffer.Set (Create_Buffer (Width, Height));
+      Widget_C.Render_Buffer := Create_Buffer (Width, Height);
 
       --  Configure Background Color Component
       BG_C.Background_Color := BG_Color;
@@ -197,7 +197,9 @@ package body User_Library is
       Comp_Ptr := Add_Entity (Entities, Render_Info_ID);
       RI_C.Terminal_Width := Term_Width;
       RI_C.Terminal_Height := Term_Height;
-      RI_C.Framebuffer := Create_Buffer (Term_Width, Term_Height);
+      RI_C.Framebuffer_1 := Create_Buffer (Term_Width, Term_Height);
+      RI_C.Framebuffer_2 := Create_Buffer (Term_Width, Term_Height);
+      RI_C.Drawing_FB := new Protected_DB;
       RI_C.Backbuffer := Create_Buffer (Term_Width, Term_Height);
       Add_Component (Comp_Ptr.all, To_CID ("RenderInfo"), RI_C);
    end Setup_Render_Info;
@@ -225,7 +227,7 @@ package body User_Library is
       Widget_C.Size_Height := Term_Height;
       Widget_C.Is_Visible := True;
       Widget_C.Is_Enabled := True;
-      Widget_C.Protected_Buffer.Set (Create_Buffer (Term_Width, Term_Height));
+      Widget_C.Render_Buffer := Create_Buffer (Term_Width, Term_Height);
 
       --  Add all children
       for Child_ID of Child_IDs loop
@@ -243,7 +245,6 @@ package body User_Library is
 
    procedure Run_Render_Systems (Entities : in out Entity_Components) is
    begin
-      BufferCopySystem (Entities);
       BufferDrawSystem (Entities);
    end Run_Render_Systems;
 
@@ -253,6 +254,8 @@ package body User_Library is
       WidgetBackgroundSystem (Entities);
       TextRenderSystem (Entities);
       ProgressBarRenderSystem (Entities);
+      BufferCopySystem (Entities);
+      DoubleBufferFlagSystem (Entities);
    end Run_Systems;
 
    procedure Setup_Animation (Entities : in out Entity_Components;

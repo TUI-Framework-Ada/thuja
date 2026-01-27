@@ -73,6 +73,9 @@ package ECS is
    --  Renders all progress bar widgets to their buffers.
    --  Should be called after WidgetBackgroundSystem and before BufferCopySystem.
    procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components);
+   --  Swaps the double-buffering flag of Render_Info_Component_T
+   --  Should be called after all other systems
+   procedure DoubleBufferFlagSystem (Entity_List : in out Entity_Components);
 
    -- ================================================================
    -- NEW: Helper procedures for resize and widget movement

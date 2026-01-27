@@ -22,11 +22,13 @@ package Components is
    -- UPDATED: Added Prev_Terminal_Width/Height for resize detection
    type Render_Info_Component_T is new Component_T with record
       --  Data Fields
-      Framebuffer     : Buffer_T;
+      Framebuffer_1   : aliased Buffer_T;
+      Framebuffer_2   : aliased Buffer_T; --  Double-buffering
+      Drawing_FB      : Protected_DB_Ptr; --  Which FB the render thread should use
       Backbuffer      : Buffer_T;
       Terminal_Width  : TUI_Width;
       Terminal_Height : TUI_Height;
-      
+
       -- NEW: Previous terminal size for detecting resize events
       -- How it works: Compare current size vs. previous size each frame
       -- If different, trigger resize handling in RenderSystem
@@ -47,7 +49,7 @@ package Components is
    type Position_Mode is (
       Flex,      -- Positioned by parent's flexbox (default)
       Absolute,  -- Manual X/Y coordinates (ignore flexbox)
-      Relative,  -- Manual offset from flexbox position  
+      Relative,  -- Manual offset from flexbox position
       Fixed      -- Fixed screen position (ignore parent)
    );
 
@@ -59,15 +61,6 @@ package Components is
       Mode : Position_Mode := Flex;
    end record;
 
-   --  Protected object type for Widget_Component_T for rendering
-   protected type Protected_Buffer_T is
-      procedure Set (V : Buffer_T);
-      function Get return Buffer_T;
-   private
-      Render_Buffer : Buffer_T;
-   end Protected_Buffer_T;
-   type Protected_Buffer_Ptr is access Protected_Buffer_T;
-
    --  WidgetComponent
    type Widget_Component_T is new Component_T with record
       -- FLEXBOX INTEGRATION: Position_X/Y and Size_Width/Height are now computed by FlexLayoutSystem
@@ -76,7 +69,7 @@ package Components is
       Position_Y : TUI_Height := TUI_Height'First;
       Size_Width : TUI_Width := TUI_Width'First;
       Size_Height: TUI_Height := TUI_Height'First;
-      
+
       --  State flags
       Is_Visible : Boolean := True; --  Set to true so it can be seen
       Is_Enabled : Boolean := True; --  Set to true so it can function

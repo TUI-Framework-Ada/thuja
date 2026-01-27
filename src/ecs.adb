@@ -313,7 +313,7 @@ end FlexLayoutSystem;
                --  edit values of the copy
                Px.Char := ' ';
                Px.Background_Color := BGColor;
-               --  pass back to update in the temp buffer
+               --  pass back to update in the buffer
                Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
@@ -409,7 +409,6 @@ end FlexLayoutSystem;
                                      Parent : Widget_Component_T) is
          Child_Component_List : Components_Ptr;
          Child_Widget : Widget_Component_T;
-         Parent_Pixel : Pixel_t;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
       begin
@@ -440,7 +439,7 @@ end FlexLayoutSystem;
                Set_Buffer_Pixel (
                   Framebuffer,
                   Parent_X, Parent_Y,
-                  Parent_Pixel
+                  Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H)
                          );
             end loop;
          end loop;
@@ -467,6 +466,7 @@ end FlexLayoutSystem;
       Root_Components : Components_Ptr;
       RenderInfo_C : Render_Info_Component_T;
       Root : Widget_Component_T;
+      Rendering_To_FB_2 : Boolean;
    begin
       RI_Component_IDs.Append (To_CID ("RenderInfo"));
       Root_Component_IDs.Append (To_CID ("RootWidget"));
@@ -478,6 +478,7 @@ end FlexLayoutSystem;
          RenderInfo_C := Render_Info_Component_T (
             Get_Component (RI_Components.all, To_CID ("RenderInfo"))
                                                  );
+         RenderInfo_C.Drawing_FB.all.Wait (Rendering_To_FB_2);
          --  For each root
          for R_Entity_ID of Matched_Roots loop
             Root_Components := Get_Entity_Components (Entity_List, R_Entity_ID);
@@ -486,7 +487,11 @@ end FlexLayoutSystem;
                                        );
 
             --  For it and its children
-            RecursiveBufferCopy (RenderInfo_C.Framebuffer, Root, Root);
+            if Rendering_To_FB_2 then
+               RecursiveBufferCopy (RenderInfo_C.Framebuffer_2, Root, Root);
+            else
+               RecursiveBufferCopy (RenderInfo_C.Framebuffer_1, Root, Root);
+            end if;
          end loop;
 
          --  Update components
@@ -495,6 +500,8 @@ end FlexLayoutSystem;
                         To_CID ("RenderInfo"),
                         RenderInfo_C
                        );
+         --  Release RenderInfo
+         RenderInfo_C.Drawing_FB.all.Post;
       end loop;
    end BufferCopySystem;
 
@@ -550,9 +557,14 @@ end FlexLayoutSystem;
       --  Pointer to Components instance
       RI_Component_List : Components_Ptr;
       --  RenderInfo component
-      RI : Render_Info_Component_T;
+      RI : aliased Render_Info_Component_T;
       --  Framebuffer pixel
       FB_Pixel : Pixel_t;
+      Drawing_To_FB_1 : Boolean;
+
+      --  Local type needed due to accessibility rules for safe 'Access usage
+      type Drawing_Ptr is access all Buffer_T;
+      Drawing : Drawing_Ptr;
    begin
       Search_Components.Append (To_CID ("RenderInfo"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Components);
@@ -565,11 +577,17 @@ end FlexLayoutSystem;
          for EID of Matched_Entities loop
             RI_Component_List := Get_Entity_Components (Entity_List, EID);
             RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
+            RI.Drawing_FB.all.Wait (Drawing_To_FB_1);
+            Drawing := (if Drawing_To_FB_1 then RI.Framebuffer_1'Access else RI.Framebuffer_2'Access);
 
+            --  Begin comparing FB to BB and drawing
             for Y in TUI_Height'First .. RI.Terminal_Height loop
                for X in TUI_Width'First .. RI.Terminal_Width loop
-                  if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /= Get_Buffer_Pixel (RI.Backbuffer, X, Y) then
-                     FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
+                  if Get_Buffer_Pixel (Drawing.all, X, Y) /=
+                    Get_Buffer_Pixel (RI.Backbuffer, X, Y)
+                  then
+                     --  Fetch buffer pixels
+                     FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
                      -- Draw to terminal
                      Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
@@ -582,6 +600,9 @@ end FlexLayoutSystem;
 
             -- Pass updated component back
             Add_Component (RI_Component_List.all, To_CID ("RenderInfo"), RI);
+
+            --  Release RenderInfo
+            RI.Drawing_FB.all.Post;
          end loop;
 
       exception
@@ -597,7 +618,6 @@ end FlexLayoutSystem;
 
       -- Ensure commands are sent to the hardware immediately
       Ada.Wide_Wide_Text_IO.Flush;
-
    end BufferDrawSystem;
 
    ---------------------------------------------------------------------------
@@ -767,5 +787,44 @@ end FlexLayoutSystem;
          Add_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent"), PB_C);
       end loop;
    end ProgressBarRenderSystem;
+
+   --  Swaps the double-buffering flag of Render_Info_Component_T
+   --  Should be called after all other systems
+   procedure DoubleBufferFlagSystem (Entity_List : in out Entity_Components) is
+      Search_Component_IDs : Component_ID_Vector.Vector;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+      Render_Info : Render_Info_Component_T;
+      Drawing_From_FB_1 : Boolean;
+   begin
+      Search_Component_IDs.Append (To_CID ("RenderInfo"));
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List, EID);
+         --Render_Info := Render_Info_Component_T (
+         --   Get_Component (Component_List.all, "RenderInfo")
+         --                                       );
+
+         Render_Info := Render_Info_Component_T (
+            Get_Component (Component_List.all, To_CID ("RenderInfo"))
+         );
+         --
+         Render_Info.Drawing_FB.all.Wait (Drawing_From_FB_1);
+         Render_Info.Drawing_FB.all.Swap;
+         Render_Info.Drawing_FB.all.Post;
+
+         --...
+
+         --  Pass updated vals back to the Components instance
+         --  Required to run Get_Entity_Components again to avoid issues with
+
+         --    Update components
+         Add_Component (
+            Get_Entity_Components (Entity_List, EID).all,
+            To_CID ("RenderInfo"),
+            Render_Info
+                       );
+      end loop;
+   end DoubleBufferFlagSystem;
 
 end ECS;
