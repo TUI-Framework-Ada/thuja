@@ -1,6 +1,5 @@
-with Ada.Characters.Conversions;
 with Ada.Strings.Unbounded;
-with Ada.Wide_Wide_Text_IO;
+with Ada.Text_IO;
 with Graphics; use Graphics;
 -- FLEXBOX INTEGRATION: Import flexbox package for layout calculations
 with Flexbox; use Flexbox;
@@ -423,12 +422,10 @@ package body ECS is
          (FG (P) & BG (P) & Bold (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
-      function ConvertWW (P : Pixel_t; Row : TUI_Height;
-                          Col : TUI_Width) return Wide_Wide_String is
-        (Ada.Characters.Conversions.To_Wide_Wide_String (
-         Move (Row, Col) &
-           Format (P)) &
-           Ada.Characters.Conversions.To_Wide_Wide_Character (P.Char));
+      Reset : constant String := CSI & "0m";
+      function Convert (P : Pixel_t; Row : TUI_Height;
+                        Col : TUI_Width) return String is
+        (Move (Row, Col) & Format (P) & P.Char & Reset);
 
       --  Real stuff begins
       Search_Components : Component_ID_Vector.Vector;
@@ -445,6 +442,10 @@ package body ECS is
       for EID of Matched_Entities loop
          RI_Component_List := Get_Entity_Components (Entity_List, EID);
          RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
+         --  Re-assert cursor hide at the start of every frame so that
+         --  terminals which reset visibility (e.g. WSL) keep it hidden.
+         Ada.Text_IO.Put (CSI & "?25l");
+
          --  Begin comparing FB to BB and drawing
          for Y in TUI_Height'First .. RI.Terminal_Height loop
             for X in TUI_Width'First .. RI.Terminal_Width loop
@@ -454,12 +455,36 @@ package body ECS is
                   --  Fetch buffer pixels
                   FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
                   --  Draw to terminal
-                  Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
+                  Ada.Text_IO.Put (Convert (FB_Pixel, Y, X));
                   --  Copy values into backbuffer's pixel
                   Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
                end if;
             end loop;
          end loop;
+
+         --  Clear background artifacts beyond the rendered area.
+         --  On Windows, the console fills newly visible columns (from a
+         --  resize) with the attributes of the last character on the line.
+         --  Position cursor one column past the last rendered pixel, reset
+         --  attributes, then erase to end of line so new columns stay clean.
+         for Y_Clear in TUI_Height'First .. RI.Terminal_Height loop
+            declare
+               Col_After : constant Natural :=
+                  Natural (RI.Terminal_Width) + 1;
+            begin
+               Ada.Text_IO.Put (
+                  CSI & Trim (Natural'Image (Natural (Y_Clear))) & ";" &
+                  Trim (Natural'Image (Col_After)) & "H" &
+                  Reset & CSI & "K");
+            end;
+         end loop;
+
+         --  Park the cursor in a fixed position after rendering so that
+         --  even if the terminal ignores cursor-hide sequences, the cursor
+         --  sits quietly instead of flashing across the screen.
+         Ada.Text_IO.Put (
+            CSI & Trim (Natural'Image (Natural (RI.Terminal_Height))) & ";" &
+            Trim (Natural'Image (Natural (RI.Terminal_Width))) & "H");
 
          --  Update components
          Add_Component (

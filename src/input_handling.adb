@@ -2,15 +2,15 @@ with Ada.Text_IO;
 
 package body Input_Handling is
 
-   --  Push a new event to the buffer
-   procedure Push (Buffer : in Out Event_Buffer_t; Event : in Input_Event_t) is
+   --  Add a new event to the back of the buffer (FIFO queue)
+   procedure Enqueue (Buffer : in out Event_Buffer_t; Event : in Input_Event_t) is
    begin
       --  Append event to the end of the vector (FIFO queue)
       Buffer.Events.Append (Event);
-   end Push;
+   end Enqueue;
 
-   --  Pop the oldest event from the buffer
-   function Pop (Buffer : in Out Event_Buffer_t; Event : out Input_Event_t) return Boolean is
+   --  Remove and return the oldest event from the front of the buffer
+   function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean is
    begin
       --  Check if buffer is empty
       if Buffer.Events.Is_Empty then
@@ -24,53 +24,35 @@ package body Input_Handling is
       Buffer.Events.Delete_First;
 
       return True;
-   end Pop;
-
-   --  Check if buffer is empty
-   function Is_Empty (Buffer : in Event_Buffer_t) return Boolean is
-   begin
-      return Buffer.Events.Is_Empty;
-   end Is_Empty;
-
-   --  Clear all events from the buffer
-   procedure Clear (Buffer : in Out Event_Buffer_t) is
-   begin
-      Buffer.Events.Clear;
-   end Clear;
-
-   --  Get the current number of events in the buffer
-   function Size (Buffer : in Event_Buffer_t) return Natural is
-   begin
-      return Natural (Buffer.Events.Length);
-   end Size;
+   end Dequeue;
 
    --  Protected object implementation
-   protected body Protected_Input_Buffer is
+   protected body Protected_Input_Buffer_t is
 
       --  Add an event to the buffer (called by input reader)
       procedure Produce (Event : in Input_Event_t) is
       begin
-         Push (Events, Event);
+         Enqueue (Events, Event);
       end Produce;
 
       --  Get an event from the buffer (called by main application)
       procedure Consume (Event : out Input_Event_t) is
          Success : Boolean;
       begin
-         Success := Pop (Events, Event);
+         Success := Dequeue (Events, Event);
          if not Success then
             --  Use NUL character to indicate no input (not space!)
             Event := (Char_Value => Character'Val (0), Cmd => None);
          end if;
       end Consume;
 
-   end Protected_Input_Buffer;
+   end Protected_Input_Buffer_t;
 
    --  State machine for parsing input sequences
    procedure Parse_Input (
       C           : in Character;
       State       : in Out Parse_State_t;
-      Cmd         : out Command;
+      Cmd         : out Command_t;
       Has_Command : out Boolean
    ) is
       ASCII_TAB : constant Character := Character'Val (9);
@@ -112,7 +94,7 @@ package body Input_Handling is
    task body Input_Reader is
       C           : Character;
       State       : Parse_State_t := Normal;
-      Cmd         : Command;
+      Cmd         : Command_t;
       Has_Command : Boolean;
       Event       : Input_Event_t;
       Running     : Boolean := False;

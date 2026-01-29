@@ -4,7 +4,7 @@ with Ada.Text_IO;
 procedure Input_Demo is
    type Demo_State_t is (Welcome, Running, Exiting, Done);
    Current_State : Demo_State_t := Welcome;
-   Cmd : Command;
+   Cmd : Command_t;
 begin
    --  Start the input reader task
    Input_Reader.Start;

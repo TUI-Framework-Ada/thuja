@@ -85,7 +85,13 @@ package graphics is
                               Y : in TUI_Height)
                               return Pixel_t;
 
-   --  Sends ANSI code to the terminal to wipe the screen. This should be run, once, before any of the systems.
+   --  Enter fullscreen TUI mode: switches to the alternate screen buffer,
+   --  hides the cursor, clears the screen, and moves to the top-left.
+   --  Call this once at application startup before any rendering.
    procedure Clear_Screen;
+
+   --  Exit fullscreen TUI mode: resets formatting, shows the cursor, and
+   --  restores the main screen buffer.  Call this once at application exit.
+   procedure Restore_Screen;
 
 end graphics;
