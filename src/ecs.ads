@@ -44,10 +44,26 @@ package ECS is
       Hash            => Hash_Entity,
       Equivalent_Keys => "=");
    subtype Entity_Components is Entity_Map.Map;
+   type Entity_Components_Ptr is access all Entity_Components;
+   --  Protected object for the entity list
+   protected type Entity_Components_PO is
+      --  "Reading" access is used for editing components of an entity,
+      --    and allows multiple threads to access entities at once
+      --  Writing access is used for adding/removing entities,
+      --    and allows only 1 thread at once
+      entry Claim_Reading (Entity_List : in out Entity_Components_Ptr);
+      entry Claim_Writing (Entity_List : in out Entity_Components_Ptr);
+      procedure Release_Reading;
+      procedure Release_Writing;
+   private
+      Read_Using : Natural := 0;
+      Write_Using : Boolean := False;
+      Entities : aliased Entity_Components;
+   end Entity_Components_PO;
 
    -- Add / Remove UML
-   function Add_Entity (Self : in out Entity_Components; Id : Entity_Id) return Components_Ptr;
-   procedure Remove_Entity (Self : in out Entity_Components; Id : Entity_Id);
+   function Add_Entity (Self : in out Entity_Components_PO; Id : Entity_Id) return Components_Ptr;
+   procedure Remove_Entity (Self : in out Entity_Components_PO; Id : Entity_Id);
 
    function Get_Entity_Components (Self : in Entity_Components; Id : Entity_Id) return Components_Ptr;
 
@@ -63,19 +79,19 @@ package ECS is
    -- When called: FIRST in main loop (before FlexLayoutSystem)
    -- ================================================================
    procedure TerminalResizeSystem (Entity_List : Entity_Components);
-   
-   -- EXISTING: Current systems, not changed. 
+
+   -- EXISTING: Current systems, not changed.
    procedure FlexLayoutSystem (Entity_List : Entity_Components);
-   procedure WidgetBackgroundSystem (Entity_List : Entity_Components);
-   procedure TextRenderSystem (Entity_List : Entity_Components);
-   procedure BufferCopySystem (Entity_List : Entity_Components);
-   procedure BufferDrawSystem (Entity_List : Entity_Components);
+   procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO);
+   procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO);
+   procedure BufferCopySystem (Entity_List_PO : in out Entity_Components_PO);
+   procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO);
    --  Renders all progress bar widgets to their buffers.
    --  Should be called after WidgetBackgroundSystem and before BufferCopySystem.
-   procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components);
+   procedure ProgressBarRenderSystem (Entity_List_PO : in out Entity_Components_PO);
    --  Swaps the double-buffering flag of Render_Info_Component_T
    --  Should be called after all other systems
-   procedure DoubleBufferFlagSystem (Entity_List : in out Entity_Components);
+   procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO);
 
    -- ================================================================
    -- NEW: Helper procedures for resize and widget movement
@@ -84,14 +100,14 @@ package ECS is
    --Why did I separate this? Cleaner code, makes it REUSABLE
    -- ================================================================
    procedure Mark_All_Flex_Dirty (Entity_List : Entity_Components);
-   
+
    -- Widget movement API for absolute positioning
    procedure Move_Widget (Entity_List : in out Entity_Components;
                          Widget_Entity : Entity_Id;
                          New_X : TUI_Width;
                          New_Y : TUI_Height);
 
-   -- Simple API for relative movement (move by delta)                    
+   -- Simple API for relative movement (move by delta)
    procedure Move_Widget_By (Entity_List : in out Entity_Components;
                             Widget_Entity : Entity_Id;
                             Delta_X : Integer;

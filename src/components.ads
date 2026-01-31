@@ -17,6 +17,7 @@ package Components is
 
    --  Abstract component superclass
    type Component_T is abstract tagged null record;
+   type Component_Class_Ptr is access all Component_T'Class;
 
    --  RenderInfoComponent
    -- UPDATED: Added Prev_Terminal_Width/Height for resize detection

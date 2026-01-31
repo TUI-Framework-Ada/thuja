@@ -14,7 +14,7 @@ with User_Library; use User_Library;
 procedure Progress_Bar_Demo is
 
    --  Entity storage for the demo
-   Entities : Entity_Components;
+   Entities_PO : Entity_Components_PO;
 
    --  Demo configuration
    Total_Steps    : constant Positive := 100;
@@ -35,7 +35,7 @@ procedure Progress_Bar_Demo is
       Comp_Ptr : Components_Ptr;
       RI_C     : Render_Info_Component_T;
    begin
-      Comp_Ptr := Add_Entity (Entities, Render_Info_ID);
+      Comp_Ptr := Add_Entity (Entities_PO, Render_Info_ID);
 
       RI_C.Terminal_Width := Term_Width;
       RI_C.Terminal_Height := Term_Height;
@@ -53,7 +53,7 @@ procedure Progress_Bar_Demo is
       Widget_C : Widget_Component_T;
       Root_C   : Root_Widget_Component_T;
    begin
-      Comp_Ptr := Add_Entity (Entities, Root_ID);
+      Comp_Ptr := Add_Entity (Entities_PO, Root_ID);
 
       --  Configure root widget to span the terminal
       Widget_C.Position_X := TUI_Width'First;
@@ -77,12 +77,12 @@ procedure Progress_Bar_Demo is
    procedure Run_Render_Systems is
    begin
       --  First, render widget-specific content
-      WidgetBackgroundSystem (Entities);      --  Fill backgrounds
-      ProgressBarRenderSystem (Entities);     --  Render progress bars
+      WidgetBackgroundSystem (Entities_PO);      --  Fill backgrounds
+      ProgressBarRenderSystem (Entities_PO);     --  Render progress bars
 
       --  Then copy buffers and draw to terminal
-      BufferCopySystem (Entities);            --  Copy widget buffers to framebuffer
-      BufferDrawSystem (Entities);            --  Draw framebuffer to terminal
+      BufferCopySystem (Entities_PO);            --  Copy widget buffers to framebuffer
+      BufferDrawSystem (Entities_PO);            --  Draw framebuffer to terminal
    end Run_Render_Systems;
 
 begin
@@ -100,7 +100,7 @@ begin
    --  Create the progress bar widget using Thuja
    --  Position it centered in the display area
    Create_Progress_Bar
-     (Entity_List  => Entities,
+     (Entity_List_PO  => Entities_PO,
       E_ID         => Progress_ID,
       Pos_X        => 5,
       Pos_Y        => 3,
@@ -116,7 +116,7 @@ begin
    --  Animation loop
    for Step in 0 .. Total_Steps loop
       --  Update progress value
-      Set_Progress (Entities, Progress_ID, Float (Step) / Float (Total_Steps));
+      Set_Progress (Entities_PO, Progress_ID, Float (Step) / Float (Total_Steps));
 
       --  Re-render
       Run_Render_Systems;

@@ -73,9 +73,9 @@ package Graphics is
 
    --  Protected object for double-buffering, for thread-safe access to Buffer_Ptr
    protected type Protected_DB is
-      entry Wait (V : out Boolean);
-      entry Post;
-      procedure Swap;
+      entry Wait (V : out Boolean); --  Lock flag from being edited and return flag
+      entry Post; --  Release flag lock
+      procedure Swap; --  Swap flag
    private
       Draw_From_1 : Boolean := True;
       Changing : Boolean := False;

@@ -181,8 +181,9 @@ procedure Demos is
 
    task body Render_Thread is
    begin
+      Graphics.Clear_Screen;
       loop
-         ECS.BufferDrawSystem (Entities);
+         ECS.BufferDrawSystem (Entities_PO);
 
          --  30 FPS
          delay Duration (1.0 / 30.0);

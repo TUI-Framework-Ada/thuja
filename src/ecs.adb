@@ -50,35 +50,77 @@ package body ECS is
       return SU.Hash (SU.Unbounded_String (Key));
    end Hash_Entity;
 
+   ------------------------------------------------------------------
+   --  Protected object for the entity list
+   ------------------------------------------------------------------
+   protected body Entity_Components_PO is
+      --  Wait for no writers to receive the entity list to read from
+      entry Claim_Reading (Entity_List : in out Entity_Components_Ptr)
+        when not Write_Using is
+      begin
+         Read_Using := Read_Using + 1;
+         Entity_List := Entities'Access;
+      end Claim_Reading;
+
+      --  Wait for no readers to receive an exclusive reference to the entity list
+      entry Claim_Writing (Entity_List : in out Entity_Components_Ptr)
+        when (Read_Using = 0) and (not Write_Using) is
+      begin
+         Write_Using := True;
+         Entity_List := Entities'Access;
+      end Claim_Writing;
+
+      --  Release a reading copy
+      procedure Release_Reading is
+      begin
+         Read_Using := Read_Using - 1;
+      end Release_Reading;
+
+      --  Release the writing reference
+      procedure Release_Writing is
+      begin
+         Write_Using := False;
+      end Release_Writing;
+   end Entity_Components_PO;
+
    ---------------------------------------
    -- Add_Entity
    ---------------------------------------
-   function Add_Entity (Self : in out Entity_Components; Id : Entity_Id) return Components_Ptr is
+   function Add_Entity (Self : in out Entity_Components_PO; Id : Entity_Id) return Components_Ptr is
+      Entity_List : Entity_Components_Ptr;
       New_Components : Components_Ptr;
    begin
-      if Self.Contains (Id) then
-         return Self (Id);
+      Self.Claim_Writing (Entity_List);
+
+      if Entity_List.Contains (Id) then
+         New_Components := Entity_List (Id); --  Return existing entity
+      else
+         New_Components := new Components;
+         Entity_List.Insert (Id, New_Components); -- Add new entity with empty components
       end if;
 
-      New_Components := new Components;
-      Self.Insert (Id, New_Components); -- Add new entity with empty components
+      Self.Release_Writing;
       return New_Components;
    end Add_Entity;
 
    ---------------------------------------
    -- Remove_Entity
    ---------------------------------------
-   procedure Remove_Entity (Self : in out Entity_Components; Id : Entity_Id) is
+   procedure Remove_Entity (Self : in out Entity_Components_PO; Id : Entity_Id) is
+      Entity_List : Entity_Components_Ptr;
    begin
-      if Self.Contains (Id) then
-         Self.Delete (Id);
+      Self.Claim_Writing (Entity_List);
+      if Entity_List.Contains (Id) then
+         --  Delete from entity list
+         Entity_List.Delete (Id);
       end if;
+      Self.Release_Writing;
    end Remove_Entity;
 
    ---------------------------------------
    -- Get_Entity_Components
    ---------------------------------------
-   function Get_Entity_Components (Self : in Entity_Components; Id : Entity_Id)
+   function Get_Entity_Components (Self : Entity_Components; Id : Entity_Id)
       return Components_Ptr
    is
    begin
@@ -284,7 +326,8 @@ begin
    end loop;
 end FlexLayoutSystem;
 
-   procedure WidgetBackgroundSystem (Entity_List : Entity_Components) is
+   procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
       Search_Component_IDs : Component_ID_Vector.Vector;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
@@ -293,11 +336,12 @@ end FlexLayoutSystem;
       BGColor : Color_t;
       Px : Pixel_t;
    begin
+      Entity_List_PO.Claim_Reading (Entity_List);
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
       for EID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, EID);
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
          Widget_C := Widget_Component_T (
             Get_Component (Component_List.all, To_CID ("WidgetComponent"))
                                      );
@@ -320,19 +364,21 @@ end FlexLayoutSystem;
 
          --  Update components
          Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
+                        Get_Entity_Components (Entity_List.all, EID).all,
                         To_CID ("WidgetComponent"),
                         Widget_C
                        );
          Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
+                        Get_Entity_Components (Entity_List.all, EID).all,
                         To_CID ("BackgroundColorComponent"),
                         BGColor_C
                        );
       end loop;
+      Entity_List_PO.Release_Reading;
    end WidgetBackgroundSystem;
 
-   procedure TextRenderSystem (Entity_List : Entity_Components) is
+   procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
       Search_Component_IDs : Component_ID_Vector.Vector;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
@@ -344,12 +390,13 @@ end FlexLayoutSystem;
       Char : Character;
       Px : Pixel_t;
    begin
+      Entity_List_PO.Claim_Reading (Entity_List);
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
 
       for EID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, EID);
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
 
          Widget_C := Widget_Component_T (
             Get_Component (Component_List.all, To_CID ("WidgetComponent"))
@@ -391,19 +438,22 @@ end FlexLayoutSystem;
 
          --  Update components
          Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
+                        Get_Entity_Components (Entity_List.all, EID).all,
                         To_CID ("WidgetComponent"),
                         Widget_C
                        );
          Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
+                        Get_Entity_Components (Entity_List.all, EID).all,
                         To_CID ("TextComponent"),
                         Text_C
                        );
       end loop;
+      Entity_List_PO.Release_Reading;
    end TextRenderSystem;
 
-   procedure BufferCopySystem (Entity_List : Entity_Components) is
+   procedure BufferCopySystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
+
       procedure RecursiveBufferCopy (Framebuffer : in out Buffer_T;
                                      Root : Widget_Component_T;
                                      Parent : Widget_Component_T) is
@@ -448,7 +498,7 @@ end FlexLayoutSystem;
          for Child_Entity_ID of Parent.Children loop
             --  Fetch the child's WidgetComponent
             Child_Component_List := Get_Entity_Components (
-               Entity_List, Child_Entity_ID
+               Entity_List.all, Child_Entity_ID
                                                           );
             Child_Widget := Widget_Component_T (
                Get_Component (Child_Component_List.all, To_CID ("WidgetComponent"))
@@ -468,20 +518,21 @@ end FlexLayoutSystem;
       Root : Widget_Component_T;
       Rendering_To_FB_2 : Boolean;
    begin
+      Entity_List_PO.Claim_Reading (Entity_List);
       RI_Component_IDs.Append (To_CID ("RenderInfo"));
       Root_Component_IDs.Append (To_CID ("RootWidget"));
-      Matched_RIs := Get_Entities_Matching (Entity_List, RI_Component_IDs);
-      Matched_Roots := Get_Entities_Matching (Entity_List, Root_Component_IDs);
+      Matched_RIs := Get_Entities_Matching (Entity_List.all, RI_Component_IDs);
+      Matched_Roots := Get_Entities_Matching (Entity_List.all, Root_Component_IDs);
       --  For each entity with RenderInfo
       for RI_Entity_ID of Matched_RIs loop
-         RI_Components := Get_Entity_Components (Entity_List, RI_Entity_ID);
+         RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
          RenderInfo_C := Render_Info_Component_T (
             Get_Component (RI_Components.all, To_CID ("RenderInfo"))
                                                  );
          RenderInfo_C.Drawing_FB.all.Wait (Rendering_To_FB_2);
          --  For each root
          for R_Entity_ID of Matched_Roots loop
-            Root_Components := Get_Entity_Components (Entity_List, R_Entity_ID);
+            Root_Components := Get_Entity_Components (Entity_List.all, R_Entity_ID);
             Root := Widget_Component_T (
                Get_Component (Root_Components.all, To_CID ("WidgetComponent"))
                                        );
@@ -496,18 +547,19 @@ end FlexLayoutSystem;
 
          --  Update components
          Add_Component (
-                        Get_Entity_Components (Entity_List, RI_Entity_ID).all,
+                        Get_Entity_Components (Entity_List.all, RI_Entity_ID).all,
                         To_CID ("RenderInfo"),
                         RenderInfo_C
                        );
          --  Release RenderInfo
          RenderInfo_C.Drawing_FB.all.Post;
       end loop;
+      Entity_List_PO.Release_Reading;
    end BufferCopySystem;
 
    -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
    -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
-   procedure BufferDrawSystem (Entity_List : Entity_Components) is
+   procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
       --  Both pixel rendering and ANSI codes
       CSI : constant String := Character'Val (16#1B#) & '[';
       Hide_Cursor  : constant String := CSI & "?25l"; -- not hiding cursor?
@@ -552,22 +604,24 @@ end FlexLayoutSystem;
         (Move (Row, Col) & Format (P) & P.Char & Reset);
 
       --  Real stuff begins
+      Entity_List : Entity_Components_Ptr;
       Search_Components : Component_ID_Vector.Vector;
       Matched_Entities : Entity_ID_Vector.Vector;
       --  Pointer to Components instance
       RI_Component_List : Components_Ptr;
       --  RenderInfo component
-      RI : aliased Render_Info_Component_T;
+      RI : Render_Info_Component_T;
       --  Framebuffer pixel
       FB_Pixel : Pixel_t;
-      Drawing_To_FB_1 : Boolean;
+      Drawing_From_FB_1 : Boolean;
 
       --  Local type needed due to accessibility rules for safe 'Access usage
       type Drawing_Ptr is access all Buffer_T;
       Drawing : Drawing_Ptr;
    begin
+      Entity_List_PO.Claim_Reading (Entity_List);
       Search_Components.Append (To_CID ("RenderInfo"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Components);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
 
       -- PRE-RENDER: Hide the cursor and save its current position
       Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Hide_Cursor & Save_Pos));
@@ -575,7 +629,7 @@ end FlexLayoutSystem;
       -- PROTECTED RENDER LOOP
       begin
          for EID of Matched_Entities loop
-            RI_Component_List := Get_Entity_Components (Entity_List, EID);
+            RI_Component_List := Get_Entity_Components (Entity_List.all, EID);
             RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
             RI.Drawing_FB.all.Wait (Drawing_To_FB_1);
             Drawing := (if Drawing_To_FB_1 then RI.Framebuffer_1'Access else RI.Framebuffer_2'Access);
@@ -618,13 +672,15 @@ end FlexLayoutSystem;
 
       -- Ensure commands are sent to the hardware immediately
       Ada.Wide_Wide_Text_IO.Flush;
+      Entity_List_PO.Release_Reading;
    end BufferDrawSystem;
 
    ---------------------------------------------------------------------------
    --  Progress Bar Render System
    ---------------------------------------------------------------------------
 
-   procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components) is
+   procedure ProgressBarRenderSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List          : Entity_Components_Ptr;
       Search_Component_IDs : Component_ID_Vector.Vector;
       Matched_Entities     : Entity_ID_Vector.Vector;
       Comp_Ptr             : Components_Ptr;
@@ -640,13 +696,14 @@ end FlexLayoutSystem;
       Current_Char         : Character;
       Has_BG               : Boolean;
    begin
+      Entity_List_PO.Claim_Reading (Entity_List);
       --  Query for entities with WidgetComponent and ProgressBarComponent
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("ProgressBarComponent"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
 
       for EID of Matched_Entities loop
-         Comp_Ptr := Get_Entity_Components (Entity_List, EID);
+         Comp_Ptr := Get_Entity_Components (Entity_List.all, EID);
 
          --  Get components
          Widget_C := Widget_Component_T (
@@ -786,24 +843,24 @@ end FlexLayoutSystem;
          Add_Component (Comp_Ptr.all, To_CID ("WidgetComponent"), Widget_C);
          Add_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent"), PB_C);
       end loop;
+      Entity_List_PO.Release_Reading;
    end ProgressBarRenderSystem;
 
    --  Swaps the double-buffering flag of Render_Info_Component_T
    --  Should be called after all other systems
-   procedure DoubleBufferFlagSystem (Entity_List : in out Entity_Components) is
+   procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
       Search_Component_IDs : Component_ID_Vector.Vector;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
       Render_Info : Render_Info_Component_T;
       Drawing_From_FB_1 : Boolean;
    begin
+      Entity_List_PO.Claim_Reading (Entity_List);
       Search_Component_IDs.Append (To_CID ("RenderInfo"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
       for EID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, EID);
-         --Render_Info := Render_Info_Component_T (
-         --   Get_Component (Component_List.all, "RenderInfo")
-         --                                       );
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
 
          Render_Info := Render_Info_Component_T (
             Get_Component (Component_List.all, To_CID ("RenderInfo"))
@@ -813,18 +870,17 @@ end FlexLayoutSystem;
          Render_Info.Drawing_FB.all.Swap;
          Render_Info.Drawing_FB.all.Post;
 
-         --...
-
          --  Pass updated vals back to the Components instance
          --  Required to run Get_Entity_Components again to avoid issues with
 
          --    Update components
          Add_Component (
-            Get_Entity_Components (Entity_List, EID).all,
+            Get_Entity_Components (Entity_List.all, EID).all,
             To_CID ("RenderInfo"),
             Render_Info
                        );
       end loop;
+      Entity_List_PO.Release_Reading;
    end DoubleBufferFlagSystem;
 
 end ECS;
