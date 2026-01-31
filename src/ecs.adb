@@ -113,6 +113,35 @@ package body ECS is
       if Entity_List.Contains (Id) then
          --  Delete from entity list
          Entity_List.Delete (Id);
+
+         --  Remove EID from all widget components
+         declare
+            Search_Component_IDs : Component_ID_Vector.Vector;
+            Matched_Entities : Entity_ID_Vector.Vector;
+            Component_List : Components_Ptr;
+            Widget_C : Widget_Component_T;
+         begin
+            Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+            Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+            for EID of Matched_Entities loop
+               Component_List := Get_Entity_Components (Entity_List.all, EID);
+               Widget_C := Widget_Component_T (
+                  Get_Component (Component_List.all, To_CID ("WidgetComponent"))
+                                              );
+
+               --  Remove from children
+               if Widget_C.Children.Contains (Id) then
+                  Widget_C.Children.Delete (Widget_C.Children.Find_Index (Id));
+               end if;
+
+               --  Update components
+               Add_Component (
+                  Get_Entity_Components (Entity_List.all, EID).all,
+                  To_CID ("WidgetComponent"),
+                  Widget_C
+               );
+            end loop;
+         end;
       end if;
       Self.Release_Writing;
    end Remove_Entity;
