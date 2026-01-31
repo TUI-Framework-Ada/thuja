@@ -28,12 +28,20 @@ package body ECS is
       Self.Components_Map.Exclude (Component);
    end Remove_Component;
 
-   function Get_Component (Self : in Components;
+   function Get_Component (Self : in out Components;
                            Component : in Component_Id)
                            return Component_T'Class is
    begin
       return Self.Components_Map (Component);
    end Get_Component;
+
+   function Get_Component_Ptr (Self : Components_Ptr;
+                               Component_Str : String)
+                               return Component_Class_Ptr is
+      Map : Component_Map renames Self.all.Components_Map;
+   begin
+      return Map.Reference (To_CID (Component_Str)).Element;
+   end Get_Component_Ptr;
 
    function Has_Component (Self : in Components;
                            Component : in Component_Id) return Boolean is
