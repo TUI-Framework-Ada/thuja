@@ -67,7 +67,7 @@ package Graphics is
       Width  : TUI_Width  := TUI_Width'Last;
       Height : TUI_Height := TUI_Height'Last;
       --  No default value needed, because Pixel already has defaults
-      Data   : aliased Pixel_Array;
+      Data   : Pixel_Array_Ptr := new Pixel_Array;
    end record;
    type Buffer_Ptr is access Buffer_T;
 

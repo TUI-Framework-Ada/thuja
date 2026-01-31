@@ -51,7 +51,7 @@ package body Graphics is
    is
    begin
       --  Writes new pixel into buffer "P" being the value Pixel
-      B.Data (X, Y) := P;
+      B.Data.all (X, Y) := P;
    end Set_Buffer_Pixel;
 
    --  Reads and returns the pixel value from the buffer at the (X, Y) coordinates
@@ -62,7 +62,7 @@ package body Graphics is
    is
    begin
       --  Returns value read from the array
-      return B.Data (X, Y);
+      return B.Data.all (X, Y);
    end Get_Buffer_Pixel;
 
    --  Hides the terminal cursor
