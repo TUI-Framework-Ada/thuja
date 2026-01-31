@@ -4,6 +4,7 @@ with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Graphics; use Graphics;
 with Flexbox; use Flexbox;
+with IDs; use type IDs.Component_ID_Vector.Vector;
 
 package body ECS is
 
@@ -365,51 +366,38 @@ end FlexLayoutSystem;
 
    procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO) is
       Entity_List : Entity_Components_Ptr;
-      Search_Component_IDs : Component_ID_Vector.Vector;
+      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+        To_CID ("WidgetComponent") &
+        To_CID ("BackgroundColorComponent");
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
-      Widget_C : Widget_Component_T;
-      BGColor_C : Background_Color_Component_T;
       BGColor : Color_t;
       Px : Pixel_t;
    begin
       Entity_List_PO.Claim_Reading (Entity_List);
-      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
-      Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List.all, EID);
-         Widget_C := Widget_Component_T (
-            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
-                                     );
-         BGColor_C := Background_Color_Component_T (
-            Get_Component (Component_List.all, To_CID ("BackgroundColorComponent"))
-                                               );
-         BGColor := BGColor_C.Background_Color;
+         declare
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, "WidgetComponent").all);
+            BGColor_C : Background_Color_Component_T renames Background_Color_Component_T (
+              Get_Component_Ptr (Component_List, "BackgroundColorComponent").all);
+         begin
+            BGColor := BGColor_C.Background_Color;
 
-         for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
-            for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
-               --  returns a copy of the buffer's pixel
-               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
-               --  edit values of the copy
-               Px.Char := ' ';
-               Px.Background_Color := BGColor;
-               --  pass back to update in the buffer
-               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+            for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
+               for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
+                  --  returns a copy of the buffer's pixel
+                  Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+                  --  edit values of the copy
+                  Px.Char := ' ';
+                  Px.Background_Color := BGColor;
+                  --  pass back to update in the buffer
+                  Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               end loop;
             end loop;
-         end loop;
-
-         --  Update components
-         Add_Component (
-                        Get_Entity_Components (Entity_List.all, EID).all,
-                        To_CID ("WidgetComponent"),
-                        Widget_C
-                       );
-         Add_Component (
-                        Get_Entity_Components (Entity_List.all, EID).all,
-                        To_CID ("BackgroundColorComponent"),
-                        BGColor_C
-                       );
+         end;
       end loop;
       Entity_List_PO.Release_Reading;
    end WidgetBackgroundSystem;
