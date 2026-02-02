@@ -416,75 +416,69 @@ end FlexLayoutSystem;
 
    procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO) is
       Entity_List : Entity_Components_Ptr;
-      Search_Component_IDs : Component_ID_Vector.Vector;
+      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+        To_CID ("WidgetComponent") &
+        To_CID ("TextComponent");
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
-      Widget_C : Widget_Component_T;
-      Text_C : Text_Component_T;
       Pos_W : TUI_Width;
       Pos_H : TUI_Height;
       Text : SU.Unbounded_String;
       Char : Character;
       Px : Pixel_t;
    begin
+
+      --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
-      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
-      Search_Component_IDs.Append (To_CID ("TextComponent"));
+--      --  Search for entities matching the list of components
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
 
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List.all, EID);
 
-         Widget_C := Widget_Component_T (
-            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
-                                        );
-         Text_C := Text_Component_T (
-            Get_Component (Component_List.all, To_CID ("TextComponent"))
-                                    );
-         Text := Text_C.Text;
+         declare
+            --  Obtain a view to the component allowing direct modification
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, "WidgetComponent").all);
 
-         -- Initiatize drawing position using text offsets
-         -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
-         Pos_W := Text_C.Offset_X;
-         Pos_H := Text_C.Offset_Y;
+            Text_C : Text_Component_T renames Text_Component_T (
+              Get_Component_Ptr (Component_List, "TextComponent").all);
+         begin
+            Text := Text_C.Text;
 
-         for Text_Index in Positive'First .. SU.Length(Text) loop
-            --  Get character and update pixel fields inside widget's buffer
-            Char := SU.Element (Text, Text_Index);
-            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
-            Px.Char := Char;
-            Px.Char_Color := Text_C.Text_Color;
+            -- Initiatize drawing position using text offsets
+            -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
+            Pos_W := Text_C.Offset_X;
+            Pos_H := Text_C.Offset_Y;
 
-            -- For text stylization
-            Px.Is_Bold           := Text_C.Is_Bold;
-            Px.Is_Italic         := Text_C.Is_Italic;
-            Px.Is_Underline      := Text_C.Is_Underline;
-            Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+            for Text_Index in Positive'First .. SU.Length(Text) loop
+               --  Get character and update pixel fields inside widget's buffer
+               Char := SU.Element (Text, Text_Index);
+               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+               Px.Char := Char;
+               Px.Char_Color := Text_C.Text_Color;
 
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               -- For text stylization
+               Px.Is_Bold           := Text_C.Is_Bold;
+               Px.Is_Italic         := Text_C.Is_Italic;
+               Px.Is_Underline      := Text_C.Is_Underline;
+               Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
-            --  Increment position in 2D array
-            Pos_W := Pos_W + 1;
-            if Pos_W > Widget_C.Size_Width then
-               Pos_W := 1;
-               Pos_H := Pos_H + 1;
-            end if;
-            --  If out of bounds, break
-            exit when Pos_H > Widget_C.Size_Height;
-         end loop;
+               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
-         --  Update components
-         Add_Component (
-                        Get_Entity_Components (Entity_List.all, EID).all,
-                        To_CID ("WidgetComponent"),
-                        Widget_C
-                       );
-         Add_Component (
-                        Get_Entity_Components (Entity_List.all, EID).all,
-                        To_CID ("TextComponent"),
-                        Text_C
-                       );
+               --  Increment position in 2D array
+               Pos_W := Pos_W + 1;
+               if Pos_W > Widget_C.Size_Width then
+                  Pos_W := 1;
+                  Pos_H := Pos_H + 1;
+               end if;
+               --  If out of bounds, break
+               exit when Pos_H > Widget_C.Size_Height;
+            end loop;
+         end;
       end loop;
+
+      --  Release lock on entity list
       Entity_List_PO.Release_Reading;
    end TextRenderSystem;
 
