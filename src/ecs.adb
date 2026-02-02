@@ -568,8 +568,8 @@ end FlexLayoutSystem;
             RenderInfo_C : Render_Info_Component_T renames Render_Info_Component_T (
               Get_Component_Ptr (RI_Components, "RenderInfo").all);
          begin
-            --  TODO does this really need wait+post? can't it just read immediately?
-            RenderInfo_C.Drawing_FB.all.Wait (Rendering_To_FB_2);
+            --  Read directly without locking, since we know the flag is only changed by a system that runs later in the same thread
+            RenderInfo_C.Drawing_FB.all.Read (Rendering_To_FB_2);
 
             --  For each root
             for R_Entity_ID of Matched_Roots loop
@@ -588,9 +588,6 @@ end FlexLayoutSystem;
                   end if;
                end;
             end loop;
-
-            --  Release RenderInfo
-            RenderInfo_C.Drawing_FB.all.Post;
          end;
       end loop;
 
@@ -903,7 +900,6 @@ end FlexLayoutSystem;
         Component_ID_Vector.To_Vector (To_CID ("RenderInfo"), 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
-      Render_Info : Render_Info_Component_T;
       Drawing_From_FB_1 : Boolean;
    begin
 

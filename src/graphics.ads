@@ -76,6 +76,7 @@ package Graphics is
       entry Wait (V : out Boolean); --  Lock flag from being edited and return flag
       entry Post; --  Release flag lock
       procedure Swap; --  Swap flag
+      entry Read (V : out Boolean); --  Return flag without locking, only to be used in the same thread as DoubleBufferFlagSystem
    private
       Draw_From_1 : Boolean := True;
       Changing : Boolean := False;

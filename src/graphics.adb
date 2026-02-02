@@ -26,6 +26,12 @@ package body Graphics is
       begin
          Draw_From_1 := not Draw_From_1;
       end Swap;
+
+      entry Read (V : out Boolean)
+        when not Changing is
+      begin
+         V := Draw_From_1;
+      end Read;
    end Protected_DB;
 
    --  Buffer_T Constructor - Allocates memory in the 2D pixel array, initializing record fields
