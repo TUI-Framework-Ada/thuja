@@ -207,31 +207,36 @@ package body ECS is
       return Result;
    end Get_Entities_Matching;
 
---   procedure ExampleSystem (Entity_List : Entity_Components) is
---      Search_Component_IDs : Component_ID_Vector.Vector;
+--   procedure ExampleSystem (Entity_List_PO : in out Entity_Components_PO) is
+--      Entity_List : Entity_Components_Ptr;
+--      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+--        To_CID ("Component_1") &
+--        To_CID ("Component_2");
 --      Matched_Entities : Entity_ID_Vector.Vector;
 --      Component_List : Components_Ptr;
---      Component : Component1;
 --   begin
---   Search_Component_IDs.Append (To_CID ("Component1"));
---   Search_Component_IDs.Append (To_CID ("Component2"));
---   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
---      for EID of Matched_Entities loop
---         Component_List := Get_Entity_Components (Entity_List, EID);
---         Component := Component1 (
---            Get_Component (Component_List.all, "Component1")
---                                 );
---            ...
---         --  Pass updated vals back to the Components instance
---         --  Required to run Get_Entity_Components again to avoid issues with
 --
---         --    Update components
---         Add_Component (
---            Get_Entity_Components (Entity_List, EID).all,
---            To_CID ("Component1"),
---            Component
---                       );
+--      --  Wait for inclusive lock for entity list
+--      Entity_List_PO.Claim_Reading (Entity_List);
+--      --  Search for entities matching the list of components
+--      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+--
+--      for EID of Matched_Entities loop
+--         Component_List := Get_Entity_Components (Entity_List.all, EID);
+--         declare
+--            --  Obtain a view to the component allowing direct modification
+--            Component_1_C : Component_1_T renames Component_1_T (
+--              Get_Component_Ptr (Component_List, "Component_1").all);
+--         begin
+--
+--            --  Read/update component as needed by interacting with it through the view
+--            ...
+--
+--         end;
 --      end loop;
+--
+--      --  Release lock on entity list
+--      Entity_List_PO.Release_Reading;
 --   end ExampleSystem;
 
    --  Built-in systems
@@ -374,11 +379,16 @@ end FlexLayoutSystem;
       BGColor : Color_t;
       Px : Pixel_t;
    begin
+
+      --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
+      --  Search for entities matching the list of components
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List.all, EID);
          declare
+            --  Obtain a view to the component allowing direct modification
             Widget_C : Widget_Component_T renames Widget_Component_T (
               Get_Component_Ptr (Component_List, "WidgetComponent").all);
             BGColor_C : Background_Color_Component_T renames Background_Color_Component_T (
@@ -399,6 +409,8 @@ end FlexLayoutSystem;
             end loop;
          end;
       end loop;
+
+      --  Release lock on entity list
       Entity_List_PO.Release_Reading;
    end WidgetBackgroundSystem;
 
