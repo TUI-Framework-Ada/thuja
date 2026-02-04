@@ -155,8 +155,8 @@ package body ECS is
 --   end ExampleSystem;
 
    --  Built-in systems
-   
-  
+
+
 -- ================================================================
 -- UPDATED FlexLayoutSystem FOR YOUR ECS.ADB
 -- Replace your existing FlexLayoutSystem with this version
@@ -168,12 +168,12 @@ package body ECS is
 procedure FlexLayoutSystem (Entity_List : Entity_Components) is
    Search_Component_IDs : Component_ID_Vector.Vector;
    Matched_Entities     : Entity_ID_Vector.Vector;
-   
+
    -- Containers for the Parent (The Flex Container)
    Parent_Comps         : Components_Ptr;
    Flex_C               : Flex_Layout_Component_T;
    Parent_Widget_C      : Widget_Component_T;
-   
+
    -- Containers for the Children (The Items)
    Child_Comps          : Components_Ptr;
    Child_Widget_C       : Widget_Component_T;
@@ -190,12 +190,12 @@ procedure FlexLayoutSystem (Entity_List : Entity_Components) is
 begin
    Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
    Search_Component_IDs.Append (To_CID ("WidgetComponent"));
-   
+
    Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
-   
+
    for Parent_EID of Matched_Entities loop
       Parent_Comps := Get_Entity_Components (Entity_List, Parent_EID);
-      
+
       Flex_C := Flex_Layout_Component_T (
          Get_Component (Parent_Comps.all, To_CID ("FlexLayoutComponent"))
       );
@@ -217,32 +217,32 @@ begin
       -- 3. Apply Calculated Positions to Child Entities
       if Flex_C.Flex_Container.Items /= null then
          for I in 1 .. Flex_C.Flex_Container.Item_Count loop
-            
+
             Child_Id := Flex_C.Flex_Container.Items(I).Related_Entity;
             Child_Comps := Get_Entity_Components(Entity_List, Child_Id);
-            
-            if Child_Comps /= null and then 
+
+            if Child_Comps /= null and then
                Has_Component(Child_Comps.all, To_CID("WidgetComponent")) then
-               
+
                -- ========================================================
                -- NEW: Check if this child should be positioned by flex
                -- ========================================================
 
                -- Step 1: Assume we do NOT skip it
                Skip_Child := False;
-               
+
                -- Step 2: Check if it has a PositionMode component
                if Has_Component(Child_Comps.all, To_CID("PositionMode")) then
                   Child_Pos_Mode := Position_Mode_Component_T (
                      Get_Component (Child_Comps.all, To_CID ("PositionMode"))
                   );
-                  
+
                   -- Step 3: If mode is not Flex, set Skip_Child to True
                   if Child_Pos_Mode.Mode /= Flex then
                      Skip_Child := True;
                   end if;
                end if;
-               
+
                -- Step 4: If Skip_Child is False, proceed to position/size the child
                if not Skip_Child then
                   Child_Widget_C := Widget_Component_T (
@@ -251,14 +251,14 @@ begin
 
                   -- FIX: Use Integer math first to allow 0 offsets, then cast to TUI type
                   -- Parent (1) + Offset (0) = 1 (Valid TUI_Width)
-                  Calc_X := Integer(Parent_Widget_C.Position_X) + 
+                  Calc_X := Integer(Parent_Widget_C.Position_X) +
                            Flex_C.Flex_Container.Items(I).Position_X;
-                  Calc_Y := Integer(Parent_Widget_C.Position_Y) + 
+                  Calc_Y := Integer(Parent_Widget_C.Position_Y) +
                            Flex_C.Flex_Container.Items(I).Position_Y;
 
                   Child_Widget_C.Position_X := TUI_Width(Calc_X);
                   Child_Widget_C.Position_Y := TUI_Height(Calc_Y);
-                  
+
                   -- UPDATE SIZE:
                   -- We also use Integer'Max(1, ...) to ensure size never hits 0 and crashes
                   if Flex_C.Flex_Container.Direction = Row then
@@ -276,7 +276,7 @@ begin
                   Add_Component (Child_Comps.all, To_CID ("WidgetComponent"), Child_Widget_C);
                end if;
                -- If Skip_Child = True, we leave the widget's position/size unchanged
-               
+
             end if;
          end loop;
       end if;
@@ -292,7 +292,6 @@ end FlexLayoutSystem;
       BGColor_C : Background_Color_Component_T;
       BGColor : Color_t;
       Px : Pixel_t;
-      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
@@ -307,21 +306,17 @@ end FlexLayoutSystem;
                                                );
          BGColor := BGColor_C.Background_Color;
 
-         --  Copy the protected buffer into a temp var for editing
-         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
             for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
                --  returns a copy of the buffer's pixel
-               Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
+               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
                --  edit values of the copy
                Px.Char := ' ';
                Px.Background_Color := BGColor;
                --  pass back to update in the temp buffer
-               Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
+               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
-         --  Assign temp buffer back to protected buffer
-         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -348,7 +343,6 @@ end FlexLayoutSystem;
       Text : SU.Unbounded_String;
       Char : Character;
       Px : Pixel_t;
-      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
@@ -365,8 +359,6 @@ end FlexLayoutSystem;
                                     );
          Text := Text_C.Text;
 
-         Temp_Buffer := Widget_C.Protected_Buffer.Get;
-
          -- Initiatize drawing position using text offsets
          -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
          Pos_W := Text_C.Offset_X;
@@ -375,7 +367,7 @@ end FlexLayoutSystem;
          for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
             Char := SU.Element (Text, Text_Index);
-            Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
+            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
             Px.Char := Char;
             Px.Char_Color := Text_C.Text_Color;
 
@@ -385,7 +377,7 @@ end FlexLayoutSystem;
             Px.Is_Underline      := Text_C.Is_Underline;
             Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
-            Set_Buffer_Pixel (Temp_buffer, Pos_W, Pos_H, Px);
+            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
@@ -396,8 +388,6 @@ end FlexLayoutSystem;
             --  If out of bounds, break
             exit when Pos_H > Widget_C.Size_Height;
          end loop;
-         --  Assign temp buffer back to protected buffer
-         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -422,7 +412,6 @@ end FlexLayoutSystem;
          Parent_Pixel : Pixel_t;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
-         Temp_Buffer : Buffer_T;
       begin
          --  Calc root edges
          Root_Left := Root.Position_X;
@@ -430,14 +419,12 @@ end FlexLayoutSystem;
          Root_Top := Root.Position_Y;
          Root_Bottom := Root.Position_Y + Root.Size_Height - TUI_Height (1);
 
-         --  Copy the protected buffer into a temp var for editing
-         Temp_Buffer := Parent.Protected_Buffer.Get;
          --  For each pixel of Render_Buffer,
          --    only within the bounds of the widget
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in TUI_Width'First .. Parent.Size_Width loop
             for Pos_H in TUI_Height'First .. Parent.Size_Height loop
-               Parent_Pixel := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
+               Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
                --  Calc X
                Parent_X := Parent.Position_X + Pos_W - TUI_Width (1);
                --  Calc Y
@@ -457,8 +444,6 @@ end FlexLayoutSystem;
                          );
             end loop;
          end loop;
-         --  Assign temp buffer back to protected buffer
-         Parent.Protected_Buffer.Set (Temp_Buffer);
 
          --  For the parent's children
          for Child_Entity_ID of Parent.Children loop
@@ -525,7 +510,7 @@ end FlexLayoutSystem;
       --Reset_SGR    : constant String := CSI & "0m"; -- Resets colors and styles
 
       -- Helper to bundle cleanup commands
-      --Cleanup_Str  : constant Wide_Wide_String := 
+      --Cleanup_Str  : constant Wide_Wide_String :=
       --   Ada.Characters.Conversions.To_Wide_Wide_String(Reset_SGR & Restore_Pos & Show_Cursor);
 
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
@@ -585,10 +570,10 @@ end FlexLayoutSystem;
                for X in TUI_Width'First .. RI.Terminal_Width loop
                   if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /= Get_Buffer_Pixel (RI.Backbuffer, X, Y) then
                      FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
-                     
+
                      -- Draw to terminal
                      Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
-                     
+
                      -- Update backbuffer
                      Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
                   end if;
@@ -609,7 +594,7 @@ end FlexLayoutSystem;
 
       -- POST-RENDER: Normal cleanup, reset text, restore position, show cursor
       Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
-      
+
       -- Ensure commands are sent to the hardware immediately
       Ada.Wide_Wide_Text_IO.Flush;
 
@@ -634,7 +619,6 @@ end FlexLayoutSystem;
       Pos_Index            : Natural;
       Current_Char         : Character;
       Has_BG               : Boolean;
-      Temp_Buffer          : Buffer_T;
    begin
       --  Query for entities with WidgetComponent and ProgressBarComponent
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
@@ -702,13 +686,11 @@ end FlexLayoutSystem;
             end if;
          end;
 
-         --  Copy the protected buffer into a temp var for editing
-         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          --  Render to buffer (first row only for single-line progress bar)
          Pos_Index := 0;
          for X in TUI_Width'First .. Widget_C.Size_Width loop
             Pos_Index := Pos_Index + 1;
-            Px := Get_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First);
+            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First);
 
             --  Set background color if available
             if Has_BG then
@@ -763,24 +745,22 @@ end FlexLayoutSystem;
             end if;
 
             Px.Char := Current_Char;
-            Set_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First, Px);
+            Set_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First, Px);
          end loop;
 
          --  Fill remaining rows with background (for multi-row widgets)
          if Widget_C.Size_Height > TUI_Height'First then
             for Y in TUI_Height'First + 1 .. Widget_C.Size_Height loop
                for X in TUI_Width'First .. Widget_C.Size_Width loop
-                  Px := Get_Buffer_Pixel (Temp_Buffer, X, Y);
+                  Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, Y);
                   Px.Char := ' ';
                   if Has_BG then
                      Px.Background_Color := BG_C.Background_Color;
                   end if;
-                  Set_Buffer_Pixel (Temp_Buffer, X, Y, Px);
+                  Set_Buffer_Pixel (Widget_C.Render_Buffer, X, Y, Px);
                end loop;
             end loop;
          end if;
-         --  Assign temp buffer back to protected buffer
-         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components back to entity
          Add_Component (Comp_Ptr.all, To_CID ("WidgetComponent"), Widget_C);
