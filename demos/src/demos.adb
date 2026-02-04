@@ -184,6 +184,8 @@ begin
    -- Child 1 (Green Sidebar)
    ECS.Add_Component (E3_C.all, IDs.To_CID ("WidgetComponent"), E3_WC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("BackgroundColorComponent"), E3_BCC);
+   ECS.Add_Component (E3_C.all, IDs.To_CID ("TextComponent"), E3_TC);
+   ECS.Add_Component (E3_C.all, IDs.To_CID ("RainbowTextComponent"), E3_CC);
 
    -- Child 2 (Red Content)
    ECS.Add_Component (E4_C.all, IDs.To_CID ("WidgetComponent"), E4_WC);
@@ -198,8 +200,6 @@ begin
       ECS.FlexLayoutSystem (Entities);
       ECS.WidgetBackgroundSystem (Entities);
       ECS.TextRenderSystem (Entities);
-      ECS.BufferCopySystem (Entities);
-      ECS.BufferDrawSystem (Entities);
 
       delay Duration (0.1);
    end loop;

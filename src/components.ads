@@ -1,3 +1,6 @@
+--  components.ads
+--  Component definitions for the TUI ECS framework
+
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
 with IDs; use IDs;
@@ -8,6 +11,10 @@ package Components is
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
 
+   --  Defines a type within the record to hold a list of child entity IDs "<>"
+   --  indicates unconstrained array
+   --type Entity_ID_Array is array (Positive range <>) of Entity_ID;
+
    --  Abstract component superclass
    type Component_T is abstract tagged null record;
 
@@ -15,8 +22,8 @@ package Components is
    -- UPDATED: Added Prev_Terminal_Width/Height for resize detection
    type Render_Info_Component_T is new Component_T with record
       --  Data Fields
-      BackBuffer      : Buffer_T;
-      FrameBuffer     : Buffer_T;
+      Framebuffer     : Buffer_T;
+      Backbuffer      : Buffer_T;
       Terminal_Width  : TUI_Width;
       Terminal_Height : TUI_Height;
       
@@ -52,6 +59,15 @@ package Components is
       Mode : Position_Mode := Flex;
    end record;
 
+   --  Protected object type for Widget_Component_T for rendering
+   protected type Protected_Buffer_T is
+      procedure Set (V : Buffer_T);
+      function Get return Buffer_T;
+   private
+      Render_Buffer : Buffer_T;
+   end Protected_Buffer_T;
+   type Protected_Buffer_Ptr is access Protected_Buffer_T;
+
    --  WidgetComponent
    type Widget_Component_T is new Component_T with record
       -- FLEXBOX INTEGRATION: Position_X/Y and Size_Width/Height are now computed by FlexLayoutSystem
@@ -73,8 +89,20 @@ package Components is
 
    --  TextComponent
    type Text_Component_T is new Component_T with record
-      Text       : SU.Unbounded_String; --  Unbounded string
-      Text_Color : Color_t; --  Color instance (copied, not referenced)
+
+      Text       : SU.Unbounded_String;  --  Unbounded string
+      Text_Color : Color_t;              --  Color instance (copied, not referenced)
+
+      -- Text Position Fields for relative offset from parent widget
+      Offset_X  :  TUI_Width  := TUI_Width'First;
+      Offset_Y  :  TUI_Height := TUI_Height'First;
+
+      -- Formatting flags for text stylization
+      Is_Bold          : Boolean := False;
+      Is_Italic        : Boolean := False;
+      Is_Underline     : Boolean := False;
+      Is_Strikethrough : Boolean := False;
+
    end record;
 
    --  RootWidgetComponent
@@ -85,6 +113,23 @@ package Components is
    --  BackgroundColorComponent
    type Background_Color_Component_T is new Component_T with record
       Background_Color : Color_t;
+   end record;
+
+   ---------------------------------------------------------------------------
+   --  Progress Bar Component
+   ---------------------------------------------------------------------------
+   --  Stores the state of a progress bar widget.
+   --  Value ranges from 0.0 (empty) to 1.0 (full).
+
+   type Progress_Bar_Component_T is new Component_T with record
+      Value           : Float := 0.0;        --  Progress value (0.0 .. 1.0)
+      Filled_Char     : Character := '=';    --  Character for filled portion
+      Empty_Char      : Character := ' ';    --  Character for empty portion
+      Filled_Color    : Color_t := Green;    --  Color of filled portion
+      Empty_Color     : Color_t := Gray;     --  Color of empty portion
+      Show_Percentage : Boolean := True;     --  Whether to show percentage text
+      Border_Left     : Character := '[';    --  Left border character
+      Border_Right    : Character := ']';    --  Right border character
    end record;
 
 end Components;

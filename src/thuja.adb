@@ -1,15 +1,20 @@
-with graphics; use graphics;
+--  Thuja - Terminal User Interface Widget Library
+--  Package Body
 
-
-
+with Graphics; use Graphics;
 with Ada.Text_IO;
--- use Ada.Text_IO;
 
-package body thuja is 
-   procedure log is 
-      Pix : Pixel_t := ('A', Red, Black, True);
+package body Thuja is
+
+   ---------------------------------------------------------------------------
+   --  Utility
+   ---------------------------------------------------------------------------
+
+   procedure Log is
+      -- Added "others" to parameters for text stylization implementation
+      Pix : constant Pixel_t := ('A', Red, Black, True, others => <>);
    begin
       Ada.Text_IO.Put_Line (Pix'Image);
-   end;
+   end Log;
 
-end thuja;
+end Thuja;
