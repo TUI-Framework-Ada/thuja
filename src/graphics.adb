@@ -1,5 +1,6 @@
 --  Package Body for Graphics
 with Ada.Text_IO;
+with Interfaces.C;
 
 package body Graphics is
 
@@ -59,8 +60,16 @@ package body Graphics is
    --  This should be run once before any of the systems.
    procedure Clear_Screen is
    begin
-      --  Clear formatting, clear screen, move cursor to top-left
-      Ada.Text_IO.Put (CSI & "0m" & CSI & "2J" & CSI & "1;1H");
+      --  Enable VT processing first so ANSI sequences are honoured
+      Enable_VT_Processing;
+      Ada.Text_IO.Put (
+         CSI & "?1049h" &   --  Switch to alternate screen buffer
+         CSI & "?25l" &     --  Hide cursor (ANSI)
+         CSI & "0m" &       --  Reset formatting
+         CSI & "2J" &       --  Clear screen
+         CSI & "1;1H");     --  Move to top-left
+      --  Also hide cursor via Win32 API as a fallback
+      Set_Cursor_Visible (False);
    end Clear_Screen;
 
    --  Resets terminal to normal state (resets colors and typefaces)

@@ -1,80 +1,141 @@
+with Ada.Text_IO;
+
 package body Input_Handling is
 
-   --  Push a new event to the buffer
-   procedure Push (Buffer : in out Input_Buffer_t; Event : in Input_Event_t) is
+   --  Add a new event to the back of the buffer (FIFO queue)
+   procedure Enqueue (Buffer : in out Event_Buffer_t; Event : in Input_Event_t) is
    begin
-      --  Store the event at the head position
-      Buffer.Events (Buffer.Head) := Event;
+      --  Append event to the end of the vector (FIFO queue)
+      Buffer.Events.Append (Event);
+   end Enqueue;
 
-      --  Advance head pointer (circular)
-      if Buffer.Head = Buffer_Max_Size then
-         Buffer.Head := 1;
-      else
-         Buffer.Head := Buffer.Head + 1;
-      end if;
-
-      --  If buffer was full, advance tail to overwrite oldest event
-      if Buffer.Count = Buffer_Max_Size then
-         --  Tail advances to maintain Count = Buffer_Max_Size
-         if Buffer.Tail = Buffer_Max_Size then
-            Buffer.Tail := 1;
-         else
-            Buffer.Tail := Buffer.Tail + 1;
-         end if;
-      else
-         --  Buffer not full, increment count
-         Buffer.Count := Buffer.Count + 1;
-      end if;
-   end Push;
-
-   --  Pop the oldest event from the buffer
-   function Pop (Buffer : in out Input_Buffer_t; Event : out Input_Event_t) return Boolean is
+   --  Remove and return the oldest event from the front of the buffer
+   function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean_t is
    begin
       --  Check if buffer is empty
-      if Buffer.Count = 0 then
+      if Buffer.Events.Is_Empty then
          return False;
       end if;
 
-      --  Retrieve the event at the tail position
-      Event := Buffer.Events (Buffer.Tail);
+      --  Get the first (oldest) event
+      Event := Buffer.Events.First_Element;
 
-      --  Advance tail pointer (circular)
-      if Buffer.Tail = Buffer_Max_Size then
-         Buffer.Tail := 1;
-      else
-         Buffer.Tail := Buffer.Tail + 1;
-      end if;
-
-      --  Decrement count
-      Buffer.Count := Buffer.Count - 1;
+      --  Remove it from the front
+      Buffer.Events.Delete_First;
 
       return True;
-   end Pop;
+   end Dequeue;
 
-   --  Check if buffer is empty
-   function Is_Empty (Buffer : in Input_Buffer_t) return Boolean is
-   begin
-      return Buffer.Count = 0;
-   end Is_Empty;
+   --  Protected object implementation
+   protected body Protected_Input_Buffer_t is
 
-   --  Check if buffer is full
-   function Is_Full (Buffer : in Input_Buffer_t) return Boolean is
-   begin
-      return Buffer.Count = Buffer_Max_Size;
-   end Is_Full;
+      --  Add an event to the buffer (called by input reader)
+      procedure Produce (Event : in Input_Event_t) is
+      begin
+         Enqueue (Events, Event);
+      end Produce;
 
-   --  Clear all events from the buffer
-   procedure Clear (Buffer : in out Input_Buffer_t) is
-   begin
-      Buffer.Head := 1;
-      Buffer.Tail := 1;
-      Buffer.Count := 0;
-   end Clear;
+      --  Get an event from the buffer (called by main application)
+      procedure Consume (Event : out Input_Event_t) is
+         Success : Boolean_t;
+      begin
+         Success := Dequeue (Events, Event);
+         if not Success then
+            --  Use NUL character to indicate no input (not space!)
+            Event := (Char_Value => Character_t'Val (0), Cmd => None);
+         end if;
+      end Consume;
 
-   --  Get the current number of events in the buffer
-   function Size (Buffer : in Input_Buffer_t) return Natural is
+   end Protected_Input_Buffer_t;
+
+   --  State machine for parsing input sequences
+   procedure Parse_Input (
+      C           : in Character_t;
+      State       : in Out Parse_State_t;
+      Cmd         : out Command_t;
+      Has_Command : out Boolean_t
+   ) is
+      ASCII_TAB : constant Character_t := Character_t'Val (9);
+      ASCII_LF  : constant Character_t := Character_t'Val (10);
+      ASCII_CR  : constant Character_t := Character_t'Val (13);
+      ASCII_ESC : constant Character_t := Character_t'Val (27);
    begin
-      return Buffer.Count;
-   end Size;
+      Has_Command := True;  --  Always produce an event for the keyboard demo
+      Cmd := None;
+
+      case State is
+         when Normal =>
+            case C is
+               when ASCII_TAB =>
+                  Cmd := Tab;
+
+               when ASCII_LF | ASCII_CR =>
+                  Cmd := Enter;
+
+               when ASCII_ESC =>
+                  --  ESC triggers quit immediately, no state change needed
+                  Cmd := Quit;
+
+               when 'q' | 'Q' =>
+                  Cmd := Quit;
+
+               when others =>
+                  null;  --  Cmd stays None, but Has_Command is True
+            end case;
+
+         when Escape_Received =>
+            --  Reserved for future escape sequence handling (e.g., arrow keys)
+            --  For now, just reset to normal state
+            State := Normal;
+      end case;
+   end Parse_Input;
+
+   --  Input reader task
+   task body Input_Reader is
+      C           : Character_t;
+      State       : Parse_State_t := Normal;
+      Cmd         : Command_t;
+      Has_Command : Boolean_t;
+      Event       : Input_Event_t;
+      Running     : Boolean_t := False;
+   begin
+      loop
+         select
+            accept Start do
+               Running := True;
+            end Start;
+
+            --  Main input reading loop
+            while Running loop
+               select
+                  accept Stop do
+                     Running := False;
+                  end Stop;
+               else
+                  begin
+                     Ada.Text_IO.Get_Immediate (C);
+                     Parse_Input (C, State, Cmd, Has_Command);
+
+                     if Has_Command then
+                        Event := (Char_Value => C, Cmd => Cmd);
+                        Input_Buffer.Produce (Event);
+                     end if;
+                  exception
+                     when others =>
+                        null;
+                  end;
+               end select;
+            end loop;
+
+         or
+            accept Stop do
+               Running := False;
+            end Stop;
+
+         or
+            terminate;
+         end select;
+      end loop;
+   end Input_Reader;
 
 end Input_Handling;

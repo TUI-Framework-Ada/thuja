@@ -1,7 +1,7 @@
 --ecs.adb
 with Ada.Characters.Conversions;
 with Ada.Strings.Unbounded;
-with Ada.Wide_Wide_Text_IO;
+with Ada.Text_IO;
 with Graphics; use Graphics;
 with Flexbox; use Flexbox;
 
@@ -554,12 +554,10 @@ end FlexLayoutSystem;
          (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
-      function ConvertWW (P : Pixel_t; Row : TUI_Height;
-                          Col : TUI_Width) return Wide_Wide_String is
-        (Ada.Characters.Conversions.To_Wide_Wide_String (
-         Move (Row, Col) &
-           Format (P)) &
-           Ada.Characters.Conversions.To_Wide_Wide_Character (P.Char));
+      Reset : constant String := CSI & "0m";
+      function Convert (P : Pixel_t; Row : TUI_Height;
+                        Col : TUI_Width) return String is
+        (Move (Row, Col) & Format (P) & P.Char & Reset);
 
       --  Real stuff begins
       Search_Components : Component_ID_Vector.Vector;

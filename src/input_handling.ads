@@ -1,45 +1,71 @@
+with Ada.Containers.Vectors;
+
 package Input_Handling is
 
-   --  Maximum number of input events that can be buffered
-   Buffer_Max_Size : constant Positive := 20;
+   --  Subtypes for standard Ada types
+   subtype Character_t is Character;
+   subtype Boolean_t is Boolean;
+   subtype Natural_t is Natural;
 
-   --  Represents a single input event (keystroke)
+   --  Command types that can be generated from input
+   type Command_t is (Tab, Quit, Enter, None);
+
+   --  Input event containing both the raw character and parsed command
    type Input_Event_t is record
-      Char_Value : Character;
+      Char_Value : Character_t := ' ';
+      Cmd        : Command_t := None;
    end record;
 
-   --  Circular buffer for input events
-   type Input_Buffer_t is private;
+   --  Instantiate vector for input events
+   package Event_Vectors is new Ada.Containers.Vectors
+      (Index_Type   => Natural_t,
+       Element_Type => Input_Event_t);
 
-   --  Push a new event to the buffer
-   --  If buffer is full, oldest event is replaced
-   procedure Push (Buffer : in out Input_Buffer_t; Event : in Input_Event_t);
+   --  Vector-based buffer for input events (unlimited capacity)
+   type Event_Buffer_t is record
+      Events : Event_Vectors.Vector;
+   end record;
 
-   --  Pop the oldest event from the buffer
+   --  Add a new event to the back of the buffer (FIFO queue)
+   procedure Enqueue (Buffer : in out Event_Buffer_t; Event : in Input_Event_t);
+
+   --  Remove and return the oldest event from the front of the buffer
    --  Returns True if an event was available, False if buffer was empty
-   function Pop (Buffer : in out Input_Buffer_t; Event : out Input_Event_t) return Boolean;
+   function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean_t;
 
-   --  Check if buffer is empty
-   function Is_Empty (Buffer : in Input_Buffer_t) return Boolean;
+   --  Protected object for thread-safe input buffer access
+   protected type Protected_Input_Buffer_t is
+      --  Add an input event to the buffer
+      procedure Produce (Event : in Input_Event_t);
 
-   --  Check if buffer is full
-   function Is_Full (Buffer : in Input_Buffer_t) return Boolean;
+      --  Get the next input event from the buffer
+      procedure Consume (Event : out Input_Event_t);
 
-   --  Clear all events from the buffer
-   procedure Clear (Buffer : in out Input_Buffer_t);
+   private
+      Events : Event_Buffer_t;
+   end Protected_Input_Buffer_t;
 
-   --  Get the current number of events in the buffer
-   function Size (Buffer : in Input_Buffer_t) return Natural;
+   --  Global protected input buffer instance
+   Input_Buffer : Protected_Input_Buffer_t;
+
+   --  Task for reading input from stdin
+   task Input_Reader is
+      entry Start;
+      entry Stop;
+   end Input_Reader;
 
 private
 
-   type Event_Array_t is array (1 .. Buffer_Max_Size) of Input_Event_t;
+   --  State machine states for parsing input sequences
+   type Parse_State_t is (Normal, Escape_Received);
 
-   type Input_Buffer_t is record
-      Events : Event_Array_t;
-      Head   : Positive := 1;  --  Points to next write position
-      Tail   : Positive := 1;  --  Points to next read position
-      Count  : Natural := 0;   --  Current number of events in buffer
-   end record;
+   --  Parse a character and current state to determine command
+   --  Returns the new state and any generated command
+   procedure Parse_Input (
+      C           : in Character_t;
+      State       : in Out Parse_State_t;
+      Cmd         : out Command_t;
+      Has_Command : out Boolean_t
+   );
 
 end Input_Handling;
