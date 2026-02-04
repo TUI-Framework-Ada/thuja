@@ -28,6 +28,15 @@ package Components is
 
    end record;
 
+   --  Protected object type for Widget_Component_T for rendering
+   protected type Protected_Buffer_T is
+      procedure Set (V : Buffer_T);
+      function Get return Buffer_T;
+   private
+      Render_Buffer : Buffer_T;
+   end Protected_Buffer_T;
+   type Protected_Buffer_Ptr is access Protected_Buffer_T;
+
    --  WidgetComponent
    type Widget_Component_T is new Component_T with record
 
@@ -42,7 +51,7 @@ package Components is
       Is_Enabled : Boolean := True;   --  Set to true so it can function
       Has_Focus  : Boolean := False;  --  Set to false as all widgets cannot be in focus
 
-      Render_Buffer : Buffer_T;  --  The buffer the widget renders its contents to
+      Protected_Buffer : Protected_Buffer_Ptr := new Protected_Buffer_T;  --  The buffer the widget renders its contents to
       Children      : Entity_ID_Vector.Vector;
 
    end record;

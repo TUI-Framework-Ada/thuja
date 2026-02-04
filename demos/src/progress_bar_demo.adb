@@ -60,7 +60,7 @@ procedure Progress_Bar_Demo is
       Widget_C.Size_Height := Term_Height;
       Widget_C.Is_Visible := True;
       Widget_C.Is_Enabled := True;
-      Widget_C.Render_Buffer := Create_Buffer (Term_Width, Term_Height);
+      Widget_C.Protected_Buffer.Set (Create_Buffer (Term_Width, Term_Height));
 
       --  Add progress bar as child of root
       Widget_C.Children.Append (Progress_ID);
