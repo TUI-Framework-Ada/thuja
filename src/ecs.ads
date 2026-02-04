@@ -23,8 +23,6 @@ package ECS is
    end record;
    type Components_Ptr is access all Components;
 
-
-
    procedure Add_Component (Self : in out Components;
                             Component : in Component_Id;
                             Component_Struct : in Component_T'Class);
@@ -51,13 +49,23 @@ package ECS is
    function Add_Entity (Self : in out Entity_Components; Id : Entity_Id) return Components_Ptr;
    procedure Remove_Entity (Self : in out Entity_Components; Id : Entity_Id);
 
-   function Get_Entity_Components (Self : in Entity_Components; Id : Entity_Id) return Components_Ptr; -- UML Get components for an entity
+   function Get_Entity_Components (Self : in Entity_Components; Id : Entity_Id) return Components_Ptr;
 
-   function Get_Entities_Matching -- UML Get all entities with matching components
+   function Get_Entities_Matching
      (Self : in Entity_Components; Required : Component_ID_Vector.Vector)
       return Entity_ID_Vector.Vector;
 
    --  Built-in systems
+   -- ================================================================
+   -- NEW: Added this system FIRST in the list
+   -- Why: Detects when the terminal size changes
+   -- How: Compares current size vs. previous size each frame
+   -- When called: FIRST in main loop (before FlexLayoutSystem)
+   -- ================================================================
+   procedure TerminalResizeSystem (Entity_List : Entity_Components);
+   
+   -- EXISTING: Current systems, not changed. 
+   procedure FlexLayoutSystem (Entity_List : Entity_Components);
    procedure WidgetBackgroundSystem (Entity_List : Entity_Components);
    procedure TextRenderSystem (Entity_List : Entity_Components);
    procedure BufferCopySystem (Entity_List : Entity_Components);
@@ -65,5 +73,25 @@ package ECS is
    --  Renders all progress bar widgets to their buffers.
    --  Should be called after WidgetBackgroundSystem and before BufferCopySystem.
    procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components);
+
+   -- ================================================================
+   -- NEW: Helper procedures for resize and widget movement
+   -- How: Sets to Is_Dirty = True for all Flex_Layout_Component_T containers
+   -- When: Called by TerminalResizeSystem when a resize is detected
+   --Why did I separate this? Cleaner code, makes it REUSABLE
+   -- ================================================================
+   procedure Mark_All_Flex_Dirty (Entity_List : Entity_Components);
+   
+   -- Widget movement API for absolute positioning
+   procedure Move_Widget (Entity_List : in out Entity_Components;
+                         Widget_Entity : Entity_Id;
+                         New_X : TUI_Width;
+                         New_Y : TUI_Height);
+
+   -- Simple API for relative movement (move by delta)                    
+   procedure Move_Widget_By (Entity_List : in out Entity_Components;
+                            Widget_Entity : Entity_Id;
+                            Delta_X : Integer;
+                            Delta_Y : Integer);
 
 end ECS;

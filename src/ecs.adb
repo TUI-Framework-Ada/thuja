@@ -3,6 +3,7 @@ with Ada.Characters.Conversions;
 with Ada.Strings.Unbounded;
 with Ada.Wide_Wide_Text_IO;
 with Graphics; use Graphics;
+with Flexbox; use Flexbox;
 
 package body ECS is
 
@@ -154,6 +155,134 @@ package body ECS is
 --   end ExampleSystem;
 
    --  Built-in systems
+   
+  
+-- ================================================================
+-- UPDATED FlexLayoutSystem FOR YOUR ECS.ADB
+-- Replace your existing FlexLayoutSystem with this version
+-- ================================================================
+
+-- FLEXBOX INTEGRATION: Corrected System with Position Mode support
+-- This version respects Position_Mode_Component_T and skips widgets
+-- that are set to Absolute, Relative, or Fixed positioning modes.
+procedure FlexLayoutSystem (Entity_List : Entity_Components) is
+   Search_Component_IDs : Component_ID_Vector.Vector;
+   Matched_Entities     : Entity_ID_Vector.Vector;
+   
+   -- Containers for the Parent (The Flex Container)
+   Parent_Comps         : Components_Ptr;
+   Flex_C               : Flex_Layout_Component_T;
+   Parent_Widget_C      : Widget_Component_T;
+   
+   -- Containers for the Children (The Items)
+   Child_Comps          : Components_Ptr;
+   Child_Widget_C       : Widget_Component_T;
+   Child_Id             : Entity_Id;
+
+   -- NEW: Position mode checking
+   -- Thought Child_Pos_Mode - Holds the child's Position_Mode_Component so we can check what mode it's in
+   -- Skip_Child - Boolean flag (T/F) that makes the logic clearer: "should I skip positioning this child?"
+   Child_Pos_Mode       : Position_Mode_Component_T;
+   Skip_Child           : Boolean;
+
+   -- Temporary integers for safe calculation
+   Calc_X, Calc_Y, Calc_W, Calc_H : Integer;
+begin
+   Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
+   Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+   
+   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+   
+   for Parent_EID of Matched_Entities loop
+      Parent_Comps := Get_Entity_Components (Entity_List, Parent_EID);
+      
+      Flex_C := Flex_Layout_Component_T (
+         Get_Component (Parent_Comps.all, To_CID ("FlexLayoutComponent"))
+      );
+      Parent_Widget_C := Widget_Component_T (
+         Get_Component (Parent_Comps.all, To_CID ("WidgetComponent"))
+      );
+
+      -- 1. Sync Flex Container size with the Parent Widget size
+      Flex_C.Flex_Container.Width := Integer (Parent_Widget_C.Size_Width);
+      Flex_C.Flex_Container.Height := Integer (Parent_Widget_C.Size_Height);
+
+      -- 2. Run Layout Algorithm
+      if Flex_C.Is_Dirty then
+         Flexbox.Layout (Flex_C.Flex_Container);
+         Flex_C.Is_Dirty := False;
+         Add_Component (Parent_Comps.all, To_CID ("FlexLayoutComponent"), Flex_C);
+      end if;
+
+      -- 3. Apply Calculated Positions to Child Entities
+      if Flex_C.Flex_Container.Items /= null then
+         for I in 1 .. Flex_C.Flex_Container.Item_Count loop
+            
+            Child_Id := Flex_C.Flex_Container.Items(I).Related_Entity;
+            Child_Comps := Get_Entity_Components(Entity_List, Child_Id);
+            
+            if Child_Comps /= null and then 
+               Has_Component(Child_Comps.all, To_CID("WidgetComponent")) then
+               
+               -- ========================================================
+               -- NEW: Check if this child should be positioned by flex
+               -- ========================================================
+
+               -- Step 1: Assume we do NOT skip it
+               Skip_Child := False;
+               
+               -- Step 2: Check if it has a PositionMode component
+               if Has_Component(Child_Comps.all, To_CID("PositionMode")) then
+                  Child_Pos_Mode := Position_Mode_Component_T (
+                     Get_Component (Child_Comps.all, To_CID ("PositionMode"))
+                  );
+                  
+                  -- Step 3: If mode is not Flex, set Skip_Child to True
+                  if Child_Pos_Mode.Mode /= Flex then
+                     Skip_Child := True;
+                  end if;
+               end if;
+               
+               -- Step 4: If Skip_Child is False, proceed to position/size the child
+               if not Skip_Child then
+                  Child_Widget_C := Widget_Component_T (
+                     Get_Component (Child_Comps.all, To_CID ("WidgetComponent"))
+                  );
+
+                  -- FIX: Use Integer math first to allow 0 offsets, then cast to TUI type
+                  -- Parent (1) + Offset (0) = 1 (Valid TUI_Width)
+                  Calc_X := Integer(Parent_Widget_C.Position_X) + 
+                           Flex_C.Flex_Container.Items(I).Position_X;
+                  Calc_Y := Integer(Parent_Widget_C.Position_Y) + 
+                           Flex_C.Flex_Container.Items(I).Position_Y;
+
+                  Child_Widget_C.Position_X := TUI_Width(Calc_X);
+                  Child_Widget_C.Position_Y := TUI_Height(Calc_Y);
+                  
+                  -- UPDATE SIZE:
+                  -- We also use Integer'Max(1, ...) to ensure size never hits 0 and crashes
+                  if Flex_C.Flex_Container.Direction = Row then
+                     Calc_W := Integer'Max(1, Flex_C.Flex_Container.Items(I).Computed_Size);
+                     Calc_H := Integer'Max(1, Flex_C.Flex_Container.Items(I).Cross_Size);
+                  else
+                     Calc_H := Integer'Max(1, Flex_C.Flex_Container.Items(I).Computed_Size);
+                     Calc_W := Integer'Max(1, Flex_C.Flex_Container.Items(I).Cross_Size);
+                  end if;
+
+                  Child_Widget_C.Size_Width := TUI_Width(Calc_W);
+                  Child_Widget_C.Size_Height := TUI_Height(Calc_H);
+
+                  -- Save Child Widget back to ECS
+                  Add_Component (Child_Comps.all, To_CID ("WidgetComponent"), Child_Widget_C);
+               end if;
+               -- If Skip_Child = True, we leave the widget's position/size unchanged
+               
+            end if;
+         end loop;
+      end if;
+
+   end loop;
+end FlexLayoutSystem;
 
    procedure WidgetBackgroundSystem (Entity_List : Entity_Components) is
       Search_Component_IDs : Component_ID_Vector.Vector;
