@@ -1,7 +1,8 @@
+--ecs.adb
+with Ada.Characters.Conversions;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Graphics; use Graphics;
--- FLEXBOX INTEGRATION: Import flexbox package for layout calculations
 with Flexbox; use Flexbox;
 
 package body ECS is
@@ -155,53 +156,133 @@ package body ECS is
 
    --  Built-in systems
    
-   -- FLEXBOX INTEGRATION: New system that computes widget layouts using flexbox algorithm
-   -- This system must run BEFORE rendering systems (WidgetBackgroundSystem, TextRenderSystem, etc.)
-   -- It queries for entities with both FlexLayoutComponent and WidgetComponent, then:
-   --   1. Calls the flexbox layout algorithm if the layout is dirty (marked for recalculation)
-   --   2. Copies computed positions and sizes from flexbox into the Widget component
-   --   3. Marks the layout as clean to avoid recalculating every frame
-   procedure FlexLayoutSystem (Entity_List : Entity_Components) is
-      Search_Component_IDs : Component_ID_Vector.Vector;
-      Matched_Entities : Entity_ID_Vector.Vector;
-      Component_List : Components_Ptr;
-      Flex_C : Flex_Layout_Component_T;
-      Widget_C : Widget_Component_T;
-   begin
-      Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
-      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+  
+-- ================================================================
+-- UPDATED FlexLayoutSystem FOR YOUR ECS.ADB
+-- Replace your existing FlexLayoutSystem with this version
+-- ================================================================
+
+-- FLEXBOX INTEGRATION: Corrected System with Position Mode support
+-- This version respects Position_Mode_Component_T and skips widgets
+-- that are set to Absolute, Relative, or Fixed positioning modes.
+procedure FlexLayoutSystem (Entity_List : Entity_Components) is
+   Search_Component_IDs : Component_ID_Vector.Vector;
+   Matched_Entities     : Entity_ID_Vector.Vector;
+   
+   -- Containers for the Parent (The Flex Container)
+   Parent_Comps         : Components_Ptr;
+   Flex_C               : Flex_Layout_Component_T;
+   Parent_Widget_C      : Widget_Component_T;
+   
+   -- Containers for the Children (The Items)
+   Child_Comps          : Components_Ptr;
+   Child_Widget_C       : Widget_Component_T;
+   Child_Id             : Entity_Id;
+
+   -- NEW: Position mode checking
+   -- Thought Child_Pos_Mode - Holds the child's Position_Mode_Component so we can check what mode it's in
+   -- Skip_Child - Boolean flag (T/F) that makes the logic clearer: "should I skip positioning this child?"
+   Child_Pos_Mode       : Position_Mode_Component_T;
+   Skip_Child           : Boolean;
+
+   -- Temporary integers for safe calculation
+   Calc_X, Calc_Y, Calc_W, Calc_H : Integer;
+begin
+   Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
+   Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+   
+   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+   
+   for Parent_EID of Matched_Entities loop
+      Parent_Comps := Get_Entity_Components (Entity_List, Parent_EID);
       
-      for EID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, EID);
-         Flex_C := Flex_Layout_Component_T (
-            Get_Component (Component_List.all, To_CID ("FlexLayoutComponent"))
-         );
-         Widget_C := Widget_Component_T (
-            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
-         );
+      Flex_C := Flex_Layout_Component_T (
+         Get_Component (Parent_Comps.all, To_CID ("FlexLayoutComponent"))
+      );
+      Parent_Widget_C := Widget_Component_T (
+         Get_Component (Parent_Comps.all, To_CID ("WidgetComponent"))
+      );
 
-         -- Only recalculate layout if marked dirty (performance optimization)
-         if Flex_C.Is_Dirty then
-            -- FLEXBOX INTEGRATION: Call the flexbox layout algorithm
-            Flexbox.Layout (Flex_C.Flex_Container);
-            Flex_C.Is_Dirty := False;
+      -- 1. Sync Flex Container size with the Parent Widget size
+      Flex_C.Flex_Container.Width := Integer (Parent_Widget_C.Size_Width);
+      Flex_C.Flex_Container.Height := Integer (Parent_Widget_C.Size_Height);
 
-            -- FLEXBOX INTEGRATION: Copy flexbox-computed positions into widget component
-            -- This ensures widgets are positioned based on flexbox rules, not manual hardcoding
-            if Flex_C.Flex_Container.Items /= null and
-               Flex_C.Flex_Container.Item_Count > 0
-            then
-               Widget_C.Position_X := TUI_Width (Flex_C.Flex_Container.Items(1).Position_X);
-               Widget_C.Position_Y := TUI_Height (Flex_C.Flex_Container.Items(1).Position_Y);
-               Widget_C.Size_Width := TUI_Width (Flex_C.Flex_Container.Items(1).Computed_Size);
+      -- 2. Run Layout Algorithm
+      if Flex_C.Is_Dirty then
+         Flexbox.Layout (Flex_C.Flex_Container);
+         Flex_C.Is_Dirty := False;
+         Add_Component (Parent_Comps.all, To_CID ("FlexLayoutComponent"), Flex_C);
+      end if;
+
+      -- 3. Apply Calculated Positions to Child Entities
+      if Flex_C.Flex_Container.Items /= null then
+         for I in 1 .. Flex_C.Flex_Container.Item_Count loop
+            
+            Child_Id := Flex_C.Flex_Container.Items(I).Related_Entity;
+            Child_Comps := Get_Entity_Components(Entity_List, Child_Id);
+            
+            if Child_Comps /= null and then 
+               Has_Component(Child_Comps.all, To_CID("WidgetComponent")) then
+               
+               -- ========================================================
+               -- NEW: Check if this child should be positioned by flex
+               -- ========================================================
+
+               -- Step 1: Assume we do NOT skip it
+               Skip_Child := False;
+               
+               -- Step 2: Check if it has a PositionMode component
+               if Has_Component(Child_Comps.all, To_CID("PositionMode")) then
+                  Child_Pos_Mode := Position_Mode_Component_T (
+                     Get_Component (Child_Comps.all, To_CID ("PositionMode"))
+                  );
+                  
+                  -- Step 3: If mode is not Flex, set Skip_Child to True
+                  if Child_Pos_Mode.Mode /= Flex then
+                     Skip_Child := True;
+                  end if;
+               end if;
+               
+               -- Step 4: If Skip_Child is False, proceed to position/size the child
+               if not Skip_Child then
+                  Child_Widget_C := Widget_Component_T (
+                     Get_Component (Child_Comps.all, To_CID ("WidgetComponent"))
+                  );
+
+                  -- FIX: Use Integer math first to allow 0 offsets, then cast to TUI type
+                  -- Parent (1) + Offset (0) = 1 (Valid TUI_Width)
+                  Calc_X := Integer(Parent_Widget_C.Position_X) + 
+                           Flex_C.Flex_Container.Items(I).Position_X;
+                  Calc_Y := Integer(Parent_Widget_C.Position_Y) + 
+                           Flex_C.Flex_Container.Items(I).Position_Y;
+
+                  Child_Widget_C.Position_X := TUI_Width(Calc_X);
+                  Child_Widget_C.Position_Y := TUI_Height(Calc_Y);
+                  
+                  -- UPDATE SIZE:
+                  -- We also use Integer'Max(1, ...) to ensure size never hits 0 and crashes
+                  if Flex_C.Flex_Container.Direction = Row then
+                     Calc_W := Integer'Max(1, Flex_C.Flex_Container.Items(I).Computed_Size);
+                     Calc_H := Integer'Max(1, Flex_C.Flex_Container.Items(I).Cross_Size);
+                  else
+                     Calc_H := Integer'Max(1, Flex_C.Flex_Container.Items(I).Computed_Size);
+                     Calc_W := Integer'Max(1, Flex_C.Flex_Container.Items(I).Cross_Size);
+                  end if;
+
+                  Child_Widget_C.Size_Width := TUI_Width(Calc_W);
+                  Child_Widget_C.Size_Height := TUI_Height(Calc_H);
+
+                  -- Save Child Widget back to ECS
+                  Add_Component (Child_Comps.all, To_CID ("WidgetComponent"), Child_Widget_C);
+               end if;
+               -- If Skip_Child = True, we leave the widget's position/size unchanged
+               
             end if;
-         end if;
+         end loop;
+      end if;
 
-         Add_Component (Component_List.all, To_CID ("FlexLayoutComponent"), Flex_C);
-         Add_Component (Component_List.all, To_CID ("WidgetComponent"), Widget_C);
-      end loop;
-   end FlexLayoutSystem;
+   end loop;
+end FlexLayoutSystem;
 
    procedure WidgetBackgroundSystem (Entity_List : Entity_Components) is
       Search_Component_IDs : Component_ID_Vector.Vector;
@@ -211,6 +292,7 @@ package body ECS is
       BGColor_C : Background_Color_Component_T;
       BGColor : Color_t;
       Px : Pixel_t;
+      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
@@ -225,17 +307,21 @@ package body ECS is
                                                );
          BGColor := BGColor_C.Background_Color;
 
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
             for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
                --  returns a copy of the buffer's pixel
-               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+               Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
                --  edit values of the copy
                Px.Char := ' ';
                Px.Background_Color := BGColor;
-               --  pass back to update in the buffer
-               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               --  pass back to update in the temp buffer
+               Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -262,12 +348,15 @@ package body ECS is
       Text : SU.Unbounded_String;
       Char : Character;
       Px : Pixel_t;
+      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List, EID);
+
          Widget_C := Widget_Component_T (
             Get_Component (Component_List.all, To_CID ("WidgetComponent"))
                                         );
@@ -276,15 +365,27 @@ package body ECS is
                                     );
          Text := Text_C.Text;
 
-         Pos_W := TUI_Width'First;
-         Pos_H := TUI_Height'First;
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
+
+         -- Initiatize drawing position using text offsets
+         -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
+         Pos_W := Text_C.Offset_X;
+         Pos_H := Text_C.Offset_Y;
+
          for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
             Char := SU.Element (Text, Text_Index);
-            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+            Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
             Px.Char := Char;
             Px.Char_Color := Text_C.Text_Color;
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+
+            -- For text stylization
+            Px.Is_Bold           := Text_C.Is_Bold;
+            Px.Is_Italic         := Text_C.Is_Italic;
+            Px.Is_Underline      := Text_C.Is_Underline;
+            Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+
+            Set_Buffer_Pixel (Temp_buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
@@ -295,6 +396,8 @@ package body ECS is
             --  If out of bounds, break
             exit when Pos_H > Widget_C.Size_Height;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -319,18 +422,22 @@ package body ECS is
          Parent_Pixel : Pixel_t;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
+         Temp_Buffer : Buffer_T;
       begin
          --  Calc root edges
          Root_Left := Root.Position_X;
          Root_Right := Root.Position_X + Root.Size_Width - TUI_Width (1);
          Root_Top := Root.Position_Y;
          Root_Bottom := Root.Position_Y + Root.Size_Height - TUI_Height (1);
+
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Parent.Protected_Buffer.Get;
          --  For each pixel of Render_Buffer,
          --    only within the bounds of the widget
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in TUI_Width'First .. Parent.Size_Width loop
             for Pos_H in TUI_Height'First .. Parent.Size_Height loop
-               Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
+               Parent_Pixel := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
                --  Calc X
                Parent_X := Parent.Position_X + Pos_W - TUI_Width (1);
                --  Calc Y
@@ -350,6 +457,8 @@ package body ECS is
                          );
             end loop;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Parent.Protected_Buffer.Set (Temp_Buffer);
 
          --  For the parent's children
          for Child_Entity_ID of Parent.Children loop
@@ -404,9 +513,21 @@ package body ECS is
       end loop;
    end BufferCopySystem;
 
+   -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
+   -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
    procedure BufferDrawSystem (Entity_List : Entity_Components) is
       --  Both pixel rendering and ANSI codes
       CSI : constant String := Character'Val (16#1B#) & '[';
+      Hide_Cursor  : constant String := CSI & "?25l"; -- not hiding cursor?
+      Show_Cursor  : constant String := CSI & "?25h"; -- unsure if show is occuring
+      Save_Pos     : constant String := CSI & "s";
+      Restore_Pos  : constant String := CSI & "u";
+      --Reset_SGR    : constant String := CSI & "0m"; -- Resets colors and styles
+
+      -- Helper to bundle cleanup commands
+      --Cleanup_Str  : constant Wide_Wide_String := 
+      --   Ada.Characters.Conversions.To_Wide_Wide_String(Reset_SGR & Restore_Pos & Show_Cursor);
+
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
       function FG (P : Pixel_t) return String is
         (CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
@@ -416,10 +537,21 @@ package body ECS is
         (CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
              & Trim (P.Background_Color.Green'Image) & ";"
              & Trim (P.Background_Color.Blue'Image) & "m");
+      -- 1m sets Bold, 22m sets Bold off
       function Bold (P : Pixel_t) return String is
         (CSI & (if P.Is_Bold then "1m" else "22m"));
+      -- 3m sets Italic, 23m sets Italic off
+      function Italic (P : Pixel_t) return String is
+        (CSI & (if P.Is_Italic then "3m" else "23m"));
+      -- 4m sets Underline, 24m sets Underline off
+      function Underline (P : Pixel_t) return String is
+        (CSI & (if P.Is_Underline then "4m" else "24m"));
+      -- 9m sets Strikethrough, 29 sets Strikethrough off
+      function Strikethrough (P : Pixel_t) return String is
+        (CSI & (if P.Is_Strikethrough then "9m" else "29m"));
+      -- Format function to include format styles
       function Format (P : Pixel_t) return String is
-         (FG (P) & BG (P) & Bold (P));
+         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       Reset : constant String := CSI & "0m";
@@ -439,60 +571,221 @@ package body ECS is
    begin
       Search_Components.Append (To_CID ("RenderInfo"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Components);
-      for EID of Matched_Entities loop
-         RI_Component_List := Get_Entity_Components (Entity_List, EID);
-         RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
-         --  Re-assert cursor hide at the start of every frame so that
-         --  terminals which reset visibility (e.g. WSL) keep it hidden.
-         Ada.Text_IO.Put (CSI & "?25l");
 
-         --  Begin comparing FB to BB and drawing
-         for Y in TUI_Height'First .. RI.Terminal_Height loop
-            for X in TUI_Width'First .. RI.Terminal_Width loop
-               if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /=
-                 Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-               then
-                  --  Fetch buffer pixels
-                  FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
-                  --  Draw to terminal
-                  Ada.Text_IO.Put (Convert (FB_Pixel, Y, X));
-                  --  Copy values into backbuffer's pixel
-                  Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
-               end if;
+      -- PRE-RENDER: Hide the cursor and save its current position
+      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Hide_Cursor & Save_Pos));
+
+      -- PROTECTED RENDER LOOP
+      begin
+         for EID of Matched_Entities loop
+            RI_Component_List := Get_Entity_Components (Entity_List, EID);
+            RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
+
+            for Y in TUI_Height'First .. RI.Terminal_Height loop
+               for X in TUI_Width'First .. RI.Terminal_Width loop
+                  if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /= Get_Buffer_Pixel (RI.Backbuffer, X, Y) then
+                     FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
+                     
+                     -- Draw to terminal
+                     Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
+                     
+                     -- Update backbuffer
+                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                  end if;
+               end loop;
             end loop;
+
+            -- Pass updated component back
+            Add_Component (RI_Component_List.all, To_CID ("RenderInfo"), RI);
          end loop;
 
-         --  Clear background artifacts beyond the rendered area.
-         --  On Windows, the console fills newly visible columns (from a
-         --  resize) with the attributes of the last character on the line.
-         --  Position cursor one column past the last rendered pixel, reset
-         --  attributes, then erase to end of line so new columns stay clean.
-         for Y_Clear in TUI_Height'First .. RI.Terminal_Height loop
-            declare
-               Col_After : constant Natural :=
-                  Natural (RI.Terminal_Width) + 1;
-            begin
-               Ada.Text_IO.Put (
-                  CSI & Trim (Natural'Image (Natural (Y_Clear))) & ";" &
-                  Trim (Natural'Image (Col_After)) & "H" &
-                  Reset & CSI & "K");
-            end;
-         end loop;
+      exception
+         when others =>
+            -- CRASH-ClEANUP: restore position, show cursor
+            Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
+            Ada.Wide_Wide_Text_IO.Flush;
+            raise; -- Rethrow the error for debug just incase
+      end;
 
-         --  Park the cursor in a fixed position after rendering so that
-         --  even if the terminal ignores cursor-hide sequences, the cursor
-         --  sits quietly instead of flashing across the screen.
-         Ada.Text_IO.Put (
-            CSI & Trim (Natural'Image (Natural (RI.Terminal_Height))) & ";" &
-            Trim (Natural'Image (Natural (RI.Terminal_Width))) & "H");
+      -- POST-RENDER: Normal cleanup, reset text, restore position, show cursor
+      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
+      
+      -- Ensure commands are sent to the hardware immediately
+      Ada.Wide_Wide_Text_IO.Flush;
 
-         --  Update components
-         Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
-                        To_CID ("RenderInfo"),
-                        RI
-                       );
-      end loop;
    end BufferDrawSystem;
+
+   ---------------------------------------------------------------------------
+   --  Progress Bar Render System
+   ---------------------------------------------------------------------------
+
+   procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components) is
+      Search_Component_IDs : Component_ID_Vector.Vector;
+      Matched_Entities     : Entity_ID_Vector.Vector;
+      Comp_Ptr             : Components_Ptr;
+      Widget_C             : Widget_Component_T;
+      PB_C                 : Progress_Bar_Component_T;
+      BG_C                 : Background_Color_Component_T;
+      Px                   : Pixel_t;
+      Bar_Width            : Natural;
+      Filled_Cells         : Natural;
+      Percent              : Natural;
+      Percent_Str          : String (1 .. 4);  --  "XXX%" or " XX%" etc.
+      Pos_Index            : Natural;
+      Current_Char         : Character;
+      Has_BG               : Boolean;
+      Temp_Buffer          : Buffer_T;
+   begin
+      --  Query for entities with WidgetComponent and ProgressBarComponent
+      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+      Search_Component_IDs.Append (To_CID ("ProgressBarComponent"));
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+
+      for EID of Matched_Entities loop
+         Comp_Ptr := Get_Entity_Components (Entity_List, EID);
+
+         --  Get components
+         Widget_C := Widget_Component_T (
+            Get_Component (Comp_Ptr.all, To_CID ("WidgetComponent")));
+         PB_C := Progress_Bar_Component_T (
+            Get_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")));
+
+         --  Check for optional background color component
+         Has_BG := Has_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"));
+         if Has_BG then
+            BG_C := Background_Color_Component_T (
+               Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent")));
+         end if;
+
+         --  Calculate bar dimensions
+         --  Format: [====    ] XXX%
+         --  Border chars take 2 positions, percentage takes ~5 positions (" 100%")
+         --  So bar content width = Widget width - 2 (borders) - 5 (percentage if shown)
+
+         if PB_C.Show_Percentage then
+            if Natural (Widget_C.Size_Width) > 7 then
+               Bar_Width := Natural (Widget_C.Size_Width) - 7;  -- 2 borders + 5 for " XXX%"
+            else
+               Bar_Width := 1;
+            end if;
+         else
+            if Natural (Widget_C.Size_Width) > 2 then
+               Bar_Width := Natural (Widget_C.Size_Width) - 2;  -- Just borders
+            else
+               Bar_Width := 1;
+            end if;
+         end if;
+
+         --  Calculate filled cells
+         Filled_Cells := Natural (PB_C.Value * Float (Bar_Width));
+         if Filled_Cells > Bar_Width then
+            Filled_Cells := Bar_Width;
+         end if;
+
+         --  Calculate percentage for display
+         Percent := Natural (PB_C.Value * 100.0);
+         if Percent > 100 then
+            Percent := 100;
+         end if;
+
+         --  Format percentage string (right-aligned, 3 digits + %)
+         declare
+            Pct_Img : constant String := Natural'Image (Percent);
+         begin
+            --  Natural'Image has leading space, so "  0" to " 100"
+            if Percent < 10 then
+               Percent_Str := "  " & Pct_Img (Pct_Img'Last) & "%";
+            elsif Percent < 100 then
+               Percent_Str := " " & Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+            else
+               Percent_Str := Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+            end if;
+         end;
+
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
+         --  Render to buffer (first row only for single-line progress bar)
+         Pos_Index := 0;
+         for X in TUI_Width'First .. Widget_C.Size_Width loop
+            Pos_Index := Pos_Index + 1;
+            Px := Get_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First);
+
+            --  Set background color if available
+            if Has_BG then
+               Px.Background_Color := BG_C.Background_Color;
+            end if;
+
+            --  Determine character and color at this position
+            if Pos_Index = 1 then
+               --  Left border
+               Current_Char := PB_C.Border_Left;
+               Px.Char_Color := White;
+            elsif Pos_Index = Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
+               --  Space before percentage
+               Current_Char := ' ';
+               Px.Char_Color := White;
+            elsif Pos_Index > Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
+               --  Percentage text area
+               declare
+                  Pct_Pos : constant Natural := Pos_Index - (Natural (Widget_C.Size_Width) - 4);
+               begin
+                  if Pct_Pos <= 4 then
+                     Current_Char := Percent_Str (Pct_Pos);
+                  else
+                     Current_Char := ' ';
+                  end if;
+               end;
+               Px.Char_Color := White;
+            elsif Pos_Index = Natural (Widget_C.Size_Width) - 5 + 1 and not PB_C.Show_Percentage then
+               --  Right border (no percentage)
+               Current_Char := PB_C.Border_Right;
+               Px.Char_Color := White;
+            elsif Pos_Index = Bar_Width + 2 then
+               --  Right border (with percentage calculation)
+               Current_Char := PB_C.Border_Right;
+               Px.Char_Color := White;
+            elsif Pos_Index > 1 and Pos_Index <= Bar_Width + 1 then
+               --  Bar content area
+               declare
+                  Bar_Pos : constant Natural := Pos_Index - 1;
+               begin
+                  if Bar_Pos <= Filled_Cells then
+                     Current_Char := PB_C.Filled_Char;
+                     Px.Char_Color := PB_C.Filled_Color;
+                  else
+                     Current_Char := PB_C.Empty_Char;
+                     Px.Char_Color := PB_C.Empty_Color;
+                  end if;
+               end;
+            else
+               Current_Char := ' ';
+               Px.Char_Color := White;
+            end if;
+
+            Px.Char := Current_Char;
+            Set_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First, Px);
+         end loop;
+
+         --  Fill remaining rows with background (for multi-row widgets)
+         if Widget_C.Size_Height > TUI_Height'First then
+            for Y in TUI_Height'First + 1 .. Widget_C.Size_Height loop
+               for X in TUI_Width'First .. Widget_C.Size_Width loop
+                  Px := Get_Buffer_Pixel (Temp_Buffer, X, Y);
+                  Px.Char := ' ';
+                  if Has_BG then
+                     Px.Background_Color := BG_C.Background_Color;
+                  end if;
+                  Set_Buffer_Pixel (Temp_Buffer, X, Y, Px);
+               end loop;
+            end loop;
+         end if;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
+
+         --  Update components back to entity
+         Add_Component (Comp_Ptr.all, To_CID ("WidgetComponent"), Widget_C);
+         Add_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent"), PB_C);
+      end loop;
+   end ProgressBarRenderSystem;
 
 end ECS;
