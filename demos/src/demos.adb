@@ -43,8 +43,8 @@ procedure Demos is
    E3_WC : constant Components.Widget_Component_T := (
       Position_X => 5,
       Position_Y => 3,
-      Size_Width => 20,
-      Size_Height => 5,
+      Size_Width => 50,
+      Size_Height => 20,
       Has_Focus => True,
       others => <>
                                                      );
@@ -53,12 +53,17 @@ procedure Demos is
 
    E3_TC : constant Components.Text_Component_T := (
       Text => SU.To_Unbounded_String ("This text will shift through colors!"),
-      Text_Color => Graphics.Red,
+      
       -- Formatting Flags for text stylization for the above string
+      Text_Color => Graphics.Red,
       Is_Bold => True,
       Is_Italic => True,
       Is_Underline => True,
       Is_Strikethrough => True,
+
+      -- Text Offset Relative to widgets position
+      Offset_X => 10,
+      Offset_Y => 5,
       others => <>
                                                    );
    E3_CC : constant User_Library.RainbowTextComponent := (Hue_Change_Speed => 60);

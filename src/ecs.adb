@@ -224,8 +224,10 @@ package body ECS is
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List, EID);
+
          Widget_C := Widget_Component_T (
             Get_Component (Component_List.all, To_CID ("WidgetComponent"))
                                         );
@@ -234,10 +236,11 @@ package body ECS is
                                     );
          Text := Text_C.Text;
 
-         Pos_W := TUI_Width'First;
-         Pos_H := TUI_Height'First;
-         --  Copy the protected buffer into a temp var for editing
-         Temp_Buffer := Widget_C.Protected_Buffer.Get;
+         -- Initiatize drawing position using text offsets
+         -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
+         Pos_W := Text_C.Offset_X;
+         Pos_H := Text_C.Offset_Y;
+
          for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
             Char := SU.Element (Text, Text_Index);
@@ -251,7 +254,7 @@ package body ECS is
             Px.Is_Underline      := Text_C.Is_Underline;
             Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
-            Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
+            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
@@ -379,9 +382,21 @@ package body ECS is
       end loop;
    end BufferCopySystem;
 
+   -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
+   -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
    procedure BufferDrawSystem (Entity_List : Entity_Components) is
       --  Both pixel rendering and ANSI codes
       CSI : constant String := Character'Val (16#1B#) & '[';
+      Hide_Cursor  : constant String := CSI & "?25l"; -- not hiding cursor?
+      Show_Cursor  : constant String := CSI & "?25h"; -- unsure if show is occuring
+      Save_Pos     : constant String := CSI & "s";
+      Restore_Pos  : constant String := CSI & "u";
+      --Reset_SGR    : constant String := CSI & "0m"; -- Resets colors and styles
+
+      -- Helper to bundle cleanup commands
+      --Cleanup_Str  : constant Wide_Wide_String := 
+      --   Ada.Characters.Conversions.To_Wide_Wide_String(Reset_SGR & Restore_Pos & Show_Cursor);
+
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
       function FG (P : Pixel_t) return String is
         (CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
@@ -427,32 +442,48 @@ package body ECS is
    begin
       Search_Components.Append (To_CID ("RenderInfo"));
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Components);
-      for EID of Matched_Entities loop
-         RI_Component_List := Get_Entity_Components (Entity_List, EID);
-         RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
-         --  Begin comparing FB to BB and drawing
-         for Y in TUI_Height'First .. RI.Terminal_Height loop
-            for X in TUI_Width'First .. RI.Terminal_Width loop
-               if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /=
-                 Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-               then
-                  --  Fetch buffer pixels
-                  FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
-                  --  Draw to terminal
-                  Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
-                  --  Copy values into backbuffer's pixel
-                  Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
-               end if;
+
+      -- PRE-RENDER: Hide the cursor and save its current position
+      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Hide_Cursor & Save_Pos));
+
+      -- PROTECTED RENDER LOOP
+      begin
+         for EID of Matched_Entities loop
+            RI_Component_List := Get_Entity_Components (Entity_List, EID);
+            RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
+
+            for Y in TUI_Height'First .. RI.Terminal_Height loop
+               for X in TUI_Width'First .. RI.Terminal_Width loop
+                  if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /= Get_Buffer_Pixel (RI.Backbuffer, X, Y) then
+                     FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
+                     
+                     -- Draw to terminal
+                     Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
+                     
+                     -- Update backbuffer
+                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                  end if;
+               end loop;
             end loop;
+
+            -- Pass updated component back
+            Add_Component (RI_Component_List.all, To_CID ("RenderInfo"), RI);
          end loop;
 
-         --  Update components
-         Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
-                        To_CID ("RenderInfo"),
-                        RI
-                       );
-      end loop;
+      exception
+         when others =>
+            -- CRASH-ClEANUP: restore position, show cursor
+            Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
+            Ada.Wide_Wide_Text_IO.Flush;
+            raise; -- Rethrow the error for debug just incase
+      end;
+
+      -- POST-RENDER: Normal cleanup, reset text, restore position, show cursor
+      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
+      
+      -- Ensure commands are sent to the hardware immediately
+      Ada.Wide_Wide_Text_IO.Flush;
+
    end BufferDrawSystem;
 
    ---------------------------------------------------------------------------
