@@ -1,3 +1,4 @@
+--ecs.adb
 with Ada.Characters.Conversions;
 with Ada.Strings.Unbounded;
 with Ada.Wide_Wide_Text_IO;
@@ -162,6 +163,7 @@ package body ECS is
       BGColor_C : Background_Color_Component_T;
       BGColor : Color_t;
       Px : Pixel_t;
+      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
@@ -176,17 +178,21 @@ package body ECS is
                                                );
          BGColor := BGColor_C.Background_Color;
 
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
             for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
                --  returns a copy of the buffer's pixel
-               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+               Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
                --  edit values of the copy
                Px.Char := ' ';
                Px.Background_Color := BGColor;
-               --  pass back to update in the buffer
-               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               --  pass back to update in the temp buffer
+               Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
             end loop;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -213,6 +219,7 @@ package body ECS is
       Text : SU.Unbounded_String;
       Char : Character;
       Px : Pixel_t;
+      Temp_Buffer : Buffer_T;
    begin
       Search_Component_IDs.Append (To_CID ("WidgetComponent"));
       Search_Component_IDs.Append (To_CID ("TextComponent"));
@@ -229,13 +236,22 @@ package body ECS is
 
          Pos_W := TUI_Width'First;
          Pos_H := TUI_Height'First;
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
          for Text_Index in Positive'First .. SU.Length(Text) loop
             --  Get character and update pixel fields inside widget's buffer
             Char := SU.Element (Text, Text_Index);
-            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+            Px := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
             Px.Char := Char;
             Px.Char_Color := Text_C.Text_Color;
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+
+            -- For text stylization
+            Px.Is_Bold           := Text_C.Is_Bold;
+            Px.Is_Italic         := Text_C.Is_Italic;
+            Px.Is_Underline      := Text_C.Is_Underline;
+            Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+
+            Set_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
@@ -246,6 +262,8 @@ package body ECS is
             --  If out of bounds, break
             exit when Pos_H > Widget_C.Size_Height;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
 
          --  Update components
          Add_Component (
@@ -270,18 +288,22 @@ package body ECS is
          Parent_Pixel : Pixel_t;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
+         Temp_Buffer : Buffer_T;
       begin
          --  Calc root edges
          Root_Left := Root.Position_X;
          Root_Right := Root.Position_X + Root.Size_Width - TUI_Width (1);
          Root_Top := Root.Position_Y;
          Root_Bottom := Root.Position_Y + Root.Size_Height - TUI_Height (1);
+
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Parent.Protected_Buffer.Get;
          --  For each pixel of Render_Buffer,
          --    only within the bounds of the widget
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in TUI_Width'First .. Parent.Size_Width loop
             for Pos_H in TUI_Height'First .. Parent.Size_Height loop
-               Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
+               Parent_Pixel := Get_Buffer_Pixel (Temp_Buffer, Pos_W, Pos_H);
                --  Calc X
                Parent_X := Parent.Position_X + Pos_W - TUI_Width (1);
                --  Calc Y
@@ -301,6 +323,8 @@ package body ECS is
                          );
             end loop;
          end loop;
+         --  Assign temp buffer back to protected buffer
+         Parent.Protected_Buffer.Set (Temp_Buffer);
 
          --  For the parent's children
          for Child_Entity_ID of Parent.Children loop
@@ -367,10 +391,21 @@ package body ECS is
         (CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
              & Trim (P.Background_Color.Green'Image) & ";"
              & Trim (P.Background_Color.Blue'Image) & "m");
+      -- 1m sets Bold, 22m sets Bold off
       function Bold (P : Pixel_t) return String is
         (CSI & (if P.Is_Bold then "1m" else "22m"));
+      -- 3m sets Italic, 23m sets Italic off
+      function Italic (P : Pixel_t) return String is
+        (CSI & (if P.Is_Italic then "3m" else "23m"));
+      -- 4m sets Underline, 24m sets Underline off
+      function Underline (P : Pixel_t) return String is
+        (CSI & (if P.Is_Underline then "4m" else "24m"));
+      -- 9m sets Strikethrough, 29 sets Strikethrough off
+      function Strikethrough (P : Pixel_t) return String is
+        (CSI & (if P.Is_Strikethrough then "9m" else "29m"));
+      -- Format function to include format styles
       function Format (P : Pixel_t) return String is
-         (FG (P) & BG (P) & Bold (P));
+         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       function ConvertWW (P : Pixel_t; Row : TUI_Height;
@@ -419,5 +454,178 @@ package body ECS is
                        );
       end loop;
    end BufferDrawSystem;
+
+   ---------------------------------------------------------------------------
+   --  Progress Bar Render System
+   ---------------------------------------------------------------------------
+
+   procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components) is
+      Search_Component_IDs : Component_ID_Vector.Vector;
+      Matched_Entities     : Entity_ID_Vector.Vector;
+      Comp_Ptr             : Components_Ptr;
+      Widget_C             : Widget_Component_T;
+      PB_C                 : Progress_Bar_Component_T;
+      BG_C                 : Background_Color_Component_T;
+      Px                   : Pixel_t;
+      Bar_Width            : Natural;
+      Filled_Cells         : Natural;
+      Percent              : Natural;
+      Percent_Str          : String (1 .. 4);  --  "XXX%" or " XX%" etc.
+      Pos_Index            : Natural;
+      Current_Char         : Character;
+      Has_BG               : Boolean;
+      Temp_Buffer          : Buffer_T;
+   begin
+      --  Query for entities with WidgetComponent and ProgressBarComponent
+      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+      Search_Component_IDs.Append (To_CID ("ProgressBarComponent"));
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+
+      for EID of Matched_Entities loop
+         Comp_Ptr := Get_Entity_Components (Entity_List, EID);
+
+         --  Get components
+         Widget_C := Widget_Component_T (
+            Get_Component (Comp_Ptr.all, To_CID ("WidgetComponent")));
+         PB_C := Progress_Bar_Component_T (
+            Get_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")));
+
+         --  Check for optional background color component
+         Has_BG := Has_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"));
+         if Has_BG then
+            BG_C := Background_Color_Component_T (
+               Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent")));
+         end if;
+
+         --  Calculate bar dimensions
+         --  Format: [====    ] XXX%
+         --  Border chars take 2 positions, percentage takes ~5 positions (" 100%")
+         --  So bar content width = Widget width - 2 (borders) - 5 (percentage if shown)
+
+         if PB_C.Show_Percentage then
+            if Natural (Widget_C.Size_Width) > 7 then
+               Bar_Width := Natural (Widget_C.Size_Width) - 7;  -- 2 borders + 5 for " XXX%"
+            else
+               Bar_Width := 1;
+            end if;
+         else
+            if Natural (Widget_C.Size_Width) > 2 then
+               Bar_Width := Natural (Widget_C.Size_Width) - 2;  -- Just borders
+            else
+               Bar_Width := 1;
+            end if;
+         end if;
+
+         --  Calculate filled cells
+         Filled_Cells := Natural (PB_C.Value * Float (Bar_Width));
+         if Filled_Cells > Bar_Width then
+            Filled_Cells := Bar_Width;
+         end if;
+
+         --  Calculate percentage for display
+         Percent := Natural (PB_C.Value * 100.0);
+         if Percent > 100 then
+            Percent := 100;
+         end if;
+
+         --  Format percentage string (right-aligned, 3 digits + %)
+         declare
+            Pct_Img : constant String := Natural'Image (Percent);
+         begin
+            --  Natural'Image has leading space, so "  0" to " 100"
+            if Percent < 10 then
+               Percent_Str := "  " & Pct_Img (Pct_Img'Last) & "%";
+            elsif Percent < 100 then
+               Percent_Str := " " & Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+            else
+               Percent_Str := Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+            end if;
+         end;
+
+         --  Copy the protected buffer into a temp var for editing
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
+         --  Render to buffer (first row only for single-line progress bar)
+         Pos_Index := 0;
+         for X in TUI_Width'First .. Widget_C.Size_Width loop
+            Pos_Index := Pos_Index + 1;
+            Px := Get_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First);
+
+            --  Set background color if available
+            if Has_BG then
+               Px.Background_Color := BG_C.Background_Color;
+            end if;
+
+            --  Determine character and color at this position
+            if Pos_Index = 1 then
+               --  Left border
+               Current_Char := PB_C.Border_Left;
+               Px.Char_Color := White;
+            elsif Pos_Index = Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
+               --  Space before percentage
+               Current_Char := ' ';
+               Px.Char_Color := White;
+            elsif Pos_Index > Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
+               --  Percentage text area
+               declare
+                  Pct_Pos : constant Natural := Pos_Index - (Natural (Widget_C.Size_Width) - 4);
+               begin
+                  if Pct_Pos <= 4 then
+                     Current_Char := Percent_Str (Pct_Pos);
+                  else
+                     Current_Char := ' ';
+                  end if;
+               end;
+               Px.Char_Color := White;
+            elsif Pos_Index = Natural (Widget_C.Size_Width) - 5 + 1 and not PB_C.Show_Percentage then
+               --  Right border (no percentage)
+               Current_Char := PB_C.Border_Right;
+               Px.Char_Color := White;
+            elsif Pos_Index = Bar_Width + 2 then
+               --  Right border (with percentage calculation)
+               Current_Char := PB_C.Border_Right;
+               Px.Char_Color := White;
+            elsif Pos_Index > 1 and Pos_Index <= Bar_Width + 1 then
+               --  Bar content area
+               declare
+                  Bar_Pos : constant Natural := Pos_Index - 1;
+               begin
+                  if Bar_Pos <= Filled_Cells then
+                     Current_Char := PB_C.Filled_Char;
+                     Px.Char_Color := PB_C.Filled_Color;
+                  else
+                     Current_Char := PB_C.Empty_Char;
+                     Px.Char_Color := PB_C.Empty_Color;
+                  end if;
+               end;
+            else
+               Current_Char := ' ';
+               Px.Char_Color := White;
+            end if;
+
+            Px.Char := Current_Char;
+            Set_Buffer_Pixel (Temp_Buffer, X, TUI_Height'First, Px);
+         end loop;
+
+         --  Fill remaining rows with background (for multi-row widgets)
+         if Widget_C.Size_Height > TUI_Height'First then
+            for Y in TUI_Height'First + 1 .. Widget_C.Size_Height loop
+               for X in TUI_Width'First .. Widget_C.Size_Width loop
+                  Px := Get_Buffer_Pixel (Temp_Buffer, X, Y);
+                  Px.Char := ' ';
+                  if Has_BG then
+                     Px.Background_Color := BG_C.Background_Color;
+                  end if;
+                  Set_Buffer_Pixel (Temp_Buffer, X, Y, Px);
+               end loop;
+            end loop;
+         end if;
+         --  Assign temp buffer back to protected buffer
+         Widget_C.Protected_Buffer.Set (Temp_Buffer);
+
+         --  Update components back to entity
+         Add_Component (Comp_Ptr.all, To_CID ("WidgetComponent"), Widget_C);
+         Add_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent"), PB_C);
+      end loop;
+   end ProgressBarRenderSystem;
 
 end ECS;

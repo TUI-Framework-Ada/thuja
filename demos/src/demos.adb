@@ -1,13 +1,14 @@
-with Ada.Text_IO;
+with Ada.Strings.Unbounded;
 with Components;
 with ECS;
 with Graphics;
 with IDs;
+with User_Library;
 
 procedure Demos is
 
-   --  Number of times main loop should iterate
-   Loop_Count : constant Positive := 20; --  Loop 20 times
+   --  Convenience rename
+   package SU renames Ada.Strings.Unbounded;
 
    --  Variables for Thuja
 
@@ -16,7 +17,7 @@ procedure Demos is
    --  Instantiate entity IDs for registering with Entities
    E1_ID : constant IDs.Entity_Id := IDs.To_EID ("Render info");
    E2_ID : constant IDs.Entity_Id := IDs.To_EID ("Root widget");
-   E3_ID : constant IDs.Entity_Id := IDs.To_EID ("Green box");
+   E3_ID : constant IDs.Entity_Id := IDs.To_EID ("Text box");
    --  Register each entity and store pointers to their Components instances
    E1_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E1_ID);
    E2_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E2_ID);
@@ -42,45 +43,70 @@ procedure Demos is
    E3_WC : constant Components.Widget_Component_T := (
       Position_X => 5,
       Position_Y => 3,
-      Size_Width => 10,
+      Size_Width => 20,
       Size_Height => 5,
       Has_Focus => True,
       others => <>
-                                            );
+                                                     );
    E3_BCC : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Green);
+      Background_Color => (64, 64, 64));
+
+   E3_TC : constant Components.Text_Component_T := (
+      Text => SU.To_Unbounded_String ("This text will shift through colors!"),
+      Text_Color => Graphics.Red,
+      -- Formatting Flags for text stylization for the above string
+      Is_Bold => True,
+      Is_Italic => True,
+      Is_Underline => True,
+      Is_Strikethrough => True,
+      others => <>
+                                                   );
+   E3_CC : constant User_Library.RainbowTextComponent := (Hue_Change_Speed => 60);
+
+
+
+   --  Render thread declaration
+   --  The main body doesn't end, so it's fine that this doesn't either
+   task Render_Thread;
+
+   task body Render_Thread is
+   begin
+      loop
+         ECS.BufferCopySystem (Entities);
+         ECS.BufferDrawSystem (Entities);
+
+         --  30 FPS
+         delay Duration (1.0 / 30.0);
+      end loop;
+   end Render_Thread;
 begin
 
    --  Continue setup of components
-   --  Initialization and assigning of components can be delegated into an independent block (components are updated by copy)
-   --  The Entity_Components instance will need to remain visible, and the entity IDs should too
-   --  Those last two can be handled by instantiating them statically in a user library to avoid clutter
 
-   --  For now, the component IDs need to be exact values for the systems to acknowledge them
    ECS.Add_Component (E1_C.all, IDs.To_CID ("RenderInfo"), E1_RIC);
    ECS.Add_Component (E2_C.all, IDs.To_CID ("WidgetComponent"), E2_WC);
    ECS.Add_Component (E2_C.all, IDs.To_CID ("RootWidget"), E2_RWC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("WidgetComponent"), E3_WC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("BackgroundColorComponent"), E3_BCC);
+   ECS.Add_Component (E3_C.all, IDs.To_CID ("TextComponent"), E3_TC);
+   ECS.Add_Component (E3_C.all, IDs.To_CID ("RainbowTextComponent"), E3_CC);
 
    --  Remaining Thuja init
    Graphics.Clear_Screen;
 
    --  Main loop
 
-   for Loop_Index in Positive'First .. Loop_Count loop
+   --  Loop forever
+   loop
+
+      --  Rainbow text system
+      User_Library.RainbowTextSystem (Entities);
 
       --  Execute systems (in correct order)
       ECS.WidgetBackgroundSystem (Entities);
       ECS.TextRenderSystem (Entities);
-      ECS.BufferCopySystem (Entities);
-      ECS.BufferDrawSystem (Entities);
 
-      --  Sleep for 0.1 seconds
-      delay Duration (0.1);
+      --  30 FPS
+      delay Duration (1.0 / 30.0);
    end loop;
-
-   --  Fix screen & print success line on demo end
-   Graphics.Clear_Screen;
-   Ada.Text_IO.Put_Line ("Thank you for using the Thuja demo");
 end Demos;
