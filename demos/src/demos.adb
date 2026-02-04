@@ -35,9 +35,9 @@ procedure Demos is
       Children => [E3_ID],
       others => <>
                                                      );
-   --  The compiler doesn't like the redundant "others" assignment here,
-   --    but not including will make it never be initialized (or just error)
+   pragma Warnings (Off, "redundant");
    E2_RWC : constant Components.Root_Widget_Component_T := (others => <>);
+   pragma Warnings (On, "redundant");
    --  Components of entity E3 (a green box)
    E3_WC : constant Components.Widget_Component_T := (
       Position_X => 5,

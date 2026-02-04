@@ -10,7 +10,7 @@ package body Input_Handling is
    end Enqueue;
 
    --  Remove and return the oldest event from the front of the buffer
-   function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean is
+   function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean_t is
    begin
       --  Check if buffer is empty
       if Buffer.Events.Is_Empty then
@@ -37,12 +37,12 @@ package body Input_Handling is
 
       --  Get an event from the buffer (called by main application)
       procedure Consume (Event : out Input_Event_t) is
-         Success : Boolean;
+         Success : Boolean_t;
       begin
          Success := Dequeue (Events, Event);
          if not Success then
             --  Use NUL character to indicate no input (not space!)
-            Event := (Char_Value => Character'Val (0), Cmd => None);
+            Event := (Char_Value => Character_t'Val (0), Cmd => None);
          end if;
       end Consume;
 
@@ -50,15 +50,15 @@ package body Input_Handling is
 
    --  State machine for parsing input sequences
    procedure Parse_Input (
-      C           : in Character;
+      C           : in Character_t;
       State       : in Out Parse_State_t;
       Cmd         : out Command_t;
-      Has_Command : out Boolean
+      Has_Command : out Boolean_t
    ) is
-      ASCII_TAB : constant Character := Character'Val (9);
-      ASCII_LF  : constant Character := Character'Val (10);
-      ASCII_CR  : constant Character := Character'Val (13);
-      ASCII_ESC : constant Character := Character'Val (27);
+      ASCII_TAB : constant Character_t := Character_t'Val (9);
+      ASCII_LF  : constant Character_t := Character_t'Val (10);
+      ASCII_CR  : constant Character_t := Character_t'Val (13);
+      ASCII_ESC : constant Character_t := Character_t'Val (27);
    begin
       Has_Command := True;  --  Always produce an event for the keyboard demo
       Cmd := None;
@@ -92,12 +92,12 @@ package body Input_Handling is
 
    --  Input reader task
    task body Input_Reader is
-      C           : Character;
+      C           : Character_t;
       State       : Parse_State_t := Normal;
       Cmd         : Command_t;
-      Has_Command : Boolean;
+      Has_Command : Boolean_t;
       Event       : Input_Event_t;
-      Running     : Boolean := False;
+      Running     : Boolean_t := False;
    begin
       loop
          select

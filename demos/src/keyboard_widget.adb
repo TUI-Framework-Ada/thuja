@@ -6,16 +6,20 @@ with Components; use Components;
 with Ada.Characters.Handling;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
-with Shortcut_Handler;
+with Command_Sequence_Handling;
 with Ada.Calendar;
 
 procedure Keyboard_Widget is
 
    package SU renames Ada.Strings.Unbounded;
 
+   --  Subtypes for standard Ada types not provided by Input_Handling
+   subtype Duration_t is Duration;
+   subtype String_t is String;
+
    --  Vector of Entity_ID vectors (one per keyboard row)
    package Keyboard_Row_Vector is new Ada.Containers.Vectors
-      (Index_Type   => Natural,
+      (Index_Type   => Natural_t,
        Element_Type => Entity_ID_Vector.Vector,
        "="          => Entity_ID_Vector."=");
 
@@ -24,7 +28,7 @@ procedure Keyboard_Widget is
    ------------------------------------------------------------
    --  CONFIGURATION
    ------------------------------------------------------------
-   Input_Consume_Delay : constant Duration := 0.0;
+   Input_Consume_Delay : constant Duration_t := 0.0;
 
    --  Terminal dimensions
    Term_Width  : constant TUI_Width := 65;
@@ -46,27 +50,27 @@ procedure Keyboard_Widget is
    Inactive_Key_Color : constant Color_t := Steel_Blue;
 
    --  Keyboard layout - each row
-   Row1_Keys : constant String := "`1234567890-=";
-   Row2_Keys : constant String := "qwertyuiop[]\";
-   Row3_Keys : constant String := "asdfghjkl;'";
-   Row4_Keys : constant String := "zxcvbnm,./";
+   Row1_Keys : constant String_t := "`1234567890-=";
+   Row2_Keys : constant String_t := "qwertyuiop[]\";
+   Row3_Keys : constant String_t := "asdfghjkl;'";
+   Row4_Keys : constant String_t := "zxcvbnm,./";
 
    --  All printable keys
-   All_Keys : constant String := Row1_Keys & Row2_Keys & Row3_Keys & Row4_Keys;
+   All_Keys : constant String_t := Row1_Keys & Row2_Keys & Row3_Keys & Row4_Keys;
 
    --  Currently pressed key
-   Pressed_Key : Character := Character'Val (0);
+   Pressed_Key : Character_t := Character_t'Val (0);
 
    --  ECS world
    World : Entity_Components;
 
    --  Check if a character is a valid key on our keyboard
-   function Is_Valid_Key (C : Character) return Boolean is
-      Lower_C : constant Character := Ada.Characters.Handling.To_Lower (C);
+   function Is_Valid_Key (C : Character_t) return Boolean_t is
+      Lower_C : constant Character_t := Ada.Characters.Handling.To_Lower (C);
    begin
-      if C = Character'Val (9) then return True; end if;  --  Tab
-      if C = Character'Val (13) or C = Character'Val (10) then return True; end if;  --  Enter
-      if C = Character'Val (8) or C = Character'Val (127) then return True; end if;  --  Backspace
+      if C = Character_t'Val (9) then return True; end if;  --  Tab
+      if C = Character_t'Val (13) or C = Character_t'Val (10) then return True; end if;  --  Enter
+      if C = Character_t'Val (8) or C = Character_t'Val (127) then return True; end if;  --  Backspace
       if C = ' ' then return True; end if;  --  Space
 
       for I in All_Keys'Range loop
@@ -79,18 +83,18 @@ procedure Keyboard_Widget is
 
    --  Create a key entity at given position
    procedure Create_Key_Entity (
-      Key_Char : Character;
+      Key_Char : Character_t;
       X : TUI_Width;
       Y : TUI_Height;
       Width : TUI_Width := TUI_Width (Key_Width);
       Height : TUI_Height := 1
    ) is
-      Entity_Name : constant String := "key_" & Key_Char;
+      Entity_Name : constant String_t := "key_" & Key_Char;
       Comp_Ptr : Components_Ptr;
       Widget : Widget_Component_T;
       Text : Text_Component_T;
       BG : Background_Color_Component_T;
-      Display_Char : Character := Key_Char;
+      Display_Char : Character_t := Key_Char;
    begin
       --  Convert to uppercase for display
       if Key_Char in 'a' .. 'z' then
@@ -120,19 +124,19 @@ procedure Keyboard_Widget is
 
    --  Create special wide key (TAB, ENTER, SPACE, etc.)
    procedure Create_Wide_Key_Entity (
-      Key_Name : String;
+      Key_Name : String_t;
       X : TUI_Width;
       Y : TUI_Height;
       Width : TUI_Width;
       BG_Color : Color_t := Gray
    ) is
-      Entity_Name : constant String := "key_" & Key_Name;
+      Entity_Name : constant String_t := "key_" & Key_Name;
       Comp_Ptr : Components_Ptr;
       Widget : Widget_Component_T;
       Text : Text_Component_T;
       BG : Background_Color_Component_T;
-      Label : String (1 .. Natural (Width));
-      Label_Start : Natural;
+      Label : String_t (1 .. Natural_t (Width));
+      Label_Start : Natural_t;
    begin
       Comp_Ptr := Add_Entity (World, To_EID (Entity_Name));
 
@@ -148,9 +152,9 @@ procedure Keyboard_Widget is
       --  Center the label in the key
       Label := [others => ' '];
       Label (1) := '[';
-      Label (Natural (Width)) := ']';
-      Label_Start := (Natural (Width) - Key_Name'Length) / 2 + 1;
-      if Label_Start > 1 and Label_Start + Key_Name'Length - 1 < Natural (Width) then
+      Label (Natural_t (Width)) := ']';
+      Label_Start := (Natural_t (Width) - Key_Name'Length) / 2 + 1;
+      if Label_Start > 1 and Label_Start + Key_Name'Length - 1 < Natural_t (Width) then
          Label (Label_Start .. Label_Start + Key_Name'Length - 1) := Key_Name;
       end if;
 
@@ -165,11 +169,11 @@ procedure Keyboard_Widget is
 
    --  Create a text label entity (for status line, etc.)
    procedure Create_Text_Entity (
-      Entity_Name : String;
+      Entity_Name : String_t;
       X : TUI_Width;
       Y : TUI_Height;
       Width : TUI_Width;
-      Initial_Text : String := "";
+      Initial_Text : String_t := "";
       FG_Color : Color_t := White;
       BG_Color : Color_t := Black
    ) is
@@ -200,7 +204,7 @@ procedure Keyboard_Widget is
    end Create_Text_Entity;
 
    --  Update text content of a text entity
-   procedure Update_Text_Entity (Entity_Name : String; New_Text : String) is
+   procedure Update_Text_Entity (Entity_Name : String_t; New_Text : String_t) is
       Comp_Ptr : Components_Ptr;
       Text : Text_Component_T;
    begin
@@ -234,7 +238,7 @@ procedure Keyboard_Widget is
       for X in TUI_Width'First .. Term_Width loop
          for Y in TUI_Height'First .. Term_Height loop
             Set_Buffer_Pixel (RI.Backbuffer, X, Y,
-               (Char             => Character'Val (1),
+               (Char             => Character_t'Val (1),
                 Char_Color       => White,
                 Background_Color => White,
                 Is_Bold          => True));
@@ -263,7 +267,7 @@ procedure Keyboard_Widget is
 
       --  Helper: create a wide key entity and append its ID to the current row
       procedure Add_Wide_To_Row (
-         Name : String; Col : TUI_Width; Row_Y : TUI_Height; W : TUI_Width;
+         Name : String_t; Col : TUI_Width; Row_Y : TUI_Height; W : TUI_Width;
          BG_Color : Color_t := Gray
       ) is
       begin
@@ -273,7 +277,7 @@ procedure Keyboard_Widget is
 
       --  Helper: create a regular key entity and append its ID to the current row
       procedure Add_Key_To_Row (
-         C : Character; Col : TUI_Width; Row_Y : TUI_Height
+         C : Character_t; Col : TUI_Width; Row_Y : TUI_Height
       ) is
       begin
          Create_Key_Entity (C, Col, Row_Y);
@@ -294,8 +298,8 @@ procedure Keyboard_Widget is
       --  F1 through F9 (width 4 each)
       for I in 1 .. 9 loop
          declare
-            Img  : constant String := Natural'Image (I);
-            Name : constant String := "F" & Img (Img'First + 1 .. Img'Last);
+            Img  : constant String_t := Natural_t'Image (I);
+            Name : constant String_t := "F" & Img (Img'First + 1 .. Img'Last);
          begin
             Add_Wide_To_Row (Name, X, Y, 4, Inactive_Key_Color);
          end;
@@ -305,8 +309,8 @@ procedure Keyboard_Widget is
       --  F10 through F12 (width 5 each)
       for I in 10 .. 12 loop
          declare
-            Img  : constant String := Natural'Image (I);
-            Name : constant String := "F" & Img (Img'First + 1 .. Img'Last);
+            Img  : constant String_t := Natural_t'Image (I);
+            Name : constant String_t := "F" & Img (Img'First + 1 .. Img'Last);
          begin
             Add_Wide_To_Row (Name, X, Y, 5, Inactive_Key_Color);
          end;
@@ -419,12 +423,12 @@ procedure Keyboard_Widget is
             Get_Component (Root_Comp.all, To_CID ("WidgetComponent"))
          );
 
-         for Row_Idx in 0 .. Natural (Keyboard_Rows.Length) - 1 loop
+         for Row_Idx in 0 .. Natural_t (Keyboard_Rows.Length) - 1 loop
             declare
                Row : constant Entity_ID_Vector.Vector :=
                   Keyboard_Rows (Row_Idx);
             begin
-               for Key_Idx in 0 .. Natural (Row.Length) - 1 loop
+               for Key_Idx in 0 .. Natural_t (Row.Length) - 1 loop
                   Root_W.Children.Append (Row (Key_Idx));
                end loop;
             end;
@@ -440,9 +444,9 @@ procedure Keyboard_Widget is
    procedure Update_Key_Colors is
       Comp_Ptr : Components_Ptr;
       BG : Background_Color_Component_T;
-      Key_Char : Character;
-      Entity_Name : String (1 .. 10);
-      Entity_Name_Len : Natural;
+      Key_Char : Character_t;
+      Entity_Name : String_t (1 .. 10);
+      Entity_Name_Len : Natural_t;
    begin
       --  Reset all keys to gray, highlight pressed key in red
       for I in All_Keys'Range loop
@@ -474,7 +478,7 @@ procedure Keyboard_Widget is
          BG := Background_Color_Component_T (
             Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
          );
-         BG.Background_Color := (if Pressed_Key = Character'Val (9) then Red else Gray);
+         BG.Background_Color := (if Pressed_Key = Character_t'Val (9) then Red else Gray);
          Add_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"), BG);
       end if;
 
@@ -484,7 +488,7 @@ procedure Keyboard_Widget is
          BG := Background_Color_Component_T (
             Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
          );
-         BG.Background_Color := (if Pressed_Key = Character'Val (13) or Pressed_Key = Character'Val (10) then Red else Gray);
+         BG.Background_Color := (if Pressed_Key = Character_t'Val (13) or Pressed_Key = Character_t'Val (10) then Red else Gray);
          Add_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"), BG);
       end if;
 
@@ -504,8 +508,8 @@ procedure Keyboard_Widget is
          BG := Background_Color_Component_T (
             Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
          );
-         BG.Background_Color := (if Pressed_Key = Character'Val (8)
-                                  or Pressed_Key = Character'Val (127)
+         BG.Background_Color := (if Pressed_Key = Character_t'Val (8)
+                                  or Pressed_Key = Character_t'Val (127)
                                   then Red else Gray);
          Add_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"), BG);
       end if;
@@ -513,17 +517,17 @@ procedure Keyboard_Widget is
 
    --  Update status line using ECS text component
    procedure Update_Status is
-      Status_Text : String (1 .. 55) := [others => ' '];
+      Status_Text : String_t (1 .. 55) := [others => ' '];
    begin
       if Pressed_Key >= ' ' and Pressed_Key <= '~' then
          Status_Text (1 .. 11) := "Last key: '";
          Status_Text (12) := Pressed_Key;
          Status_Text (13) := ''';
-      elsif Pressed_Key = Character'Val (9) then
+      elsif Pressed_Key = Character_t'Val (9) then
          Status_Text (1 .. 14) := "Last key: TAB ";
-      elsif Pressed_Key = Character'Val (13) or Pressed_Key = Character'Val (10) then
+      elsif Pressed_Key = Character_t'Val (13) or Pressed_Key = Character_t'Val (10) then
          Status_Text (1 .. 16) := "Last key: ENTER ";
-      elsif Pressed_Key = Character'Val (8) or Pressed_Key = Character'Val (127) then
+      elsif Pressed_Key = Character_t'Val (8) or Pressed_Key = Character_t'Val (127) then
          Status_Text (1 .. 20) := "Last key: BACKSPACE ";
       end if;
       Update_Text_Entity ("status_line", Status_Text);
@@ -538,14 +542,14 @@ procedure Keyboard_Widget is
       BufferDrawSystem (World);
    end Render;
 
-   --  Highlight specific keys with Gold for shortcut activation
-   procedure Highlight_Shortcut_Keys (Result : Shortcut_Handler.Handler_Result_t) is
+   --  Highlight specific keys with Gold for command activation
+   procedure Highlight_Command_Keys (Result : Command_Sequence_Handling.Handler_Result_t) is
       Comp_Ptr : Components_Ptr;
       BG : Background_Color_Component_T;
    begin
-      for I in 1 .. Result.Key_Count loop
+      for I in 1 .. SU.Length (Result.Keys) loop
          declare
-            Key_Name : constant String := "key_" & Result.Keys (I);
+            Key_Name : constant String_t := "key_" & SU.Element (Result.Keys, I);
          begin
             Comp_Ptr := Get_Entity_Components (World, To_EID (Key_Name));
             if Comp_Ptr /= null and then
@@ -558,66 +562,66 @@ procedure Keyboard_Widget is
             end if;
          end;
       end loop;
-   end Highlight_Shortcut_Keys;
+   end Highlight_Command_Keys;
 
-   --  Update status line to show which shortcut was activated
-   procedure Update_Shortcut_Status (Result : Shortcut_Handler.Handler_Result_t) is
-      Status_Text : String (1 .. 55) := [others => ' '];
-      Pos : Natural := 1;
-      Prefix : constant String := "Shortcut: ";
+   --  Update status line to show which command was activated
+   procedure Update_Command_Status (Result : Command_Sequence_Handling.Handler_Result_t) is
+      Status_Text : String_t (1 .. 55) := [others => ' '];
+      Pos : Natural_t := 1;
+      Prefix : constant String_t := "Command: ";
    begin
       Status_Text (Pos .. Pos + Prefix'Length - 1) := Prefix;
       Pos := Pos + Prefix'Length;
 
-      for I in 1 .. Result.Key_Count loop
+      for I in 1 .. SU.Length (Result.Keys) loop
          if I > 1 then
             Status_Text (Pos .. Pos + 3) := " -> ";
             Pos := Pos + 4;
          end if;
-         Status_Text (Pos) := Ada.Characters.Handling.To_Upper (Result.Keys (I));
+         Status_Text (Pos) := Ada.Characters.Handling.To_Upper (SU.Element (Result.Keys, I));
          Pos := Pos + 1;
       end loop;
 
       Update_Text_Entity ("status_line", Status_Text);
-   end Update_Shortcut_Status;
+   end Update_Command_Status;
 
-   --  Handle the result from the shortcut handler
-   procedure Handle_Shortcut_Result (Result : Shortcut_Handler.Handler_Result_t) is
+   --  Handle the result from the command sequence handler
+   procedure Handle_Command_Result (Result : Command_Sequence_Handling.Handler_Result_t) is
    begin
       case Result.Kind is
-         when Shortcut_Handler.No_Result =>
+         when Command_Sequence_Handling.No_Result =>
             null;
 
-         when Shortcut_Handler.Shortcut_Activated =>
+         when Command_Sequence_Handling.Command_Activated =>
             --  Reset all keys to their default colors
-            Pressed_Key := Character'Val (0);
+            Pressed_Key := Character_t'Val (0);
             Update_Key_Colors;
-            --  Highlight the shortcut keys with Gold
-            Highlight_Shortcut_Keys (Result);
-            --  Show shortcut info on the status line
-            Update_Shortcut_Status (Result);
+            --  Highlight the command keys with Gold
+            Highlight_Command_Keys (Result);
+            --  Show command info on the status line
+            Update_Command_Status (Result);
             Render;
 
-         when Shortcut_Handler.Keys_Passed_Through =>
+         when Command_Sequence_Handling.Keys_Passed_Through =>
             --  Process the last passed-through key as a normal key press
-            if Result.Key_Count > 0 then
-               Pressed_Key := Result.Keys (Result.Key_Count);
+            if SU.Length (Result.Keys) > 0 then
+               Pressed_Key := SU.Element (Result.Keys, SU.Length (Result.Keys));
                Update_Key_Colors;
                Update_Status;
                Render;
             end if;
       end case;
-   end Handle_Shortcut_Result;
+   end Handle_Command_Result;
 
    Event            : Input_Event_t;
-   SC_Result        : Shortcut_Handler.Handler_Result_t;
-   Running          : Boolean := True;
+   Cmd_Result       : Command_Sequence_Handling.Handler_Result_t;
+   Running          : Boolean_t := True;
    Last_Full_Render : Ada.Calendar.Time := Ada.Calendar.Clock;
 
 begin
    --  Initialize
    Graphics.Clear_Screen;
-   Shortcut_Handler.Initialize (Timeout => 0.15);
+   Command_Sequence_Handling.Initialize;
 
    --  Create ECS entities
    Create_Render_Info_Entity;
@@ -633,19 +637,15 @@ begin
    while Running loop
       Input_Buffer.Consume (Event);
 
-      if Event.Cmd /= None or Event.Char_Value /= Character'Val (0) then
-         if Event.Cmd = Quit and Event.Char_Value = Character'Val (27) then
+      if Event.Cmd /= None or Event.Char_Value /= Character_t'Val (0) then
+         if Event.Cmd = Quit and Event.Char_Value = Character_t'Val (27) then
             Running := False;
          elsif Is_Valid_Key (Event.Char_Value) then
-            --  Feed key through the shortcut handler
-            SC_Result := Shortcut_Handler.Process_Key (Event.Char_Value);
-            Handle_Shortcut_Result (SC_Result);
+            --  Feed key through the command sequence handler
+            Cmd_Result := Command_Sequence_Handling.Process_Key (Event.Char_Value);
+            Handle_Command_Result (Cmd_Result);
          end if;
       end if;
-
-      --  Check for shortcut sequence timeout
-      SC_Result := Shortcut_Handler.Check_Timeout;
-      Handle_Shortcut_Result (SC_Result);
 
       --  Periodically force a full re-render to recover from visual
       --  corruption caused by terminal resizes.  Resetting the Backbuffer
@@ -667,7 +667,7 @@ begin
                for RX in TUI_Width'First .. Term_Width loop
                   for RY in TUI_Height'First .. Term_Height loop
                      Set_Buffer_Pixel (RI.Backbuffer, RX, RY,
-                        (Char             => Character'Val (1),
+                        (Char             => Character_t'Val (1),
                          Char_Color       => White,
                          Background_Color => White,
                          Is_Bold          => True));

@@ -2,18 +2,23 @@ with Ada.Containers.Vectors;
 
 package Input_Handling is
 
+   --  Subtypes for standard Ada types
+   subtype Character_t is Character;
+   subtype Boolean_t is Boolean;
+   subtype Natural_t is Natural;
+
    --  Command types that can be generated from input
    type Command_t is (Tab, Quit, Enter, None);
 
    --  Input event containing both the raw character and parsed command
    type Input_Event_t is record
-      Char_Value : Character := ' ';
+      Char_Value : Character_t := ' ';
       Cmd        : Command_t := None;
    end record;
 
    --  Instantiate vector for input events
    package Event_Vectors is new Ada.Containers.Vectors
-      (Index_Type   => Natural,
+      (Index_Type   => Natural_t,
        Element_Type => Input_Event_t);
 
    --  Vector-based buffer for input events (unlimited capacity)
@@ -26,7 +31,7 @@ package Input_Handling is
 
    --  Remove and return the oldest event from the front of the buffer
    --  Returns True if an event was available, False if buffer was empty
-   function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean;
+   function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean_t;
 
    --  Protected object for thread-safe input buffer access
    protected type Protected_Input_Buffer_t is
@@ -57,10 +62,10 @@ private
    --  Parse a character and current state to determine command
    --  Returns the new state and any generated command
    procedure Parse_Input (
-      C           : in Character;
+      C           : in Character_t;
       State       : in Out Parse_State_t;
       Cmd         : out Command_t;
-      Has_Command : out Boolean
+      Has_Command : out Boolean_t
    );
 
 end Input_Handling;
