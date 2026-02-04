@@ -365,6 +365,8 @@ end FlexLayoutSystem;
                                     );
          Text := Text_C.Text;
 
+         Temp_Buffer := Widget_C.Protected_Buffer.Get;
+
          -- Initiatize drawing position using text offsets
          -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
          Pos_W := Text_C.Offset_X;
@@ -383,7 +385,7 @@ end FlexLayoutSystem;
             Px.Is_Underline      := Text_C.Is_Underline;
             Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+            Set_Buffer_Pixel (Temp_buffer, Pos_W, Pos_H, Px);
 
             --  Increment position in 2D array
             Pos_W := Pos_W + 1;
