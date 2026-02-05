@@ -1,11 +1,32 @@
 --  Package Body for Graphics
 with Ada.Text_IO;
-with Interfaces.C;
+with Interfaces.C; -- Not implemented yet, but may be needed for future FFI
 
 package body Graphics is
 
    --  ANSI escape sequence prefix
    CSI : constant String := Character'Val (16#1B#) & '[';
+
+      --=============================================================================
+   --TODO: Implement these for Windows using Win32 API calls
+   procedure Enable_VT_Processing is
+   begin
+      --  On Windows, this would enable ANSI escape sequence processing
+      --  On Unix/Linux/macOS, ANSI sequences work by default
+      --  This is a no-op stub for cross-platform compatibility
+      null;
+   end Enable_VT_Processing;
+
+  
+   procedure Set_Cursor_Visible (Visible : Boolean) is
+   begin
+      --  On Windows, this would use Win32 API to show/hide cursor
+      --  On Unix/Linux/macOS, we use ANSI sequences instead
+      --  This is a no-op stub since ANSI sequences handle it
+      null;
+   end Set_Cursor_Visible;
+--=============================================================================
+
 
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is

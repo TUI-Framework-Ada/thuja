@@ -6,7 +6,7 @@ project Demos is
    for Object_Dir use "obj/" & Demos_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
    for Exec_Dir use "bin";
-   for Main use ("demos.adb", "input_demo.adb", "keyboard_widget.adb", "presentation_2_demo.adb", "progress_bar_demo.adb");
+   for Main use ("demos.adb", "input_demo.adb", "keyboard_widget.adb", "presentation_2_demo.adb", "progress_bar_demo.adb", "Compression_Demo.adb","Resize_And_Movement_Demo.adb");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches & ("-gnat2022");
