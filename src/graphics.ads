@@ -67,8 +67,21 @@ package Graphics is
       Width  : TUI_Width  := TUI_Width'Last;
       Height : TUI_Height := TUI_Height'Last;
       --  No default value needed, because Pixel already has defaults
-      Data   : aliased Pixel_Array;
+      Data   : Pixel_Array_Ptr := new Pixel_Array;
    end record;
+   type Buffer_Ptr is access Buffer_T;
+
+   --  Protected object for double-buffering, for thread-safe access to Buffer_Ptr
+   protected type Protected_DB is
+      entry Wait (V : out Boolean); --  Lock flag from being edited and return flag
+      entry Post; --  Release flag lock
+      procedure Swap; --  Swap flag
+      entry Read (V : out Boolean); --  Return flag without locking, only to be used in the same thread as DoubleBufferFlagSystem
+   private
+      Draw_From_1 : Boolean := True;
+      Changing : Boolean := False;
+   end Protected_DB;
+   type Protected_DB_Ptr is access Protected_DB;
 
    --  Constructor to create and initialize buffer instance
    function Create_Buffer (Width  : in TUI_Width;

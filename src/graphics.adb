@@ -7,6 +7,33 @@ package body Graphics is
    --  ANSI escape sequence prefix
    CSI : constant String := Character'Val (16#1B#) & '[';
 
+   --  Protected object for Buffer_Ptr for thread-safe access
+   protected body Protected_DB is
+      entry Wait (V : out Boolean)
+         when not Changing is
+      begin
+         Changing := True;
+         V := Draw_From_1;
+      end Wait;
+
+      entry Post
+         when Changing is
+      begin
+         Changing := False;
+      end Post;
+
+      procedure Swap is
+      begin
+         Draw_From_1 := not Draw_From_1;
+      end Swap;
+
+      entry Read (V : out Boolean)
+        when not Changing is
+      begin
+         V := Draw_From_1;
+      end Read;
+   end Protected_DB;
+
    --  Buffer_T Constructor - Allocates memory in the 2D pixel array, initializing record fields
    function Create_Buffer (Width  : TUI_Width;
                            Height : TUI_Height)
@@ -30,7 +57,7 @@ package body Graphics is
    is
    begin
       --  Writes new pixel into buffer "P" being the value Pixel
-      B.Data (X, Y) := P;
+      B.Data.all (X, Y) := P;
    end Set_Buffer_Pixel;
 
    --  Reads and returns the pixel value from the buffer at the (X, Y) coordinates
@@ -41,7 +68,7 @@ package body Graphics is
    is
    begin
       --  Returns value read from the array
-      return B.Data (X, Y);
+      return B.Data.all (X, Y);
    end Get_Buffer_Pixel;
 
    --  Hides the terminal cursor

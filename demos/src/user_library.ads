@@ -9,7 +9,7 @@ package User_Library is
       Hue_Change_Speed : Integer := 0;
    end record;
 
-   procedure RainbowTextSystem (Entity_List : ECS.Entity_Components);
+   procedure RainbowTextSystem (Entity_List_PO : in out ECS.Entity_Components_PO);
 
    --  Creates a progress bar entity with all necessary components.
    --  Parameters:
@@ -23,7 +23,7 @@ package User_Library is
    --    Empty_Color  - Color for the empty portion
    --    BG_Color     - Background color
    procedure Create_Progress_Bar
-     (Entity_List  : in Out Entity_Components;
+     (Entity_List_PO  : in Out Entity_Components_PO;
       E_ID         : in Entity_Id;
       Pos_X        : in TUI_Width;
       Pos_Y        : in TUI_Height;
@@ -35,37 +35,37 @@ package User_Library is
 
    --  Sets the progress value (clamped to 0.0 .. 1.0)
    procedure Set_Progress
-     (Entity_List : in Out Entity_Components;
+     (Entity_List_PO : in Out Entity_Components_PO;
       E_ID        : in Entity_Id;
       Value       : in Float);
 
    --  Gets the current progress value
    function Get_Progress
-     (Entity_List : in Entity_Components;
+     (Entity_List_PO : in out Entity_Components_PO;
       E_ID        : in Entity_Id) return Float;
 
    --  Increments progress by a given amount
    procedure Increment_Progress
-     (Entity_List : in Out Entity_Components;
+     (Entity_List_PO : in Out Entity_Components_PO;
       E_ID        : in Entity_Id;
       Amount      : in Float);
 
-   procedure Setup_Render_Info (Entities : in out Entity_Components;
+   procedure Setup_Render_Info (Entities_PO : in out Entity_Components_PO;
                                 Render_Info_ID : Entity_Id;
                                 Term_Width : TUI_Width;
                                 Term_Height : TUI_Height);
 
-   procedure Setup_Root_Widget (Entities : in out Entity_Components;
+   procedure Setup_Root_Widget (Entities_PO : in out Entity_Components_PO;
                                 Root_ID : Entity_Id;
                                 Term_Width : TUI_Width;
                                 Term_Height : TUI_Height;
                                 Child_IDs : Entity_ID_Vector.Vector);
 
-   procedure Run_Render_Systems (Entities : in out Entity_Components);
+   procedure Run_Render_Systems (Entities_PO : in out Entity_Components_PO);
 
-   procedure Run_Systems (Entities : in out Entity_Components);
+   procedure Run_Systems (Entities_PO : in out Entity_Components_PO);
 
-   procedure Setup_Animation (Entities : in out Entity_Components;
+   procedure Setup_Animation (Entities_PO : in out Entity_Components_PO;
                              Animation_ID : Entity_Id);
 
 end User_Library;

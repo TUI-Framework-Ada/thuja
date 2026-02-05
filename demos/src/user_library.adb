@@ -3,7 +3,8 @@ with Ada.Strings.Unbounded;
 
 package body User_Library is
 
-   procedure RainbowTextSystem (Entity_List : ECS.Entity_Components) is
+   procedure RainbowTextSystem (Entity_List_PO : in out ECS.Entity_Components_PO) is
+      Entity_List : ECS.Entity_Components_Ptr;
       Search_Component_IDs : IDs.Component_ID_Vector.Vector;
       Matched_Entities : IDs.Entity_ID_Vector.Vector;
       Component_List : ECS.Components_Ptr;
@@ -20,11 +21,12 @@ package body User_Library is
       Gp : Float;
       Bp : Float;
    begin
+      Entity_List_PO.Claim_Reading (Entity_List);
       Search_Component_IDs.Append (IDs.To_CID ("TextComponent"));
       Search_Component_IDs.Append (IDs.To_CID ("RainbowTextComponent"));
-      Matched_Entities := ECS.Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      Matched_Entities := ECS.Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
       for EID of Matched_Entities loop
-         Component_List := ECS.Get_Entity_Components (Entity_List, EID);
+         Component_List := ECS.Get_Entity_Components (Entity_List.all, EID);
          Text_C := Components.Text_Component_T (
             ECS.Get_Component (Component_List.all, IDs.To_CID ("TextComponent"))
                                                );
@@ -49,18 +51,18 @@ package body User_Library is
          elsif Hue <= 360 then
                Rp := 1.0; Gp := 0.0; Bp := X;
          end if;
-         pragma Assert (Rp * 255.0 <= 255.0, "RED GOES OVER");
          Text_C.Text_Color.Red := Graphics.u8 (Integer (Rp * 255.0) mod 256);
          Text_C.Text_Color.Green := Graphics.u8 (Integer (Gp * 255.0) mod 256);
          Text_C.Text_Color.Blue := Graphics.u8 (Integer (Bp * 255.0) mod 256);
 
          --  Update text component
          ECS.Add_Component (
-            ECS.Get_Entity_Components (Entity_List, EID).all,
+            ECS.Get_Entity_Components (Entity_List.all, EID).all,
             IDs.To_CID ("TextComponent"),
             Text_C
                            );
       end loop;
+      Entity_List_PO.Release_Reading;
    end RainbowTextSystem;
 
 
@@ -70,7 +72,7 @@ package body User_Library is
    ---------------------------------------------------------------------------
 
    procedure Create_Progress_Bar
-     (Entity_List  : in Out Entity_Components;
+     (Entity_List_PO  : in Out Entity_Components_PO;
       E_ID         : in Entity_Id;
       Pos_X        : in TUI_Width;
       Pos_Y        : in TUI_Height;
@@ -86,7 +88,7 @@ package body User_Library is
       PB_C     : Progress_Bar_Component_T;
    begin
       --  Add entity and get components pointer
-      Comp_Ptr := Add_Entity (Entity_List, E_ID);
+      Comp_Ptr := Add_Entity (Entity_List_PO, E_ID);
 
       --  Configure Widget Component
       Widget_C.Position_X := Pos_X;
@@ -96,7 +98,7 @@ package body User_Library is
       Widget_C.Is_Visible := True;
       Widget_C.Is_Enabled := True;
       Widget_C.Has_Focus := False;
-      Widget_C.Protected_Buffer.Set (Create_Buffer (Width, Height));
+      Widget_C.Render_Buffer := Create_Buffer (Width, Height);
 
       --  Configure Background Color Component
       BG_C.Background_Color := BG_Color;
@@ -122,20 +124,24 @@ package body User_Library is
    ---------------------------------------------------------------------------
 
    procedure Set_Progress
-     (Entity_List : in Out Entity_Components;
+     (Entity_List_PO : in Out Entity_Components_PO;
       E_ID        : in Entity_Id;
       Value       : in Float)
    is
+      Entity_List : Entity_Components_Ptr;
       Comp_Ptr : Components_Ptr;
       PB_C     : Progress_Bar_Component_T;
       Clamped  : Float;
    begin
-      Comp_Ptr := Get_Entity_Components (Entity_List, E_ID);
+      Entity_List_PO.Claim_Reading (Entity_List);
+      Comp_Ptr := Get_Entity_Components (Entity_List.all, E_ID);
       if Comp_Ptr = null then
+         Entity_List_PO.Release_Reading;
          return;
       end if;
 
       if not Has_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")) then
+         Entity_List_PO.Release_Reading;
          return;
       end if;
 
@@ -153,56 +159,64 @@ package body User_Library is
          Get_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")));
       PB_C.Value := Clamped;
       Add_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent"), PB_C);
+      Entity_List_PO.Release_Reading;
    end Set_Progress;
 
    function Get_Progress
-     (Entity_List : in Entity_Components;
+     (Entity_List_PO : in out Entity_Components_PO;
       E_ID        : in Entity_Id) return Float
    is
+      Entity_List : Entity_Components_Ptr;
       Comp_Ptr : Components_Ptr;
       PB_C     : Progress_Bar_Component_T;
    begin
-      Comp_Ptr := Get_Entity_Components (Entity_List, E_ID);
+      Entity_List_PO.Claim_Reading (Entity_List);
+      Comp_Ptr := Get_Entity_Components (Entity_List.all, E_ID);
       if Comp_Ptr = null then
+         Entity_List_PO.Release_Reading;
          return 0.0;
       end if;
 
       if not Has_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")) then
+         Entity_List_PO.Release_Reading;
          return 0.0;
       end if;
 
       PB_C := Progress_Bar_Component_T (
          Get_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")));
+      Entity_List_PO.Release_Reading;
       return PB_C.Value;
    end Get_Progress;
 
    procedure Increment_Progress
-     (Entity_List : in Out Entity_Components;
+     (Entity_List_PO : in Out Entity_Components_PO;
       E_ID        : in Entity_Id;
       Amount      : in Float)
    is
       Current : Float;
    begin
-      Current := Get_Progress (Entity_List, E_ID);
-      Set_Progress (Entity_List, E_ID, Current + Amount);
+      Current := Get_Progress (Entity_List_PO, E_ID);
+      Set_Progress (Entity_List_PO, E_ID, Current + Amount);
    end Increment_Progress;
 
-   procedure Setup_Render_Info (Entities : in out Entity_Components;
+   procedure Setup_Render_Info (Entities_PO : in out Entity_Components_PO;
                                 Render_Info_ID : Entity_Id;
                                 Term_Width : TUI_Width;
                                 Term_Height : TUI_Height) is
       Comp_Ptr : Components_Ptr;
       RI_C     : Render_Info_Component_T;
    begin
-      Comp_Ptr := Add_Entity (Entities, Render_Info_ID);
+      Comp_Ptr := Add_Entity (Entities_PO, Render_Info_ID);
       RI_C.Terminal_Width := Term_Width;
       RI_C.Terminal_Height := Term_Height;
-      RI_C.Framebuffer := Create_Buffer (Term_Width, Term_Height);
+      RI_C.Framebuffer_1 := Create_Buffer (Term_Width, Term_Height);
+      RI_C.Framebuffer_2 := Create_Buffer (Term_Width, Term_Height);
+      RI_C.Drawing_FB := new Protected_DB;
       RI_C.Backbuffer := Create_Buffer (Term_Width, Term_Height);
       Add_Component (Comp_Ptr.all, To_CID ("RenderInfo"), RI_C);
    end Setup_Render_Info;
 
-   procedure Setup_Root_Widget (Entities : in out Entity_Components;
+   procedure Setup_Root_Widget (Entities_PO : in out Entity_Components_PO;
                                 Root_ID : Entity_Id;
                                 Term_Width : TUI_Width;
                                 Term_Height : TUI_Height;
@@ -218,14 +232,14 @@ package body User_Library is
          Text_Color => Graphics.White,
          others => <>);
    begin
-      Comp_Ptr := Add_Entity (Entities, Root_ID);
+      Comp_Ptr := Add_Entity (Entities_PO, Root_ID);
       Widget_C.Position_X := TUI_Width'First;
       Widget_C.Position_Y := TUI_Height'First;
       Widget_C.Size_Width := Term_Width;
       Widget_C.Size_Height := Term_Height;
       Widget_C.Is_Visible := True;
       Widget_C.Is_Enabled := True;
-      Widget_C.Protected_Buffer.Set (Create_Buffer (Term_Width, Term_Height));
+      Widget_C.Render_Buffer := Create_Buffer (Term_Width, Term_Height);
 
       --  Add all children
       for Child_ID of Child_IDs loop
@@ -241,24 +255,25 @@ package body User_Library is
       Add_Component (Comp_Ptr.all, To_CID ("TextComponent"), Text_C);
    end Setup_Root_Widget;
 
-   procedure Run_Render_Systems (Entities : in out Entity_Components) is
+   procedure Run_Render_Systems (Entities_PO : in out Entity_Components_PO) is
    begin
-      BufferCopySystem (Entities);
-      BufferDrawSystem (Entities);
+      BufferDrawSystem (Entities_PO);
    end Run_Render_Systems;
 
-   procedure Run_Systems (Entities : in out Entity_Components) is
+   procedure Run_Systems (Entities_PO : in out Entity_Components_PO) is
    begin
-      RainbowTextSystem (Entities);
-      WidgetBackgroundSystem (Entities);
-      TextRenderSystem (Entities);
-      ProgressBarRenderSystem (Entities);
+      RainbowTextSystem (Entities_PO);
+      WidgetBackgroundSystem (Entities_PO);
+      TextRenderSystem (Entities_PO);
+      ProgressBarRenderSystem (Entities_PO);
+      BufferCopySystem (Entities_PO);
+      DoubleBufferFlagSystem (Entities_PO);
    end Run_Systems;
 
-   procedure Setup_Animation (Entities : in out Entity_Components;
+   procedure Setup_Animation (Entities_PO : in out Entity_Components_PO;
                               Animation_ID : Entity_Id) is
       --  Components access val
-      Comp_Ptr : constant Components_Ptr := Add_Entity (Entities, Animation_ID);
+      Comp_Ptr : constant Components_Ptr := Add_Entity (Entities_PO, Animation_ID);
       --  Components of animation
       Widget_C : constant Widget_Component_T :=
         (Position_X => 45,

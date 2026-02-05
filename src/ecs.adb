@@ -4,6 +4,7 @@ with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Graphics; use Graphics;
 with Flexbox; use Flexbox;
+with IDs; use type IDs.Component_ID_Vector.Vector;
 
 package body ECS is
 
@@ -28,12 +29,20 @@ package body ECS is
       Self.Components_Map.Exclude (Component);
    end Remove_Component;
 
-   function Get_Component (Self : in Components;
+   function Get_Component (Self : in out Components;
                            Component : in Component_Id)
                            return Component_T'Class is
    begin
       return Self.Components_Map (Component);
    end Get_Component;
+
+   function Get_Component_Ptr (Self : Components_Ptr;
+                               Component_Str : String)
+                               return Component_Class_Ptr is
+      Map : Component_Map renames Self.all.Components_Map;
+   begin
+      return Map.Reference (To_CID (Component_Str)).Element;
+   end Get_Component_Ptr;
 
    function Has_Component (Self : in Components;
                            Component : in Component_Id) return Boolean is
@@ -50,35 +59,106 @@ package body ECS is
       return SU.Hash (SU.Unbounded_String (Key));
    end Hash_Entity;
 
+   ------------------------------------------------------------------
+   --  Protected object for the entity list
+   ------------------------------------------------------------------
+   protected body Entity_Components_PO is
+      --  Wait for no writers to receive the entity list to read from
+      entry Claim_Reading (Entity_List : in out Entity_Components_Ptr)
+        when not Write_Using is
+      begin
+         Read_Using := Read_Using + 1;
+         Entity_List := Entities'Access;
+      end Claim_Reading;
+
+      --  Wait for no readers to receive an exclusive reference to the entity list
+      entry Claim_Writing (Entity_List : in out Entity_Components_Ptr)
+        when (Read_Using = 0) and (not Write_Using) is
+      begin
+         Write_Using := True;
+         Entity_List := Entities'Access;
+      end Claim_Writing;
+
+      --  Release a reading copy
+      procedure Release_Reading is
+      begin
+         Read_Using := Read_Using - 1;
+      end Release_Reading;
+
+      --  Release the writing reference
+      procedure Release_Writing is
+      begin
+         Write_Using := False;
+      end Release_Writing;
+   end Entity_Components_PO;
+
    ---------------------------------------
    -- Add_Entity
    ---------------------------------------
-   function Add_Entity (Self : in out Entity_Components; Id : Entity_Id) return Components_Ptr is
+   function Add_Entity (Self : in out Entity_Components_PO; Id : Entity_Id) return Components_Ptr is
+      Entity_List : Entity_Components_Ptr;
       New_Components : Components_Ptr;
    begin
-      if Self.Contains (Id) then
-         return Self (Id);
+      Self.Claim_Writing (Entity_List);
+
+      if Entity_List.Contains (Id) then
+         New_Components := Entity_List (Id); --  Return existing entity
+      else
+         New_Components := new Components;
+         Entity_List.Insert (Id, New_Components); -- Add new entity with empty components
       end if;
 
-      New_Components := new Components;
-      Self.Insert (Id, New_Components); -- Add new entity with empty components
+      Self.Release_Writing;
       return New_Components;
    end Add_Entity;
 
    ---------------------------------------
    -- Remove_Entity
    ---------------------------------------
-   procedure Remove_Entity (Self : in out Entity_Components; Id : Entity_Id) is
+   procedure Remove_Entity (Self : in out Entity_Components_PO; Id : Entity_Id) is
+      Entity_List : Entity_Components_Ptr;
    begin
-      if Self.Contains (Id) then
-         Self.Delete (Id);
+      Self.Claim_Writing (Entity_List);
+      if Entity_List.Contains (Id) then
+         --  Delete from entity list
+         Entity_List.Delete (Id);
+
+         --  Remove EID from all widget components
+         declare
+            Search_Component_IDs : Component_ID_Vector.Vector;
+            Matched_Entities : Entity_ID_Vector.Vector;
+            Component_List : Components_Ptr;
+            Widget_C : Widget_Component_T;
+         begin
+            Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+            Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+            for EID of Matched_Entities loop
+               Component_List := Get_Entity_Components (Entity_List.all, EID);
+               Widget_C := Widget_Component_T (
+                  Get_Component (Component_List.all, To_CID ("WidgetComponent"))
+                                              );
+
+               --  Remove from children
+               if Widget_C.Children.Contains (Id) then
+                  Widget_C.Children.Delete (Widget_C.Children.Find_Index (Id));
+               end if;
+
+               --  Update components
+               Add_Component (
+                  Get_Entity_Components (Entity_List.all, EID).all,
+                  To_CID ("WidgetComponent"),
+                  Widget_C
+               );
+            end loop;
+         end;
       end if;
+      Self.Release_Writing;
    end Remove_Entity;
 
    ---------------------------------------
    -- Get_Entity_Components
    ---------------------------------------
-   function Get_Entity_Components (Self : in Entity_Components; Id : Entity_Id)
+   function Get_Entity_Components (Self : Entity_Components; Id : Entity_Id)
       return Components_Ptr
    is
    begin
@@ -127,31 +207,38 @@ package body ECS is
       return Result;
    end Get_Entities_Matching;
 
---   procedure ExampleSystem (Entity_List : Entity_Components) is
---      Search_Component_IDs : Component_ID_Vector.Vector;
+--   procedure ExampleSystem (Entity_List_PO : in out Entity_Components_PO) is
+--      Entity_List : Entity_Components_Ptr;
+--      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+--        To_CID ("Component_1") &
+--        To_CID ("Component_2");
+--      Single_Search_ID : constant Component_ID_Vector.Vector :=
+--        Component_ID_Vector.To_Vector (To_CID ("Component"), 1);
 --      Matched_Entities : Entity_ID_Vector.Vector;
 --      Component_List : Components_Ptr;
---      Component : Component1;
 --   begin
---   Search_Component_IDs.Append (To_CID ("Component1"));
---   Search_Component_IDs.Append (To_CID ("Component2"));
---   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
---      for EID of Matched_Entities loop
---         Component_List := Get_Entity_Components (Entity_List, EID);
---         Component := Component1 (
---            Get_Component (Component_List.all, "Component1")
---                                 );
---            ...
---         --  Pass updated vals back to the Components instance
---         --  Required to run Get_Entity_Components again to avoid issues with
 --
---         --    Update components
---         Add_Component (
---            Get_Entity_Components (Entity_List, EID).all,
---            To_CID ("Component1"),
---            Component
---                       );
+--      --  Wait for inclusive lock for entity list
+--      Entity_List_PO.Claim_Reading (Entity_List);
+--      --  Search for entities matching the list of components
+--      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+--
+--      for EID of Matched_Entities loop
+--         Component_List := Get_Entity_Components (Entity_List.all, EID);
+--         declare
+--            --  Obtain a view to the component allowing direct modification
+--            Component_1_C : Component_1_T renames Component_1_T (
+--              Get_Component_Ptr (Component_List, "Component_1").all);
+--         begin
+--
+--            --  Read/update component as needed by interacting with it through the view
+--            ...
+--
+--         end;
 --      end loop;
+--
+--      --  Release lock on entity list
+--      Entity_List_PO.Release_Reading;
 --   end ExampleSystem;
 
    --  Built-in systems
@@ -284,132 +371,127 @@ begin
    end loop;
 end FlexLayoutSystem;
 
-   procedure WidgetBackgroundSystem (Entity_List : Entity_Components) is
-      Search_Component_IDs : Component_ID_Vector.Vector;
+   procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
+      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+        To_CID ("WidgetComponent") &
+        To_CID ("BackgroundColorComponent");
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
-      Widget_C : Widget_Component_T;
-      BGColor_C : Background_Color_Component_T;
       BGColor : Color_t;
       Px : Pixel_t;
    begin
-      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
-      Search_Component_IDs.Append (To_CID ("BackgroundColorComponent"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
+      --  Search for entities matching the list of components
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+
       for EID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, EID);
-         Widget_C := Widget_Component_T (
-            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
-                                     );
-         BGColor_C := Background_Color_Component_T (
-            Get_Component (Component_List.all, To_CID ("BackgroundColorComponent"))
-                                               );
-         BGColor := BGColor_C.Background_Color;
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
+         declare
+            --  Obtain a view to the component allowing direct modification
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, "WidgetComponent").all);
+            BGColor_C : Background_Color_Component_T renames Background_Color_Component_T (
+              Get_Component_Ptr (Component_List, "BackgroundColorComponent").all);
+         begin
+            BGColor := BGColor_C.Background_Color;
 
-         for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
-            for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
-               --  returns a copy of the buffer's pixel
-               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
-               --  edit values of the copy
-               Px.Char := ' ';
-               Px.Background_Color := BGColor;
-               --  pass back to update in the temp buffer
-               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+            for Pos_W in TUI_Width'First .. Widget_C.Size_Width loop
+               for Pos_H in TUI_Height'First .. Widget_C.Size_Height loop
+                  --  returns a copy of the buffer's pixel
+                  Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+                  --  edit values of the copy
+                  Px.Char := ' ';
+                  Px.Background_Color := BGColor;
+                  --  pass back to update in the buffer
+                  Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               end loop;
             end loop;
-         end loop;
-
-         --  Update components
-         Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
-                        To_CID ("WidgetComponent"),
-                        Widget_C
-                       );
-         Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
-                        To_CID ("BackgroundColorComponent"),
-                        BGColor_C
-                       );
+         end;
       end loop;
+
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
    end WidgetBackgroundSystem;
 
-   procedure TextRenderSystem (Entity_List : Entity_Components) is
-      Search_Component_IDs : Component_ID_Vector.Vector;
+   procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
+      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+        To_CID ("WidgetComponent") &
+        To_CID ("TextComponent");
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
-      Widget_C : Widget_Component_T;
-      Text_C : Text_Component_T;
       Pos_W : TUI_Width;
       Pos_H : TUI_Height;
       Text : SU.Unbounded_String;
       Char : Character;
       Px : Pixel_t;
    begin
-      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
-      Search_Component_IDs.Append (To_CID ("TextComponent"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
+--      --  Search for entities matching the list of components
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
 
       for EID of Matched_Entities loop
-         Component_List := Get_Entity_Components (Entity_List, EID);
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
 
-         Widget_C := Widget_Component_T (
-            Get_Component (Component_List.all, To_CID ("WidgetComponent"))
-                                        );
-         Text_C := Text_Component_T (
-            Get_Component (Component_List.all, To_CID ("TextComponent"))
-                                    );
-         Text := Text_C.Text;
+         declare
+            --  Obtain a view to the component allowing direct modification
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, "WidgetComponent").all);
 
-         -- Initiatize drawing position using text offsets
-         -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
-         Pos_W := Text_C.Offset_X;
-         Pos_H := Text_C.Offset_Y;
+            Text_C : Text_Component_T renames Text_Component_T (
+              Get_Component_Ptr (Component_List, "TextComponent").all);
+         begin
+            Text := Text_C.Text;
 
-         for Text_Index in Positive'First .. SU.Length(Text) loop
-            --  Get character and update pixel fields inside widget's buffer
-            Char := SU.Element (Text, Text_Index);
-            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
-            Px.Char := Char;
-            Px.Char_Color := Text_C.Text_Color;
+            -- Initiatize drawing position using text offsets
+            -- Assume Offset_X/Y are relative to the widget's (1, 1) coordinate
+            Pos_W := Text_C.Offset_X;
+            Pos_H := Text_C.Offset_Y;
 
-            -- For text stylization
-            Px.Is_Bold           := Text_C.Is_Bold;
-            Px.Is_Italic         := Text_C.Is_Italic;
-            Px.Is_Underline      := Text_C.Is_Underline;
-            Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+            for Text_Index in Positive'First .. SU.Length(Text) loop
+               --  Get character and update pixel fields inside widget's buffer
+               Char := SU.Element (Text, Text_Index);
+               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+               Px.Char := Char;
+               Px.Char_Color := Text_C.Text_Color;
 
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               -- For text stylization
+               Px.Is_Bold           := Text_C.Is_Bold;
+               Px.Is_Italic         := Text_C.Is_Italic;
+               Px.Is_Underline      := Text_C.Is_Underline;
+               Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
 
-            --  Increment position in 2D array
-            Pos_W := Pos_W + 1;
-            if Pos_W > Widget_C.Size_Width then
-               Pos_W := 1;
-               Pos_H := Pos_H + 1;
-            end if;
-            --  If out of bounds, break
-            exit when Pos_H > Widget_C.Size_Height;
-         end loop;
+               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
-         --  Update components
-         Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
-                        To_CID ("WidgetComponent"),
-                        Widget_C
-                       );
-         Add_Component (
-                        Get_Entity_Components (Entity_List, EID).all,
-                        To_CID ("TextComponent"),
-                        Text_C
-                       );
+               --  Increment position in 2D array
+               Pos_W := Pos_W + 1;
+               if Pos_W > Widget_C.Size_Width then
+                  Pos_W := 1;
+                  Pos_H := Pos_H + 1;
+               end if;
+               --  If out of bounds, break
+               exit when Pos_H > Widget_C.Size_Height;
+            end loop;
+         end;
       end loop;
+
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
    end TextRenderSystem;
 
-   procedure BufferCopySystem (Entity_List : Entity_Components) is
+   procedure BufferCopySystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
+
       procedure RecursiveBufferCopy (Framebuffer : in out Buffer_T;
                                      Root : Widget_Component_T;
                                      Parent : Widget_Component_T) is
          Child_Component_List : Components_Ptr;
          Child_Widget : Widget_Component_T;
-         Parent_Pixel : Pixel_t;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
       begin
@@ -424,7 +506,6 @@ end FlexLayoutSystem;
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in TUI_Width'First .. Parent.Size_Width loop
             for Pos_H in TUI_Height'First .. Parent.Size_Height loop
-               Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
                --  Calc X
                Parent_X := Parent.Position_X + Pos_W - TUI_Width (1);
                --  Calc Y
@@ -440,7 +521,7 @@ end FlexLayoutSystem;
                Set_Buffer_Pixel (
                   Framebuffer,
                   Parent_X, Parent_Y,
-                  Parent_Pixel
+                  Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H)
                          );
             end loop;
          end loop;
@@ -449,7 +530,7 @@ end FlexLayoutSystem;
          for Child_Entity_ID of Parent.Children loop
             --  Fetch the child's WidgetComponent
             Child_Component_List := Get_Entity_Components (
-               Entity_List, Child_Entity_ID
+               Entity_List.all, Child_Entity_ID
                                                           );
             Child_Widget := Widget_Component_T (
                Get_Component (Child_Component_List.all, To_CID ("WidgetComponent"))
@@ -459,48 +540,63 @@ end FlexLayoutSystem;
          end loop;
       end RecursiveBufferCopy;
 
-      RI_Component_IDs : Component_ID_Vector.Vector;
-      Root_Component_IDs : Component_ID_Vector.Vector;
+      RI_Component_IDs : constant Component_ID_Vector.Vector :=
+        Component_ID_Vector.To_Vector (To_CID ("RenderInfo"), 1);
+      Root_Component_IDs : constant Component_ID_Vector.Vector :=
+        To_CID ("RootWidget") &
+        To_CID ("WidgetComponent");
       Matched_RIs : Entity_ID_Vector.Vector;
       Matched_Roots : Entity_ID_Vector.Vector;
       RI_Components : Components_Ptr;
       Root_Components : Components_Ptr;
-      RenderInfo_C : Render_Info_Component_T;
-      Root : Widget_Component_T;
+      Rendering_To_FB_2 : Boolean;
    begin
-      RI_Component_IDs.Append (To_CID ("RenderInfo"));
-      Root_Component_IDs.Append (To_CID ("RootWidget"));
-      Matched_RIs := Get_Entities_Matching (Entity_List, RI_Component_IDs);
-      Matched_Roots := Get_Entities_Matching (Entity_List, Root_Component_IDs);
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
+      --  Search for entities with Render_Info_Component_T
+      Matched_RIs := Get_Entities_Matching (Entity_List.all, RI_Component_IDs);
+      --  Search for entities with Root_- and Widget_Component_T
+      Matched_Roots := Get_Entities_Matching (Entity_List.all, Root_Component_IDs);
+
       --  For each entity with RenderInfo
       for RI_Entity_ID of Matched_RIs loop
-         RI_Components := Get_Entity_Components (Entity_List, RI_Entity_ID);
-         RenderInfo_C := Render_Info_Component_T (
-            Get_Component (RI_Components.all, To_CID ("RenderInfo"))
-                                                 );
-         --  For each root
-         for R_Entity_ID of Matched_Roots loop
-            Root_Components := Get_Entity_Components (Entity_List, R_Entity_ID);
-            Root := Widget_Component_T (
-               Get_Component (Root_Components.all, To_CID ("WidgetComponent"))
-                                       );
+         RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
+         declare
+            --  Obtain a view to the render info
+            RenderInfo_C : Render_Info_Component_T renames Render_Info_Component_T (
+              Get_Component_Ptr (RI_Components, "RenderInfo").all);
+         begin
+            --  Read directly without locking, since we know the flag is only changed by a system that runs later in the same thread
+            RenderInfo_C.Drawing_FB.all.Read (Rendering_To_FB_2);
 
-            --  For it and its children
-            RecursiveBufferCopy (RenderInfo_C.Framebuffer, Root, Root);
-         end loop;
+            --  For each root
+            for R_Entity_ID of Matched_Roots loop
+               Root_Components := Get_Entity_Components (Entity_List.all, R_Entity_ID);
+               declare
+                  --  Obtain a view to the component allowing direct modification
+                  Root : Widget_Component_T renames Widget_Component_T (
+                    Get_Component_Ptr (Root_Components, "WidgetComponent").all);
+               begin
 
-         --  Update components
-         Add_Component (
-                        Get_Entity_Components (Entity_List, RI_Entity_ID).all,
-                        To_CID ("RenderInfo"),
-                        RenderInfo_C
-                       );
+                  --  For it and its children
+                  if Rendering_To_FB_2 then
+                     RecursiveBufferCopy (RenderInfo_C.Framebuffer_2, Root, Root);
+                  else
+                     RecursiveBufferCopy (RenderInfo_C.Framebuffer_1, Root, Root);
+                  end if;
+               end;
+            end loop;
+         end;
       end loop;
+
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
    end BufferCopySystem;
 
    -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
    -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
-   procedure BufferDrawSystem (Entity_List : Entity_Components) is
+   procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
       --  Both pixel rendering and ANSI codes
       CSI : constant String := Character'Val (16#1B#) & '[';
       Hide_Cursor  : constant String := CSI & "?25l"; -- not hiding cursor?
@@ -545,17 +641,25 @@ end FlexLayoutSystem;
         (Move (Row, Col) & Format (P) & P.Char & Reset);
 
       --  Real stuff begins
-      Search_Components : Component_ID_Vector.Vector;
+      Entity_List : Entity_Components_Ptr;
+      Search_Components : constant Component_ID_Vector.Vector :=
+        Component_ID_Vector.To_Vector (To_CID ("RenderInfo"), 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       --  Pointer to Components instance
       RI_Component_List : Components_Ptr;
-      --  RenderInfo component
-      RI : Render_Info_Component_T;
       --  Framebuffer pixel
       FB_Pixel : Pixel_t;
+      Drawing_From_FB_1 : Boolean;
+
+      --  Local type needed due to accessibility rules for safe 'Access usage
+      type Drawing_Ptr is access all Buffer_T;
+      Drawing : Drawing_Ptr;
    begin
-      Search_Components.Append (To_CID ("RenderInfo"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Components);
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
+      --  Search for entities matching the list of components
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
 
       -- PRE-RENDER: Hide the cursor and save its current position
       Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Hide_Cursor & Save_Pos));
@@ -563,25 +667,37 @@ end FlexLayoutSystem;
       -- PROTECTED RENDER LOOP
       begin
          for EID of Matched_Entities loop
-            RI_Component_List := Get_Entity_Components (Entity_List, EID);
-            RI := Render_Info_Component_T (Get_Component (RI_Component_List.all, To_CID ("RenderInfo")));
+            RI_Component_List := Get_Entity_Components (Entity_List.all, EID);
 
-            for Y in TUI_Height'First .. RI.Terminal_Height loop
-               for X in TUI_Width'First .. RI.Terminal_Width loop
-                  if Get_Buffer_Pixel (RI.Framebuffer, X, Y) /= Get_Buffer_Pixel (RI.Backbuffer, X, Y) then
-                     FB_Pixel := Get_Buffer_Pixel (RI.Framebuffer, X, Y);
+            declare
+               --  Obtain a view to the component allowing direct modification
+               RI : Render_Info_Component_T renames Render_Info_Component_T (
+                 Get_Component_Ptr (RI_Component_List, "RenderInfo").all);
+            begin
+               RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
+               Drawing := (if Drawing_From_FB_1 then RI.Framebuffer_1'Access else RI.Framebuffer_2'Access);
 
-                     -- Draw to terminal
-                     Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
+               --  Begin comparing FB to BB and drawing
+               for Y in TUI_Height'First .. RI.Terminal_Height loop
+                  for X in TUI_Width'First .. RI.Terminal_Width loop
+                     if Get_Buffer_Pixel (Drawing.all, X, Y) /=
+                       Get_Buffer_Pixel (RI.Backbuffer, X, Y)
+                     then
+                        --  Fetch buffer pixels
+                        FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
-                     -- Update backbuffer
-                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
-                  end if;
+                        -- Draw to terminal
+                        Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
+
+                        -- Update backbuffer
+                        Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                     end if;
+                  end loop;
                end loop;
-            end loop;
 
-            -- Pass updated component back
-            Add_Component (RI_Component_List.all, To_CID ("RenderInfo"), RI);
+               --  Release RenderInfo
+               RI.Drawing_FB.all.Post;
+            end;
          end loop;
 
       exception
@@ -598,18 +714,21 @@ end FlexLayoutSystem;
       -- Ensure commands are sent to the hardware immediately
       Ada.Wide_Wide_Text_IO.Flush;
 
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
    end BufferDrawSystem;
 
    ---------------------------------------------------------------------------
    --  Progress Bar Render System
    ---------------------------------------------------------------------------
 
-   procedure ProgressBarRenderSystem (Entity_List : in Out Entity_Components) is
-      Search_Component_IDs : Component_ID_Vector.Vector;
+   procedure ProgressBarRenderSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List          : Entity_Components_Ptr;
+      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+                             To_CID ("WidgetComponent") &
+                             To_CID ("ProgressBarComponent");
       Matched_Entities     : Entity_ID_Vector.Vector;
       Comp_Ptr             : Components_Ptr;
-      Widget_C             : Widget_Component_T;
-      PB_C                 : Progress_Bar_Component_T;
       BG_C                 : Background_Color_Component_T;
       Px                   : Pixel_t;
       Bar_Width            : Natural;
@@ -620,152 +739,190 @@ end FlexLayoutSystem;
       Current_Char         : Character;
       Has_BG               : Boolean;
    begin
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
       --  Query for entities with WidgetComponent and ProgressBarComponent
-      Search_Component_IDs.Append (To_CID ("WidgetComponent"));
-      Search_Component_IDs.Append (To_CID ("ProgressBarComponent"));
-      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
 
       for EID of Matched_Entities loop
-         Comp_Ptr := Get_Entity_Components (Entity_List, EID);
+         Comp_Ptr := Get_Entity_Components (Entity_List.all, EID);
 
-         --  Get components
-         Widget_C := Widget_Component_T (
-            Get_Component (Comp_Ptr.all, To_CID ("WidgetComponent")));
-         PB_C := Progress_Bar_Component_T (
-            Get_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")));
-
-         --  Check for optional background color component
-         Has_BG := Has_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"));
-         if Has_BG then
-            BG_C := Background_Color_Component_T (
-               Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent")));
-         end if;
-
-         --  Calculate bar dimensions
-         --  Format: [====    ] XXX%
-         --  Border chars take 2 positions, percentage takes ~5 positions (" 100%")
-         --  So bar content width = Widget width - 2 (borders) - 5 (percentage if shown)
-
-         if PB_C.Show_Percentage then
-            if Natural (Widget_C.Size_Width) > 7 then
-               Bar_Width := Natural (Widget_C.Size_Width) - 7;  -- 2 borders + 5 for " XXX%"
-            else
-               Bar_Width := 1;
-            end if;
-         else
-            if Natural (Widget_C.Size_Width) > 2 then
-               Bar_Width := Natural (Widget_C.Size_Width) - 2;  -- Just borders
-            else
-               Bar_Width := 1;
-            end if;
-         end if;
-
-         --  Calculate filled cells
-         Filled_Cells := Natural (PB_C.Value * Float (Bar_Width));
-         if Filled_Cells > Bar_Width then
-            Filled_Cells := Bar_Width;
-         end if;
-
-         --  Calculate percentage for display
-         Percent := Natural (PB_C.Value * 100.0);
-         if Percent > 100 then
-            Percent := 100;
-         end if;
-
-         --  Format percentage string (right-aligned, 3 digits + %)
          declare
-            Pct_Img : constant String := Natural'Image (Percent);
+            --  Get components
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Comp_Ptr, "WidgetComponent").all);
+            PB_C : Progress_Bar_Component_T renames Progress_Bar_Component_T (
+              Get_Component_Ptr (Comp_Ptr, "ProgressBarComponent").all);
          begin
-            --  Natural'Image has leading space, so "  0" to " 100"
-            if Percent < 10 then
-               Percent_Str := "  " & Pct_Img (Pct_Img'Last) & "%";
-            elsif Percent < 100 then
-               Percent_Str := " " & Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+
+            --  Check for optional background color component
+            Has_BG := Has_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"));
+            if Has_BG then
+               --  BG_C will never be updated, so this read-only copy is fine
+               BG_C := Background_Color_Component_T (
+                  Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent")));
+            end if;
+
+            --  Calculate bar dimensions
+            --  Format: [====    ] XXX%
+            --  Border chars take 2 positions, percentage takes ~5 positions (" 100%")
+            --  So bar content width = Widget width - 2 (borders) - 5 (percentage if shown)
+
+            if PB_C.Show_Percentage then
+               if Natural (Widget_C.Size_Width) > 7 then
+                  Bar_Width := Natural (Widget_C.Size_Width) - 7;  -- 2 borders + 5 for " XXX%"
+               else
+                  Bar_Width := 1;
+               end if;
             else
-               Percent_Str := Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+               if Natural (Widget_C.Size_Width) > 2 then
+                  Bar_Width := Natural (Widget_C.Size_Width) - 2;  -- Just borders
+               else
+                  Bar_Width := 1;
+               end if;
+            end if;
+
+            --  Calculate filled cells
+            Filled_Cells := Natural (PB_C.Value * Float (Bar_Width));
+            if Filled_Cells > Bar_Width then
+               Filled_Cells := Bar_Width;
+            end if;
+
+            --  Calculate percentage for display
+            Percent := Natural (PB_C.Value * 100.0);
+            if Percent > 100 then
+               Percent := 100;
+            end if;
+
+            --  Format percentage string (right-aligned, 3 digits + %)
+            declare
+               Pct_Img : constant String := Natural'Image (Percent);
+            begin
+               --  Natural'Image has leading space, so "  0" to " 100"
+               if Percent < 10 then
+                  Percent_Str := "  " & Pct_Img (Pct_Img'Last) & "%";
+               elsif Percent < 100 then
+                  Percent_Str := " " & Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+               else
+                  Percent_Str := Pct_Img (Pct_Img'First + 1 .. Pct_Img'Last) & "%";
+               end if;
+            end;
+
+            --  Render to buffer (first row only for single-line progress bar)
+            Pos_Index := 0;
+            for X in TUI_Width'First .. Widget_C.Size_Width loop
+               Pos_Index := Pos_Index + 1;
+               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First);
+
+               --  Set background color if available
+               if Has_BG then
+                  Px.Background_Color := BG_C.Background_Color;
+               end if;
+
+               --  Determine character and color at this position
+               if Pos_Index = 1 then
+                  --  Left border
+                  Current_Char := PB_C.Border_Left;
+                  Px.Char_Color := White;
+               elsif Pos_Index = Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
+                  --  Space before percentage
+                  Current_Char := ' ';
+                  Px.Char_Color := White;
+               elsif Pos_Index > Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
+                  --  Percentage text area
+                  declare
+                     Pct_Pos : constant Natural := Pos_Index - (Natural (Widget_C.Size_Width) - 4);
+                  begin
+                     if Pct_Pos <= 4 then
+                        Current_Char := Percent_Str (Pct_Pos);
+                     else
+                        Current_Char := ' ';
+                     end if;
+                  end;
+                  Px.Char_Color := White;
+               elsif Pos_Index = Natural (Widget_C.Size_Width) - 5 + 1 and not PB_C.Show_Percentage then
+                  --  Right border (no percentage)
+                  Current_Char := PB_C.Border_Right;
+                  Px.Char_Color := White;
+               elsif Pos_Index = Bar_Width + 2 then
+                  --  Right border (with percentage calculation)
+                  Current_Char := PB_C.Border_Right;
+                  Px.Char_Color := White;
+               elsif Pos_Index > 1 and Pos_Index <= Bar_Width + 1 then
+                  --  Bar content area
+                  declare
+                     Bar_Pos : constant Natural := Pos_Index - 1;
+                  begin
+                     if Bar_Pos <= Filled_Cells then
+                        Current_Char := PB_C.Filled_Char;
+                        Px.Char_Color := PB_C.Filled_Color;
+                     else
+                        Current_Char := PB_C.Empty_Char;
+                        Px.Char_Color := PB_C.Empty_Color;
+                     end if;
+                  end;
+               else
+                  Current_Char := ' ';
+                  Px.Char_Color := White;
+               end if;
+
+               Px.Char := Current_Char;
+               Set_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First, Px);
+            end loop;
+
+            --  Fill remaining rows with background (for multi-row widgets)
+            if Widget_C.Size_Height > TUI_Height'First then
+               for Y in TUI_Height'First + 1 .. Widget_C.Size_Height loop
+                  for X in TUI_Width'First .. Widget_C.Size_Width loop
+                     Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, Y);
+                     Px.Char := ' ';
+                     if Has_BG then
+                        Px.Background_Color := BG_C.Background_Color;
+                     end if;
+                     Set_Buffer_Pixel (Widget_C.Render_Buffer, X, Y, Px);
+                  end loop;
+               end loop;
             end if;
          end;
-
-         --  Render to buffer (first row only for single-line progress bar)
-         Pos_Index := 0;
-         for X in TUI_Width'First .. Widget_C.Size_Width loop
-            Pos_Index := Pos_Index + 1;
-            Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First);
-
-            --  Set background color if available
-            if Has_BG then
-               Px.Background_Color := BG_C.Background_Color;
-            end if;
-
-            --  Determine character and color at this position
-            if Pos_Index = 1 then
-               --  Left border
-               Current_Char := PB_C.Border_Left;
-               Px.Char_Color := White;
-            elsif Pos_Index = Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
-               --  Space before percentage
-               Current_Char := ' ';
-               Px.Char_Color := White;
-            elsif Pos_Index > Natural (Widget_C.Size_Width) - 4 and PB_C.Show_Percentage then
-               --  Percentage text area
-               declare
-                  Pct_Pos : constant Natural := Pos_Index - (Natural (Widget_C.Size_Width) - 4);
-               begin
-                  if Pct_Pos <= 4 then
-                     Current_Char := Percent_Str (Pct_Pos);
-                  else
-                     Current_Char := ' ';
-                  end if;
-               end;
-               Px.Char_Color := White;
-            elsif Pos_Index = Natural (Widget_C.Size_Width) - 5 + 1 and not PB_C.Show_Percentage then
-               --  Right border (no percentage)
-               Current_Char := PB_C.Border_Right;
-               Px.Char_Color := White;
-            elsif Pos_Index = Bar_Width + 2 then
-               --  Right border (with percentage calculation)
-               Current_Char := PB_C.Border_Right;
-               Px.Char_Color := White;
-            elsif Pos_Index > 1 and Pos_Index <= Bar_Width + 1 then
-               --  Bar content area
-               declare
-                  Bar_Pos : constant Natural := Pos_Index - 1;
-               begin
-                  if Bar_Pos <= Filled_Cells then
-                     Current_Char := PB_C.Filled_Char;
-                     Px.Char_Color := PB_C.Filled_Color;
-                  else
-                     Current_Char := PB_C.Empty_Char;
-                     Px.Char_Color := PB_C.Empty_Color;
-                  end if;
-               end;
-            else
-               Current_Char := ' ';
-               Px.Char_Color := White;
-            end if;
-
-            Px.Char := Current_Char;
-            Set_Buffer_Pixel (Widget_C.Render_Buffer, X, TUI_Height'First, Px);
-         end loop;
-
-         --  Fill remaining rows with background (for multi-row widgets)
-         if Widget_C.Size_Height > TUI_Height'First then
-            for Y in TUI_Height'First + 1 .. Widget_C.Size_Height loop
-               for X in TUI_Width'First .. Widget_C.Size_Width loop
-                  Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, Y);
-                  Px.Char := ' ';
-                  if Has_BG then
-                     Px.Background_Color := BG_C.Background_Color;
-                  end if;
-                  Set_Buffer_Pixel (Widget_C.Render_Buffer, X, Y, Px);
-               end loop;
-            end loop;
-         end if;
-
-         --  Update components back to entity
-         Add_Component (Comp_Ptr.all, To_CID ("WidgetComponent"), Widget_C);
-         Add_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent"), PB_C);
       end loop;
+
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
    end ProgressBarRenderSystem;
+
+   --  Swaps the double-buffering flag of Render_Info_Component_T
+   --  Should be called after all other systems
+   procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
+      Search_Component_IDs : constant Component_ID_Vector.Vector :=
+        Component_ID_Vector.To_Vector (To_CID ("RenderInfo"), 1);
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+      Drawing_From_FB_1 : Boolean;
+   begin
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
+--      --  Search for entities with render info
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
+
+         declare
+            --  Obtain a view to the component allowing direct modification
+            Render_Info : Render_Info_Component_T renames Render_Info_Component_T (
+              Get_Component_Ptr (Component_List, "RenderInfo").all);
+         begin
+            Render_Info.Drawing_FB.all.Wait (Drawing_From_FB_1);
+            Render_Info.Drawing_FB.all.Swap;
+            Render_Info.Drawing_FB.all.Post;
+         end;
+      end loop;
+
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
+   end DoubleBufferFlagSystem;
 
 end ECS;

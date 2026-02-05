@@ -16,7 +16,7 @@ with User_Library; use User_Library;
 procedure Presentation_2_Demo is
 
    --  Entity storage
-   Entities : Entity_Components;
+   Entities_PO : Entity_Components_PO;
 
    --  Demo timing
    Frame_Duration : constant Duration := 0.05;  --  50ms per frame (20 FPS)
@@ -67,7 +67,7 @@ procedure Presentation_2_Demo is
    task body Render_Thread_T is
    begin
       loop
-         Run_Render_Systems (Entities);
+         Run_Render_Systems (Entities_PO);
          delay Frame_Duration;
          exit when Thread_Flag.Check;
       end loop;
@@ -78,14 +78,14 @@ begin
    Clear_Screen;
 
    --  Setup infrastructure
-   Setup_Render_Info (Entities, Render_Info_ID, Term_Width, Term_Height);
-   Setup_Root_Widget (Entities, Root_ID, Term_Width, Term_Height,
+   Setup_Render_Info (Entities_PO, Render_Info_ID, Term_Width, Term_Height);
+   Setup_Root_Widget (Entities_PO, Root_ID, Term_Width, Term_Height,
                       [Progress1_ID, Progress2_ID, Progress3_ID, Animation_ID]);
 
    --  Create progress bars with different styles
    --  Progress Bar 1: Download (Cyan/Blue theme)
    Create_Progress_Bar
-     (Entity_List  => Entities,
+     (Entity_List_PO  => Entities_PO,
       E_ID         => Progress1_ID,
       Pos_X        => 3,
       Pos_Y        => 3,
@@ -97,7 +97,7 @@ begin
 
    --  Progress Bar 2: Install (Green/Yellow theme)
    Create_Progress_Bar
-     (Entity_List  => Entities,
+     (Entity_List_PO  => Entities_PO,
       E_ID         => Progress2_ID,
       Pos_X        => 3,
       Pos_Y        => 6,
@@ -109,7 +109,7 @@ begin
 
    --  Progress Bar 3: Configure (Orange/Red theme)
    Create_Progress_Bar
-     (Entity_List  => Entities,
+     (Entity_List_PO  => Entities_PO,
       E_ID         => Progress3_ID,
       Pos_X        => 3,
       Pos_Y        => 9,
@@ -120,10 +120,10 @@ begin
       BG_Color     => Navy);
 
    --  Animated text
-   Setup_Animation (Entities, Animation_ID);
+   Setup_Animation (Entities_PO, Animation_ID);
 
    --  Initial systems pass
-   Run_Systems (Entities);
+   Run_Systems (Entities_PO);
 
    --  Main loop, simulating non-system data hooking
    for Frame in 1 .. Total_Frames loop
@@ -134,7 +134,7 @@ begin
          if P1_Value > 1.0 then
             P1_Value := 1.0;
          end if;
-         Set_Progress (Entities, Progress1_ID, P1_Value);
+         Set_Progress (Entities_PO, Progress1_ID, P1_Value);
       end if;
 
       --  Installation bar: Starts when download is at 30%
@@ -143,7 +143,7 @@ begin
          if P2_Value > 1.0 then
             P2_Value := 1.0;
          end if;
-         Set_Progress (Entities, Progress2_ID, P2_Value);
+         Set_Progress (Entities_PO, Progress2_ID, P2_Value);
       end if;
 
       --  Configuration bar: Starts when install is at 50%
@@ -152,11 +152,11 @@ begin
          if P3_Value > 1.0 then
             P3_Value := 1.0;
          end if;
-         Set_Progress (Entities, Progress3_ID, P3_Value);
+         Set_Progress (Entities_PO, Progress3_ID, P3_Value);
       end if;
 
       --  Run systems to update & render
-      Run_Systems (Entities);
+      Run_Systems (Entities_PO);
 
       --  Check if all complete
       exit when P1_Value >= 1.0 and P2_Value >= 1.0 and P3_Value >= 1.0;
