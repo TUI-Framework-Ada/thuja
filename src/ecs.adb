@@ -506,7 +506,6 @@ end FlexLayoutSystem;
          --  Assuming 1-indexed Buffer_T and Position_X/Y
          for Pos_W in TUI_Width'First .. Parent.Size_Width loop
             for Pos_H in TUI_Height'First .. Parent.Size_Height loop
-               Parent_Pixel := Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H);
                --  Calc X
                Parent_X := Parent.Position_X + Pos_W - TUI_Width (1);
                --  Calc Y
