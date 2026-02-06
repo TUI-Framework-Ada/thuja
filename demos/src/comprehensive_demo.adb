@@ -332,14 +332,8 @@ procedure Comprehensive_Demo is
    begin
       Graphics.Clear_Screen;
       loop
-         --  Claim reading access
-         Entities_PO.Claim_Reading (Entity_List);
-         
-         --  Run draw system
+         --  Run draw system (automatically claims access)
          ECS.BufferDrawSystem (Entities_PO);
-         
-         --  Release reading access
-         Entities_PO.Release_Reading;
 
          --  30 FPS
          delay Duration (1.0 / 30.0);
@@ -404,11 +398,11 @@ begin
          --  SYSTEM 1: Terminal Resize Detection (NEW FEATURE!)
          ECS.TerminalResizeSystem (Entity_List.all);
 
-         --  SYSTEM 2: Flexbox Layout (positions flex children)
-         ECS.FlexLayoutSystem (Entity_List.all);
-
          --  Release reading access
          Entities_PO.Release_Reading;
+
+         --  SYSTEM 2: Flexbox Layout (positions flex children)
+         ECS.FlexLayoutSystem (Entities_PO);
 
          --  UPDATE PROGRESS BAR (Animate from 0% to 100%)
          Progress := Float (Loop_Index) / Float (Loop_Count);

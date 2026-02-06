@@ -86,7 +86,7 @@ package ECS is
    procedure TerminalResizeSystem (Entity_List : Entity_Components);
 
    -- EXISTING: Current systems, not changed.
-   procedure FlexLayoutSystem (Entity_List : Entity_Components);
+   procedure FlexLayoutSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure BufferCopySystem (Entity_List_PO : in out Entity_Components_PO);
