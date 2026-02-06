@@ -4,6 +4,7 @@ with Ada.Strings;
 with Ada.Strings.Unbounded.Hash;
 with Components; use Components;
 with IDs; use IDs;
+with Graphics; use Graphics;
 
 package ECS is
 

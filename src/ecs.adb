@@ -1,12 +1,14 @@
 --ecs.adb
-with Ada.Characters.Conversions;
 with Ada.Strings.Unbounded;
-with Ada.Text_IO;
-with Graphics; use Graphics;
 with Flexbox; use Flexbox;
 with IDs; use type IDs.Component_ID_Vector.Vector;
+with Ada.Wide_Wide_Text_IO;
+with Ada.Characters.Conversions;
 
 package body ECS is
+
+      function ConvertWW (S : String) return Wide_Wide_String 
+      renames Ada.Characters.Conversions.To_Wide_Wide_String;
 
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
@@ -68,7 +70,8 @@ package body ECS is
         when not Write_Using is
       begin
          Read_Using := Read_Using + 1;
-         Entity_List := Entities'Access;
+         --Changed to Unchecked_Access since it is trying to return an access to a protected object field
+         Entity_List := Entities'Unchecked_Access;
       end Claim_Reading;
 
       --  Wait for no readers to receive an exclusive reference to the entity list
@@ -76,7 +79,9 @@ package body ECS is
         when (Read_Using = 0) and (not Write_Using) is
       begin
          Write_Using := True;
-         Entity_List := Entities'Access;
+
+         --Changed to Unchecked_Access since it is trying to return an access to a protected object field
+         Entity_List := Entities'Unchecked_Access;
       end Claim_Writing;
 
       --  Release a reading copy
@@ -675,7 +680,8 @@ end FlexLayoutSystem;
                  Get_Component_Ptr (RI_Component_List, "RenderInfo").all);
             begin
                RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
-               Drawing := (if Drawing_From_FB_1 then RI.Framebuffer_1'Access else RI.Framebuffer_2'Access);
+               -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
+               Drawing := (if Drawing_From_FB_1 then RI.Framebuffer_1'Unchecked_Access else RI.Framebuffer_2'Unchecked_Access);
 
                --  Begin comparing FB to BB and drawing
                for Y in TUI_Height'First .. RI.Terminal_Height loop
@@ -687,7 +693,7 @@ end FlexLayoutSystem;
                         FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
                         -- Draw to terminal
-                        Ada.Wide_Wide_Text_IO.Put (ConvertWW (FB_Pixel, Y, X));
+                        Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
 
                         -- Update backbuffer
                         Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
@@ -924,5 +930,153 @@ end FlexLayoutSystem;
       --  Release lock on entity list
       Entity_List_PO.Release_Reading;
    end DoubleBufferFlagSystem;
+
+      -- ================================================================
+-- 1. TERMINAL RESIZE SYSTEM
+-- Detects when terminal size changes and marks layouts dirty
+-- Call this FIRST in main loop
+-- ================================================================
+
+procedure TerminalResizeSystem (Entity_List : Entity_Components) is
+   Search_Component_IDs : Component_ID_Vector.Vector;
+   Matched_Entities     : Entity_ID_Vector.Vector;
+   
+   RI_Components : Components_Ptr;
+   RI            : Render_Info_Component_T;
+begin
+   -- Find all entities with RenderInfo component
+   Search_Component_IDs.Append (To_CID ("RenderInfo"));
+   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+   
+   for RI_Entity_ID of Matched_Entities loop
+      RI_Components := Get_Entity_Components (Entity_List, RI_Entity_ID);
+      RI := Render_Info_Component_T (
+         Get_Component (RI_Components.all, To_CID ("RenderInfo"))
+      );
+      
+      -- Check if terminal size has changed
+      if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
+         RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
+      then
+         -- Terminal was resized! Mark all flex layouts as dirty
+         Mark_All_Flex_Dirty (Entity_List);
+         
+         -- Update previous size to current size
+         RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
+         RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
+         
+         -- Save updated component
+         Add_Component (RI_Components.all, To_CID ("RenderInfo"), RI);
+      end if;
+   end loop;
+end TerminalResizeSystem;
+
+-- ================================================================
+-- 2. MARK ALL FLEX DIRTY HELPER
+-- Called when terminal resizes to trigger layout recalculation
+-- ================================================================
+
+procedure Mark_All_Flex_Dirty (Entity_List : Entity_Components) is
+   Search_Component_IDs : Component_ID_Vector.Vector;
+   Matched_Entities     : Entity_ID_Vector.Vector;
+   
+   Flex_Components : Components_Ptr;
+   Flex_C          : Flex_Layout_Component_T;
+begin
+   -- Find all entities with FlexLayoutComponent
+   Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
+   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+   
+   -- Mark each flex container as dirty
+   for Flex_Entity_ID of Matched_Entities loop
+      Flex_Components := Get_Entity_Components (Entity_List, Flex_Entity_ID);
+      Flex_C := Flex_Layout_Component_T (
+         Get_Component (Flex_Components.all, To_CID ("FlexLayoutComponent"))
+      );
+      
+      -- Set dirty flag to trigger layout recalculation
+      Flex_C.Is_Dirty := True;
+      
+      -- Save updated component
+      Add_Component (Flex_Components.all, To_CID ("FlexLayoutComponent"), Flex_C);
+   end loop;
+end Mark_All_Flex_Dirty;
+
+-- ================================================================
+-- 3. MOVE WIDGET - Manual Positioning API
+-- Moves a widget to absolute screen coordinates
+-- Automatically sets the widget to Absolute positioning mode
+-- ================================================================
+
+procedure Move_Widget (Entity_List : in out Entity_Components;
+                      Widget_Entity : Entity_Id;
+                      New_X : TUI_Width;
+                      New_Y : TUI_Height) is
+   Comps    : Components_Ptr;
+   Widget   : Widget_Component_T;
+   Pos_Mode : Position_Mode_Component_T;
+begin
+   Comps := Get_Entity_Components (Entity_List, Widget_Entity);
+   
+   if Comps = null then
+      return;  -- Entity doesn't exist
+   end if;
+   
+   if not Has_Component (Comps.all, To_CID ("WidgetComponent")) then
+      return;  -- Not a widget
+   end if;
+   
+   -- Set position mode to Absolute (so FlexLayoutSystem skips it)
+   Pos_Mode.Mode := Absolute;
+   Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
+   
+   -- Update widget position
+   Widget := Widget_Component_T (
+      Get_Component (Comps.all, To_CID ("WidgetComponent"))
+   );
+   Widget.Position_X := New_X;
+   Widget.Position_Y := New_Y;
+   Add_Component (Comps.all, To_CID ("WidgetComponent"), Widget);
+end Move_Widget;
+
+-- ================================================================
+-- 4. MOVE WIDGET BY - Relative Movement
+-- Moves a widget by a delta (useful for dragging, animation)
+-- ================================================================
+
+procedure Move_Widget_By (Entity_List : in out Entity_Components;
+                         Widget_Entity : Entity_Id;
+                         Delta_X : Integer;
+                         Delta_Y : Integer) is
+   Comps : Components_Ptr;
+   Widget : Widget_Component_T;
+   New_X : Integer;
+   New_Y : Integer;
+begin
+   Comps := Get_Entity_Components (Entity_List, Widget_Entity);
+   
+   if Comps = null then
+      return;
+   end if;
+   
+   if not Has_Component (Comps.all, To_CID ("WidgetComponent")) then
+      return;
+   end if;
+   
+   Widget := Widget_Component_T (
+      Get_Component (Comps.all, To_CID ("WidgetComponent"))
+   );
+   
+   -- Calculate new position
+   New_X := Integer(Widget.Position_X) + Delta_X;
+   New_Y := Integer(Widget.Position_Y) + Delta_Y;
+   
+   -- Clamp to valid range (optional - prevents moving off-screen)
+   New_X := Integer'Max(Integer(TUI_Width'First), New_X);
+   New_Y := Integer'Max(Integer(TUI_Height'First), New_Y);
+   
+   -- Move to new position
+   Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
+end Move_Widget_By;
 
 end ECS;

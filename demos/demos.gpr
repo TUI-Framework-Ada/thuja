@@ -6,7 +6,10 @@ project Demos is
    for Object_Dir use "obj/" & Demos_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
    for Exec_Dir use "bin";
-   for Main use ("demos.adb", "input_demo.adb", "keyboard_widget.adb", "presentation_2_demo.adb", "progress_bar_demo.adb");
+   -- Build a single demo main to avoid gprbuild selecting multiple mains
+   -- which can cause "not a source of project" errors on some systems.
+   -- Point to the source file explicitly to avoid any Source_Dirs resolution issues
+   for Main use ("comprehensive_demo");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches & ("-gnat2022");
