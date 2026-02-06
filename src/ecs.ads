@@ -83,7 +83,7 @@ package ECS is
    -- How: Compares current size vs. previous size each frame
    -- When called: FIRST in main loop (before FlexLayoutSystem)
    -- ================================================================
-   procedure TerminalResizeSystem (Entity_List : Entity_Components);
+   procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO);
 
    -- EXISTING: Current systems, not changed.
    procedure FlexLayoutSystem (Entity_List_PO : in out Entity_Components_PO);

@@ -941,13 +941,16 @@ package body ECS is
 -- Call this FIRST in main loop
 -- ================================================================
 
-procedure TerminalResizeSystem (Entity_List : Entity_Components) is
+procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO) is
+   Entity_List          : Entity_Components_Ptr;
    Search_Component_IDs : Component_ID_Vector.Vector;
    Matched_Entities     : Entity_ID_Vector.Vector;
 
    RI_Components : Components_Ptr;
    RI            : Render_Info_Component_T;
 begin
+   --  Claim reading access
+   Entity_List_PO.Claim_Reading (Entity_List);
    -- Find all entities with RenderInfo component
    Search_Component_IDs.Append (To_CID ("RenderInfo"));
    Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
@@ -973,6 +976,7 @@ begin
          Add_Component (RI_Components.all, To_CID ("RenderInfo"), RI);
       end if;
    end loop;
+   Entity_List_PO.Release_Reading;
 end TerminalResizeSystem;
 
 -- ================================================================

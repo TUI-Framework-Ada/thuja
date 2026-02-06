@@ -415,14 +415,9 @@ begin
       declare
          Entity_List : ECS.Entity_Components_Ptr;
       begin
-         --  Claim reading access
-         Entities_PO.Claim_Reading (Entity_List);
 
          --  SYSTEM 1: Terminal Resize Detection (NEW FEATURE!)
-         ECS.TerminalResizeSystem (Entity_List.all);
-
-         --  Release reading access
-         Entities_PO.Release_Reading;
+         ECS.TerminalResizeSystem (Entities_PO);
 
          --  SYSTEM 2: Flexbox Layout (positions flex children)
          ECS.FlexLayoutSystem (Entities_PO);
