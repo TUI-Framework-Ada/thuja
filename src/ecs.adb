@@ -7,10 +7,6 @@ with Ada.Characters.Conversions;
 
 package body ECS is
 
-      -- Conversion removed here and moved into "Convert" function in BufferDrawSystem
-      -- function ConvertWW (S : String) return Wide_Wide_String 
-      -- renames Ada.Characters.Conversions.To_Wide_Wide_String;
-
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
 
@@ -603,7 +599,7 @@ end FlexLayoutSystem;
    -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
    -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
-      -- Shorthand for Graphics file
+      -- Created an alias for the Graphics package
       package GFX renames Graphics;
       
       --  Both pixel rendering and ANSI codes
