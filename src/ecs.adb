@@ -1,9 +1,10 @@
 --ecs.adb
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
-with IDs; use type IDs.Component_ID_Vector.Vector;
+with IDs; use type IDs.Component_ID_Vector.Vector; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Wide_Wide_Text_IO;
 with Ada.Characters.Conversions;
+with Ada.Tags; use Ada.Tags;
 
 package body ECS is
 
@@ -35,18 +36,90 @@ package body ECS is
       return Self.Components_Map (Component);
    end Get_Component;
 
+   function Get_Component (Self : in Components;
+                           Component_Tag : in Ada.Tags.Tag)
+                           return Component_T'Class is
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor))'Tag = Component_Tag
+         then
+            return Self.Components_Map.Element (
+               Component_Map_Pkg.Key (Component_Cursor));
+         end if;
+      end loop;
+      raise Constraint_Error with "No such component with tag ";
+   end Get_Component;
+
+   function Get_Component_ID (Self : in Components;
+                              Component_Tag : in Ada.Tags.Tag)
+                              return Component_Id is
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor))'Tag = Component_Tag
+         then
+            return Component_Map_Pkg.Key (Component_Cursor);
+         end if;
+      end loop;
+      raise Constraint_Error with "No such component with tag ";
+   end Get_Component_ID;
+
+   function Get_Component_IDs (Self : in Components;
+                               Component_Tag : in Ada.Tags.Tag)
+                               return Component_ID_Vector.Vector is
+      Result : Component_ID_Vector.Vector;
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor))'Tag = Component_Tag
+         then
+            Result.Append (Component_Map_Pkg.Key (Component_Cursor));
+         end if;
+      end loop;
+
+      return Result;
+   end Get_Component_IDs;
+
    function Get_Component_Ptr (Self : Components_Ptr;
-                               Component_Str : String)
+                               Component_Key : Component_Id)
                                return Component_Class_Ptr is
       Map : Component_Map renames Self.all.Components_Map;
    begin
-      return Map.Reference (To_CID (Component_Str)).Element;
+      return Map.Reference (Component_Key).Element;
    end Get_Component_Ptr;
+
+   function Get_Component_Ptr (Self : Components_Ptr;
+                               Component_Str : String)
+                               return Component_Class_Ptr is
+   begin
+      return Get_Component_Ptr (Self, To_CID (Component_Str));
+   end Get_Component_Ptr;
+
+   function Get_First_Component_Ptr (Self : Components_Ptr;
+                                     Component_Tag : Ada.Tags.Tag)
+                                     return Component_Class_Ptr is
+   begin
+      return Get_Component_Ptr (Self, Get_Component_ID (Self.all, Component_Tag));
+   end Get_First_Component_Ptr;
 
    function Has_Component (Self : in Components;
                            Component : in Component_Id) return Boolean is
    begin
       return Self.Components_Map.Contains (Component);
+   end Has_Component;
+
+   function Has_Component (Self : in Components;
+                           Component_Tag : in Ada.Tags.Tag) return Boolean is
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor)
+         )'Tag = Component_Tag then
+            return True;
+         end if;
+      end loop;
+      return False;
    end Has_Component;
 
    ------------------------------------------------------------------
@@ -209,13 +282,47 @@ package body ECS is
       return Result;
    end Get_Entities_Matching;
 
+   function Get_Entities_Matching
+     (Self : in Entity_Components; Required : Component_Tag_Vector.Vector)
+      return Entity_ID_Vector.Vector
+   is
+      Result : Entity_ID_Vector.Vector;
+      Checking_Entity : Entity_Id;
+      Matching : Boolean;
+   begin
+      --  ECS logic
+
+      for Entity_Cursor in Self.Iterate loop
+         Matching := True;
+         Checking_Entity := Entity_Map.Key (Entity_Cursor);
+
+         for Component_Cursor in Required.Iterate loop
+            if not (Has_Component(
+               Entity_Map.Element (Self, Checking_Entity).all,
+               Component_Tag_Vector.Element (
+                  Required, Component_Tag_Vector.To_Index (Component_Cursor)
+               )
+            )) then
+               Matching := False;
+               exit; --  break
+            end if;
+         end loop;
+
+         if Matching then
+            Result.Append (Checking_Entity);
+         end if;
+      end loop;
+
+      return Result;
+   end Get_Entities_Matching;
+
 --   procedure ExampleSystem (Entity_List_PO : in out Entity_Components_PO) is
 --      Entity_List : Entity_Components_Ptr;
---      Search_Component_IDs : constant Component_ID_Vector.Vector :=
---        To_CID ("Component_1") &
---        To_CID ("Component_2");
---      Single_Search_ID : constant Component_ID_Vector.Vector :=
---        Component_ID_Vector.To_Vector (To_CID ("Component"), 1);
+--      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+--        Component_1_T'Tag &
+--        Component_2_T'Tag;
+--      Single_Search_Tag : constant Component_Tag_Vector.Vector :=
+--        Component_Tag_Vector.To_Vector (Component_1_T'Tag, 1);
 --      Matched_Entities : Entity_ID_Vector.Vector;
 --      Component_List : Components_Ptr;
 --   begin
@@ -223,14 +330,15 @@ package body ECS is
 --      --  Wait for inclusive lock for entity list
 --      Entity_List_PO.Claim_Reading (Entity_List);
 --      --  Search for entities matching the list of components
---      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+--      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 --
 --      for EID of Matched_Entities loop
 --         Component_List := Get_Entity_Components (Entity_List.all, EID);
 --         declare
 --            --  Obtain a view to the component allowing direct modification
+--            Component_1_ID : Component_Id := Get_Component_ID (Component_List.all, Component_1_T'Tag);
 --            Component_1_C : Component_1_T renames Component_1_T (
---              Get_Component_Ptr (Component_List, "Component_1").all);
+--              Get_Component_Ptr (Component_List, Component_1_ID).all);
 --         begin
 --
 --            --  Read/update component as needed by interacting with it through the view
@@ -379,9 +487,9 @@ package body ECS is
 
    procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO) is
       Entity_List : Entity_Components_Ptr;
-      Search_Component_IDs : constant Component_ID_Vector.Vector :=
-        To_CID ("WidgetComponent") &
-        To_CID ("BackgroundColorComponent");
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Widget_Component_T'Tag &
+        Background_Color_Component_T'Tag;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
       BGColor : Color_t;
@@ -391,16 +499,16 @@ package body ECS is
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
       --  Search for entities matching the list of components
-      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List.all, EID);
          declare
             --  Obtain a view to the component allowing direct modification
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, "WidgetComponent").all);
+              Get_First_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
             BGColor_C : Background_Color_Component_T renames Background_Color_Component_T (
-              Get_Component_Ptr (Component_List, "BackgroundColorComponent").all);
+              Get_First_Component_Ptr (Component_List, Background_Color_Component_T'Tag).all);
          begin
             BGColor := BGColor_C.Background_Color;
 
