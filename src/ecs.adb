@@ -336,9 +336,8 @@ package body ECS is
 --         Component_List := Get_Entity_Components (Entity_List.all, EID);
 --         declare
 --            --  Obtain a view to the component allowing direct modification
---            Component_1_ID : Component_Id := Get_Component_ID (Component_List.all, Component_1_T'Tag);
 --            Component_1_C : Component_1_T renames Component_1_T (
---              Get_Component_Ptr (Component_List, Component_1_ID).all);
+--              Get_Component_Ptr (Component_List, Component_1_T'Tag).all);
 --         begin
 --
 --            --  Read/update component as needed by interacting with it through the view
