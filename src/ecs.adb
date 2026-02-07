@@ -1037,156 +1037,156 @@ package body ECS is
       Entity_List_PO.Release_Reading;
    end DoubleBufferFlagSystem;
 
-      -- ================================================================
--- 1. TERMINAL RESIZE SYSTEM
--- Detects when terminal size changes and marks layouts dirty
--- Call this FIRST in main loop
--- ================================================================
+   -- ================================================================
+   -- 1. TERMINAL RESIZE SYSTEM
+   -- Detects when terminal size changes and marks layouts dirty
+   -- Call this FIRST in main loop
+   -- ================================================================
 
-procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO) is
-   Entity_List           : Entity_Components_Ptr;
-   Search_Component_Tags : Component_Tag_Vector.Vector;
-   Matched_Entities      : Entity_ID_Vector.Vector;
+   procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List           : Entity_Components_Ptr;
+      Search_Component_Tags : Component_Tag_Vector.Vector;
+      Matched_Entities      : Entity_ID_Vector.Vector;
 
-   RI_Components : Components_Ptr;
-begin
-   --  Claim reading access
-   Entity_List_PO.Claim_Reading (Entity_List);
-   -- Find all entities with RenderInfo component
-   Search_Component_Tags.Append (Render_Info_Component_T'Tag);
-   Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
+      RI_Components : Components_Ptr;
+   begin
+      --  Claim reading access
+      Entity_List_PO.Claim_Reading (Entity_List);
+      -- Find all entities with RenderInfo component
+      Search_Component_Tags.Append (Render_Info_Component_T'Tag);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
-   for RI_Entity_ID of Matched_Entities loop
-      RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
-      declare
-         RI : Render_Info_Component_T renames Render_Info_Component_T (
-           Get_First_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
-      begin
+      for RI_Entity_ID of Matched_Entities loop
+         RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
+         declare
+            RI : Render_Info_Component_T renames Render_Info_Component_T (
+              Get_First_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
+         begin
 
-         -- Check if terminal size has changed
-         if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
-            RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
-         then
-            -- Terminal was resized! Mark all flex layouts as dirty
-            Mark_All_Flex_Dirty (Entity_List.all);
+            -- Check if terminal size has changed
+            if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
+              RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
+            then
+               -- Terminal was resized! Mark all flex layouts as dirty
+               Mark_All_Flex_Dirty (Entity_List.all);
 
-            -- Update previous size to current size
-            RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
-            RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
-         end if;
-      end;
-   end loop;
-   Entity_List_PO.Release_Reading;
-end TerminalResizeSystem;
+               -- Update previous size to current size
+               RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
+               RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
+            end if;
+         end;
+      end loop;
+      Entity_List_PO.Release_Reading;
+   end TerminalResizeSystem;
 
--- ================================================================
--- 2. MARK ALL FLEX DIRTY HELPER
--- Called when terminal resizes to trigger layout recalculation
--- ================================================================
+   -- ================================================================
+   -- 2. MARK ALL FLEX DIRTY HELPER
+   -- Called when terminal resizes to trigger layout recalculation
+   -- ================================================================
 
-procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components) is
-   Search_Component_Tags : Component_Tag_Vector.Vector;
-   Matched_Entities      : Entity_ID_Vector.Vector;
+   procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components) is
+      Search_Component_Tags : Component_Tag_Vector.Vector;
+      Matched_Entities      : Entity_ID_Vector.Vector;
 
-   Flex_Components : Components_Ptr;
-   Flex_C          : Flex_Layout_Component_T;
-begin
-   -- Find all entities with FlexLayoutComponent
-   Search_Component_Tags.Append (Flex_Layout_Component_T'Tag);
-   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_Tags);
+      Flex_Components : Components_Ptr;
+      Flex_C          : Flex_Layout_Component_T;
+   begin
+      -- Find all entities with FlexLayoutComponent
+      Search_Component_Tags.Append (Flex_Layout_Component_T'Tag);
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_Tags);
 
-   -- Mark each flex container as dirty
-   for Flex_Entity_ID of Matched_Entities loop
-      Flex_Components := Get_Entity_Components (Entity_List, Flex_Entity_ID);
-      Flex_C := Flex_Layout_Component_T (
-         Get_Component (Flex_Components.all, Flex_Layout_Component_T'Tag)
+      -- Mark each flex container as dirty
+      for Flex_Entity_ID of Matched_Entities loop
+         Flex_Components := Get_Entity_Components (Entity_List, Flex_Entity_ID);
+         Flex_C := Flex_Layout_Component_T (
+            Get_Component (Flex_Components.all, Flex_Layout_Component_T'Tag)
+         );
+
+         -- Set dirty flag to trigger layout recalculation
+         Flex_C.Is_Dirty := True;
+
+         -- Save updated component
+         Add_Component (Flex_Components.all, To_CID ("FlexLayoutComponent"), Flex_C);
+      end loop;
+   end Mark_All_Flex_Dirty;
+
+   -- ================================================================
+   -- 3. MOVE WIDGET - Manual Positioning API
+   -- Moves a widget to absolute screen coordinates
+   -- Automatically sets the widget to Absolute positioning mode
+   -- ================================================================
+
+   procedure Move_Widget (Entity_List : in out Entity_Components;
+                          Widget_Entity : Entity_Id;
+                          New_X : TUI_Width;
+                          New_Y : TUI_Height) is
+      Comps     : Components_Ptr;
+      Widget_ID : Component_Id;
+      Widget    : Widget_Component_T;
+      Pos_Mode  : Position_Mode_Component_T;
+   begin
+      Comps := Get_Entity_Components (Entity_List, Widget_Entity);
+
+      if Comps = null then
+         return;  -- Entity doesn't exist
+      end if;
+
+      if not Has_Component (Comps.all, Widget_Component_T'Tag) then
+         return;  -- Not a widget
+      end if;
+
+      -- Set position mode to Absolute (so FlexLayoutSystem skips it)
+      Pos_Mode.Mode := Absolute;
+      Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
+
+      -- Update widget position
+      Widget_ID := Get_Component_ID (Comps.all, Widget_Component_T'Tag);
+      Widget := Widget_Component_T (
+         Get_Component (Comps.all, Widget_ID)
+      );
+      Widget.Position_X := New_X;
+      Widget.Position_Y := New_Y;
+      Add_Component (Comps.all, Widget_ID, Widget);
+   end Move_Widget;
+
+   -- ================================================================
+   -- 4. MOVE WIDGET BY - Relative Movement
+   -- Moves a widget by a delta (useful for dragging, animation)
+   -- ================================================================
+
+   procedure Move_Widget_By (Entity_List : in out Entity_Components;
+                             Widget_Entity : Entity_Id;
+                             Delta_X : Integer;
+                             Delta_Y : Integer) is
+      Comps : Components_Ptr;
+      Widget : Widget_Component_T;
+      New_X : Integer;
+      New_Y : Integer;
+   begin
+      Comps := Get_Entity_Components (Entity_List, Widget_Entity);
+
+      if Comps = null then
+         return;
+      end if;
+
+      if not Has_Component (Comps.all, Widget_Component_T'Tag) then
+         return;
+      end if;
+
+      Widget := Widget_Component_T (
+         Get_Component (Comps.all, Widget_Component_T'Tag)
       );
 
-      -- Set dirty flag to trigger layout recalculation
-      Flex_C.Is_Dirty := True;
+      -- Calculate new position
+      New_X := Integer(Widget.Position_X) + Delta_X;
+      New_Y := Integer(Widget.Position_Y) + Delta_Y;
 
-      -- Save updated component
-      Add_Component (Flex_Components.all, To_CID ("FlexLayoutComponent"), Flex_C);
-   end loop;
-end Mark_All_Flex_Dirty;
+      -- Clamp to valid range (optional - prevents moving off-screen)
+      New_X := Integer'Max(Integer(TUI_Width'First), New_X);
+      New_Y := Integer'Max(Integer(TUI_Height'First), New_Y);
 
--- ================================================================
--- 3. MOVE WIDGET - Manual Positioning API
--- Moves a widget to absolute screen coordinates
--- Automatically sets the widget to Absolute positioning mode
--- ================================================================
-
-procedure Move_Widget (Entity_List : in out Entity_Components;
-                      Widget_Entity : Entity_Id;
-                      New_X : TUI_Width;
-                      New_Y : TUI_Height) is
-   Comps     : Components_Ptr;
-   Widget_ID : Component_Id;
-   Widget    : Widget_Component_T;
-   Pos_Mode  : Position_Mode_Component_T;
-begin
-   Comps := Get_Entity_Components (Entity_List, Widget_Entity);
-
-   if Comps = null then
-      return;  -- Entity doesn't exist
-   end if;
-
-   if not Has_Component (Comps.all, Widget_Component_T'Tag) then
-      return;  -- Not a widget
-   end if;
-
-   -- Set position mode to Absolute (so FlexLayoutSystem skips it)
-   Pos_Mode.Mode := Absolute;
-   Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
-
-   -- Update widget position
-   Widget_ID := Get_Component_ID (Comps.all, Widget_Component_T'Tag);
-   Widget := Widget_Component_T (
-      Get_Component (Comps.all, Widget_ID)
-   );
-   Widget.Position_X := New_X;
-   Widget.Position_Y := New_Y;
-   Add_Component (Comps.all, Widget_ID, Widget);
-end Move_Widget;
-
--- ================================================================
--- 4. MOVE WIDGET BY - Relative Movement
--- Moves a widget by a delta (useful for dragging, animation)
--- ================================================================
-
-procedure Move_Widget_By (Entity_List : in out Entity_Components;
-                         Widget_Entity : Entity_Id;
-                         Delta_X : Integer;
-                         Delta_Y : Integer) is
-   Comps : Components_Ptr;
-   Widget : Widget_Component_T;
-   New_X : Integer;
-   New_Y : Integer;
-begin
-   Comps := Get_Entity_Components (Entity_List, Widget_Entity);
-
-   if Comps = null then
-      return;
-   end if;
-
-   if not Has_Component (Comps.all, Widget_Component_T'Tag) then
-      return;
-   end if;
-
-   Widget := Widget_Component_T (
-      Get_Component (Comps.all, Widget_Component_T'Tag)
-   );
-
-   -- Calculate new position
-   New_X := Integer(Widget.Position_X) + Delta_X;
-   New_Y := Integer(Widget.Position_Y) + Delta_Y;
-
-   -- Clamp to valid range (optional - prevents moving off-screen)
-   New_X := Integer'Max(Integer(TUI_Width'First), New_X);
-   New_Y := Integer'Max(Integer(TUI_Height'First), New_Y);
-
-   -- Move to new position
-   Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
-end Move_Widget_By;
+      -- Move to new position
+      Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
+   end Move_Widget_By;
 
 end ECS;
