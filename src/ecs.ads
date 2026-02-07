@@ -5,6 +5,7 @@ with Ada.Strings.Unbounded.Hash;
 with Components; use Components;
 with IDs; use IDs;
 with Graphics; use Graphics;
+with Ada.Tags;
 
 package ECS is
 
@@ -35,11 +36,32 @@ package ECS is
                            Component : in Component_Id) return Component_T'Class;
 
    function Get_Component_Ptr (Self : Components_Ptr;
+                               Component_Key : Component_Id)
+                               return Component_Class_Ptr;
+
+   function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Str : String)
                                return Component_Class_Ptr;
 
+   function Get_Component_Ptr (Self : Components_Ptr;
+                               Component_Tag : in Ada.Tags.Tag)
+                               return Component_Class_Ptr;
+
+   function Get_Component (Self : in Components;
+                           Component_Tag : in Ada.Tags.Tag) return Component_T'Class;
+
+   function Get_Component_ID (Self : in Components;
+                              Component_Tag : in Ada.Tags.Tag) return Component_Id;
+
+   function Get_Component_IDs (Self : in Components;
+                               Component_Tag : in Ada.Tags.Tag)
+                               return Component_ID_Vector.Vector;
+
    function Has_Component (Self : in Components;
                            Component : in Component_Id) return Boolean;
+
+   function Has_Component (Self : in Components;
+                           Component_Tag : in Ada.Tags.Tag) return Boolean;
 
    function Hash_Entity (Key : Entity_Id) return Ada.Containers.Hash_Type;
 
@@ -74,6 +96,10 @@ package ECS is
 
    function Get_Entities_Matching
      (Self : in Entity_Components; Required : Component_ID_Vector.Vector)
+      return Entity_ID_Vector.Vector;
+
+   function Get_Entities_Matching
+     (Self : in Entity_Components; Required : Component_Tag_Vector.Vector)
       return Entity_ID_Vector.Vector;
 
    --  Built-in systems

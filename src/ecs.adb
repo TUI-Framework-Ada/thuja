@@ -1,9 +1,10 @@
 --ecs.adb
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
-with IDs; use type IDs.Component_ID_Vector.Vector;
+with IDs; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Wide_Wide_Text_IO;
 with Ada.Characters.Conversions;
+with Ada.Tags; use Ada.Tags;
 
 package body ECS is
 
@@ -35,18 +36,90 @@ package body ECS is
       return Self.Components_Map (Component);
    end Get_Component;
 
+   function Get_Component (Self : in Components;
+                           Component_Tag : in Ada.Tags.Tag)
+                           return Component_T'Class is
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor))'Tag = Component_Tag
+         then
+            return Self.Components_Map.Element (
+               Component_Map_Pkg.Key (Component_Cursor));
+         end if;
+      end loop;
+      raise Constraint_Error with "No such component with tag ";
+   end Get_Component;
+
+   function Get_Component_ID (Self : in Components;
+                              Component_Tag : in Ada.Tags.Tag)
+                              return Component_Id is
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor))'Tag = Component_Tag
+         then
+            return Component_Map_Pkg.Key (Component_Cursor);
+         end if;
+      end loop;
+      raise Constraint_Error with "No such component with tag ";
+   end Get_Component_ID;
+
+   function Get_Component_IDs (Self : in Components;
+                               Component_Tag : in Ada.Tags.Tag)
+                               return Component_ID_Vector.Vector is
+      Result : Component_ID_Vector.Vector;
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor))'Tag = Component_Tag
+         then
+            Result.Append (Component_Map_Pkg.Key (Component_Cursor));
+         end if;
+      end loop;
+
+      return Result;
+   end Get_Component_IDs;
+
    function Get_Component_Ptr (Self : Components_Ptr;
-                               Component_Str : String)
+                               Component_Key : Component_Id)
                                return Component_Class_Ptr is
       Map : Component_Map renames Self.all.Components_Map;
    begin
-      return Map.Reference (To_CID (Component_Str)).Element;
+      return Map.Reference (Component_Key).Element;
+   end Get_Component_Ptr;
+
+   function Get_Component_Ptr (Self : Components_Ptr;
+                               Component_Str : String)
+                               return Component_Class_Ptr is
+   begin
+      return Get_Component_Ptr (Self, To_CID (Component_Str));
+   end Get_Component_Ptr;
+
+   function Get_Component_Ptr (Self : Components_Ptr;
+                                     Component_Tag : Ada.Tags.Tag)
+                                     return Component_Class_Ptr is
+   begin
+      return Get_Component_Ptr (Self, Get_Component_ID (Self.all, Component_Tag));
    end Get_Component_Ptr;
 
    function Has_Component (Self : in Components;
                            Component : in Component_Id) return Boolean is
    begin
       return Self.Components_Map.Contains (Component);
+   end Has_Component;
+
+   function Has_Component (Self : in Components;
+                           Component_Tag : in Ada.Tags.Tag) return Boolean is
+   begin
+      for Component_Cursor in Self.Components_Map.Iterate loop
+         if Self.Components_Map.Element (
+            Component_Map_Pkg.Key (Component_Cursor)
+         )'Tag = Component_Tag then
+            return True;
+         end if;
+      end loop;
+      return False;
    end Has_Component;
 
    ------------------------------------------------------------------
@@ -209,13 +282,47 @@ package body ECS is
       return Result;
    end Get_Entities_Matching;
 
+   function Get_Entities_Matching
+     (Self : in Entity_Components; Required : Component_Tag_Vector.Vector)
+      return Entity_ID_Vector.Vector
+   is
+      Result : Entity_ID_Vector.Vector;
+      Checking_Entity : Entity_Id;
+      Matching : Boolean;
+   begin
+      --  ECS logic
+
+      for Entity_Cursor in Self.Iterate loop
+         Matching := True;
+         Checking_Entity := Entity_Map.Key (Entity_Cursor);
+
+         for Component_Cursor in Required.Iterate loop
+            if not (Has_Component(
+               Entity_Map.Element (Self, Checking_Entity).all,
+               Component_Tag_Vector.Element (
+                  Required, Component_Tag_Vector.To_Index (Component_Cursor)
+               )
+            )) then
+               Matching := False;
+               exit; --  break
+            end if;
+         end loop;
+
+         if Matching then
+            Result.Append (Checking_Entity);
+         end if;
+      end loop;
+
+      return Result;
+   end Get_Entities_Matching;
+
 --   procedure ExampleSystem (Entity_List_PO : in out Entity_Components_PO) is
 --      Entity_List : Entity_Components_Ptr;
---      Search_Component_IDs : constant Component_ID_Vector.Vector :=
---        To_CID ("Component_1") &
---        To_CID ("Component_2");
---      Single_Search_ID : constant Component_ID_Vector.Vector :=
---        Component_ID_Vector.To_Vector (To_CID ("Component"), 1);
+--      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+--        Component_1_T'Tag &
+--        Component_2_T'Tag;
+--      Single_Search_Tag : constant Component_Tag_Vector.Vector :=
+--        Component_Tag_Vector.To_Vector (Component_1_T'Tag, 1);
 --      Matched_Entities : Entity_ID_Vector.Vector;
 --      Component_List : Components_Ptr;
 --   begin
@@ -223,14 +330,14 @@ package body ECS is
 --      --  Wait for inclusive lock for entity list
 --      Entity_List_PO.Claim_Reading (Entity_List);
 --      --  Search for entities matching the list of components
---      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+--      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 --
 --      for EID of Matched_Entities loop
 --         Component_List := Get_Entity_Components (Entity_List.all, EID);
 --         declare
 --            --  Obtain a view to the component allowing direct modification
 --            Component_1_C : Component_1_T renames Component_1_T (
---              Get_Component_Ptr (Component_List, "Component_1").all);
+--              Get_Component_Ptr (Component_List, Component_1_T'Tag).all);
 --         begin
 --
 --            --  Read/update component as needed by interacting with it through the view
@@ -256,9 +363,9 @@ package body ECS is
 -- that are set to Absolute, Relative, or Fixed positioning modes.
    procedure FlexLayoutSystem (Entity_List_PO : in out Entity_Components_PO) is
       Entity_List : Entity_Components_Ptr;
-      Search_Component_IDs : constant Component_ID_Vector.Vector :=
-        To_CID ("FlexLayoutComponent") &
-        To_CID ("WidgetComponent");
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Flex_Layout_Component_T'Tag &
+        Widget_Component_T'Tag;
       Matched_Entities     : Entity_ID_Vector.Vector;
 
       -- Containers for the Parent (The Flex Container)
@@ -280,19 +387,19 @@ package body ECS is
    begin
 
       Entity_List_PO.Claim_Reading (Entity_List);
-      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
       for Parent_EID of Matched_Entities loop
          Parent_Comps := Get_Entity_Components (Entity_List.all, Parent_EID);
          declare
             --  Obtain writable view of the parent's flex-layout component
             Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
-              Get_Component_Ptr (Parent_Comps, "FlexLayoutComponent").all);
+              Get_Component_Ptr (Parent_Comps, Flex_Layout_Component_T'Tag).all);
          begin
 
             --  Obtain read-only copy of the parent's widget component
             Parent_Widget_C := Widget_Component_T (
-               Get_Component (Parent_Comps.all, To_CID ("WidgetComponent"))
+               Get_Component (Parent_Comps.all, Widget_Component_T'Tag)
             );
 
             -- 1. Sync Flex Container size with the Parent Widget size
@@ -313,7 +420,7 @@ package body ECS is
                   Child_Comps := Get_Entity_Components (Entity_List.all, Child_Id);
 
                   if Child_Comps /= null and then
-                    Has_Component (Child_Comps.all, To_CID ("WidgetComponent")) then
+                    Has_Component (Child_Comps.all, Widget_Component_T'Tag) then
 
                      -- ========================================================
                      -- NEW: Check if this child should be positioned by flex
@@ -323,10 +430,10 @@ package body ECS is
                      Skip_Child := False;
 
                      -- Step 2: Check if it has a PositionMode component
-                     if Has_Component (Child_Comps.all, To_CID ("PositionMode")) then
+                     if Has_Component (Child_Comps.all, Position_Mode_Component_T'Tag) then
                         --  Obtain read-only copy of component
                         Child_Pos_Mode := Position_Mode_Component_T (
-                           Get_Component (Child_Comps.all, To_CID ("PositionMode"))
+                           Get_Component (Child_Comps.all, Position_Mode_Component_T'Tag)
                         );
 
                         -- Step 3: If mode is not Flex, set Skip_Child to True
@@ -340,7 +447,7 @@ package body ECS is
                         declare
                            --  Obtain a writable view of the child's widget
                            Child_Widget_C : Widget_Component_T renames Widget_Component_T (
-                             Get_Component_Ptr (Child_Comps, "WidgetComponent").all);
+                             Get_Component_Ptr (Child_Comps, Widget_Component_T'Tag).all);
                         begin
 
                         -- FIX: Use Integer math first to allow 0 offsets, then cast to TUI type
@@ -379,9 +486,9 @@ package body ECS is
 
    procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO) is
       Entity_List : Entity_Components_Ptr;
-      Search_Component_IDs : constant Component_ID_Vector.Vector :=
-        To_CID ("WidgetComponent") &
-        To_CID ("BackgroundColorComponent");
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Widget_Component_T'Tag &
+        Background_Color_Component_T'Tag;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
       BGColor : Color_t;
@@ -391,16 +498,16 @@ package body ECS is
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
       --  Search for entities matching the list of components
-      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List.all, EID);
          declare
             --  Obtain a view to the component allowing direct modification
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, "WidgetComponent").all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
             BGColor_C : Background_Color_Component_T renames Background_Color_Component_T (
-              Get_Component_Ptr (Component_List, "BackgroundColorComponent").all);
+              Get_Component_Ptr (Component_List, Background_Color_Component_T'Tag).all);
          begin
             BGColor := BGColor_C.Background_Color;
 
@@ -424,9 +531,9 @@ package body ECS is
 
    procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO) is
       Entity_List : Entity_Components_Ptr;
-      Search_Component_IDs : constant Component_ID_Vector.Vector :=
-        To_CID ("WidgetComponent") &
-        To_CID ("TextComponent");
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Widget_Component_T'Tag &
+        Text_Component_T'Tag;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
       Pos_W : TUI_Width;
@@ -439,7 +546,7 @@ package body ECS is
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
 --      --  Search for entities matching the list of components
-      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List.all, EID);
@@ -447,10 +554,10 @@ package body ECS is
          declare
             --  Obtain a view to the component allowing direct modification
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, "WidgetComponent").all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
 
             Text_C : Text_Component_T renames Text_Component_T (
-              Get_Component_Ptr (Component_List, "TextComponent").all);
+              Get_Component_Ptr (Component_List, Text_Component_T'Tag).all);
          begin
             Text := Text_C.Text;
 
@@ -539,18 +646,18 @@ package body ECS is
                Entity_List.all, Child_Entity_ID
                                                           );
             Child_Widget := Widget_Component_T (
-               Get_Component (Child_Component_List.all, To_CID ("WidgetComponent"))
+               Get_Component (Child_Component_List.all, Widget_Component_T'Tag)
                                                );
             --  Loop again over the children
             RecursiveBufferCopy (Framebuffer, Parent, Child_Widget);
          end loop;
       end RecursiveBufferCopy;
 
-      RI_Component_IDs : constant Component_ID_Vector.Vector :=
-        Component_ID_Vector.To_Vector (To_CID ("RenderInfo"), 1);
-      Root_Component_IDs : constant Component_ID_Vector.Vector :=
-        To_CID ("RootWidget") &
-        To_CID ("WidgetComponent");
+      RI_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
+      Root_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Root_Widget_Component_T'Tag &
+        Widget_Component_T'Tag;
       Matched_RIs : Entity_ID_Vector.Vector;
       Matched_Roots : Entity_ID_Vector.Vector;
       RI_Components : Components_Ptr;
@@ -561,9 +668,9 @@ package body ECS is
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
       --  Search for entities with Render_Info_Component_T
-      Matched_RIs := Get_Entities_Matching (Entity_List.all, RI_Component_IDs);
+      Matched_RIs := Get_Entities_Matching (Entity_List.all, RI_Component_Tags);
       --  Search for entities with Root_- and Widget_Component_T
-      Matched_Roots := Get_Entities_Matching (Entity_List.all, Root_Component_IDs);
+      Matched_Roots := Get_Entities_Matching (Entity_List.all, Root_Component_Tags);
 
       --  For each entity with RenderInfo
       for RI_Entity_ID of Matched_RIs loop
@@ -571,7 +678,7 @@ package body ECS is
          declare
             --  Obtain a view to the render info
             RenderInfo_C : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_Component_Ptr (RI_Components, "RenderInfo").all);
+              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
          begin
             --  Read directly without locking, since we know the flag is only changed by a system that runs later in the same thread
             RenderInfo_C.Drawing_FB.all.Read (Rendering_To_FB_2);
@@ -582,7 +689,7 @@ package body ECS is
                declare
                   --  Obtain a view to the component allowing direct modification
                   Root : Widget_Component_T renames Widget_Component_T (
-                    Get_Component_Ptr (Root_Components, "WidgetComponent").all);
+                    Get_Component_Ptr (Root_Components, Widget_Component_T'Tag).all);
                begin
 
                   --  For it and its children
@@ -644,8 +751,8 @@ package body ECS is
 
       --  Real stuff begins
       Entity_List : Entity_Components_Ptr;
-      Search_Components : constant Component_ID_Vector.Vector :=
-        Component_ID_Vector.To_Vector (To_CID ("RenderInfo"), 1);
+      Search_Components : constant Component_Tag_Vector.Vector :=
+        Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       --  Pointer to Components instance
       RI_Component_List : Components_Ptr;
@@ -674,7 +781,7 @@ package body ECS is
             declare
                --  Obtain a view to the component allowing direct modification
                RI : Render_Info_Component_T renames Render_Info_Component_T (
-                 Get_Component_Ptr (RI_Component_List, "RenderInfo").all);
+                 Get_Component_Ptr (RI_Component_List, Render_Info_Component_T'Tag).all);
             begin
                RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
                -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
@@ -727,27 +834,27 @@ package body ECS is
    ---------------------------------------------------------------------------
 
    procedure ProgressBarRenderSystem (Entity_List_PO : in out Entity_Components_PO) is
-      Entity_List          : Entity_Components_Ptr;
-      Search_Component_IDs : constant Component_ID_Vector.Vector :=
-                             To_CID ("WidgetComponent") &
-                             To_CID ("ProgressBarComponent");
-      Matched_Entities     : Entity_ID_Vector.Vector;
-      Comp_Ptr             : Components_Ptr;
-      BG_C                 : Background_Color_Component_T;
-      Px                   : Pixel_t;
-      Bar_Width            : Natural;
-      Filled_Cells         : Natural;
-      Percent              : Natural;
-      Percent_Str          : String (1 .. 4);  --  "XXX%" or " XX%" etc.
-      Pos_Index            : Natural;
-      Current_Char         : Character;
-      Has_BG               : Boolean;
+      Entity_List           : Entity_Components_Ptr;
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+                             Widget_Component_T'Tag &
+                             Progress_Bar_Component_T'Tag;
+      Matched_Entities      : Entity_ID_Vector.Vector;
+      Comp_Ptr              : Components_Ptr;
+      BG_C                  : Background_Color_Component_T;
+      Px                    : Pixel_t;
+      Bar_Width             : Natural;
+      Filled_Cells          : Natural;
+      Percent               : Natural;
+      Percent_Str           : String (1 .. 4);  --  "XXX%" or " XX%" etc.
+      Pos_Index             : Natural;
+      Current_Char          : Character;
+      Has_BG                : Boolean;
    begin
 
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
       --  Query for entities with WidgetComponent and ProgressBarComponent
-      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
       for EID of Matched_Entities loop
          Comp_Ptr := Get_Entity_Components (Entity_List.all, EID);
@@ -755,17 +862,17 @@ package body ECS is
          declare
             --  Get components
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Comp_Ptr, "WidgetComponent").all);
+              Get_Component_Ptr (Comp_Ptr, Widget_Component_T'Tag).all);
             PB_C : Progress_Bar_Component_T renames Progress_Bar_Component_T (
-              Get_Component_Ptr (Comp_Ptr, "ProgressBarComponent").all);
+              Get_Component_Ptr (Comp_Ptr, Progress_Bar_Component_T'Tag).all);
          begin
 
             --  Check for optional background color component
-            Has_BG := Has_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"));
+            Has_BG := Has_Component (Comp_Ptr.all, Background_Color_Component_T'Tag);
             if Has_BG then
                --  BG_C will never be updated, so this read-only copy is fine
                BG_C := Background_Color_Component_T (
-                  Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent")));
+                  Get_Component (Comp_Ptr.all, Background_Color_Component_T'Tag));
             end if;
 
             --  Calculate bar dimensions
@@ -899,8 +1006,8 @@ package body ECS is
    --  Should be called after all other systems
    procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO) is
       Entity_List : Entity_Components_Ptr;
-      Search_Component_IDs : constant Component_ID_Vector.Vector :=
-        Component_ID_Vector.To_Vector (To_CID ("RenderInfo"), 1);
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
       Drawing_From_FB_1 : Boolean;
@@ -909,7 +1016,7 @@ package body ECS is
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
 --      --  Search for entities with render info
-      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
       for EID of Matched_Entities loop
          Component_List := Get_Entity_Components (Entity_List.all, EID);
@@ -917,7 +1024,7 @@ package body ECS is
          declare
             --  Obtain a view to the component allowing direct modification
             Render_Info : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_Component_Ptr (Component_List, "RenderInfo").all);
+              Get_Component_Ptr (Component_List, Render_Info_Component_T'Tag).all);
          begin
             Render_Info.Drawing_FB.all.Wait (Drawing_From_FB_1);
             Render_Info.Drawing_FB.all.Swap;
@@ -929,154 +1036,158 @@ package body ECS is
       Entity_List_PO.Release_Reading;
    end DoubleBufferFlagSystem;
 
-      -- ================================================================
--- 1. TERMINAL RESIZE SYSTEM
--- Detects when terminal size changes and marks layouts dirty
--- Call this FIRST in main loop
--- ================================================================
+   -- ================================================================
+   -- 1. TERMINAL RESIZE SYSTEM
+   -- Detects when terminal size changes and marks layouts dirty
+   -- Call this FIRST in main loop
+   -- ================================================================
 
-procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO) is
-   Entity_List          : Entity_Components_Ptr;
-   Search_Component_IDs : Component_ID_Vector.Vector;
-   Matched_Entities     : Entity_ID_Vector.Vector;
+   procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List           : Entity_Components_Ptr;
+      Search_Component_Tags : Component_Tag_Vector.Vector;
+      Matched_Entities      : Entity_ID_Vector.Vector;
 
-   RI_Components : Components_Ptr;
-begin
-   --  Claim reading access
-   Entity_List_PO.Claim_Reading (Entity_List);
-   -- Find all entities with RenderInfo component
-   Search_Component_IDs.Append (To_CID ("RenderInfo"));
-   Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
+      RI_Components : Components_Ptr;
+   begin
+      --  Claim reading access
+      Entity_List_PO.Claim_Reading (Entity_List);
+      -- Find all entities with RenderInfo component
+      Search_Component_Tags.Append (Render_Info_Component_T'Tag);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
 
-   for RI_Entity_ID of Matched_Entities loop
-      RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
-      declare
-         RI : Render_Info_Component_T renames Render_Info_Component_T (
-           Get_Component_Ptr (RI_Components, "RenderInfo").all);
-      begin
+      for RI_Entity_ID of Matched_Entities loop
+         RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
+         declare
+            RI : Render_Info_Component_T renames Render_Info_Component_T (
+              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
+         begin
 
-         -- Check if terminal size has changed
-         if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
-            RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
-         then
-            -- Terminal was resized! Mark all flex layouts as dirty
-            Mark_All_Flex_Dirty (Entity_List.all);
+            -- Check if terminal size has changed
+            if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
+              RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
+            then
+               -- Terminal was resized! Mark all flex layouts as dirty
+               Mark_All_Flex_Dirty (Entity_List.all);
 
-            -- Update previous size to current size
-            RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
-            RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
-         end if;
-      end;
-   end loop;
-   Entity_List_PO.Release_Reading;
-end TerminalResizeSystem;
+               -- Update previous size to current size
+               RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
+               RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
+            end if;
+         end;
+      end loop;
+      Entity_List_PO.Release_Reading;
+   end TerminalResizeSystem;
 
--- ================================================================
--- 2. MARK ALL FLEX DIRTY HELPER
--- Called when terminal resizes to trigger layout recalculation
--- ================================================================
+   -- ================================================================
+   -- 2. MARK ALL FLEX DIRTY HELPER
+   -- Called when terminal resizes to trigger layout recalculation
+   -- ================================================================
 
-procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components) is
-   Search_Component_IDs : Component_ID_Vector.Vector;
-   Matched_Entities     : Entity_ID_Vector.Vector;
+   procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components) is
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Component_Tag_Vector.To_Vector (Flex_Layout_Component_T'Tag, 1);
+      Matched_Entities      : Entity_ID_Vector.Vector;
 
-   Flex_Components : Components_Ptr;
-   Flex_C          : Flex_Layout_Component_T;
-begin
-   -- Find all entities with FlexLayoutComponent
-   Search_Component_IDs.Append (To_CID ("FlexLayoutComponent"));
-   Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_IDs);
+      Flex_Components : Components_Ptr;
+   begin
+      -- Find all entities with FlexLayoutComponent
+      Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_Tags);
 
-   -- Mark each flex container as dirty
-   for Flex_Entity_ID of Matched_Entities loop
-      Flex_Components := Get_Entity_Components (Entity_List, Flex_Entity_ID);
-      Flex_C := Flex_Layout_Component_T (
-         Get_Component (Flex_Components.all, To_CID ("FlexLayoutComponent"))
+      -- Mark each flex container as dirty
+      for Flex_Entity_ID of Matched_Entities loop
+         Flex_Components := Get_Entity_Components (Entity_List, Flex_Entity_ID);
+         declare
+            --  Obtain a view to the component allowing direct modification
+            Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
+              Get_Component_Ptr (Flex_Components, Flex_Layout_Component_T'Tag).all);
+         begin
+            Flex_C := Flex_Layout_Component_T (
+               Get_Component (Flex_Components.all, Flex_Layout_Component_T'Tag)
+            );
+
+            -- Set dirty flag to trigger layout recalculation
+            Flex_C.Is_Dirty := True;
+         end;
+      end loop;
+   end Mark_All_Flex_Dirty;
+
+   -- ================================================================
+   -- 3. MOVE WIDGET - Manual Positioning API
+   -- Moves a widget to absolute screen coordinates
+   -- Automatically sets the widget to Absolute positioning mode
+   -- ================================================================
+
+   procedure Move_Widget (Entity_List : in out Entity_Components;
+                          Widget_Entity : Entity_Id;
+                          New_X : TUI_Width;
+                          New_Y : TUI_Height) is
+      Comps     : Components_Ptr;
+      Widget_ID : Component_Id;
+      Widget    : Widget_Component_T;
+      Pos_Mode  : Position_Mode_Component_T;
+   begin
+      Comps := Get_Entity_Components (Entity_List, Widget_Entity);
+
+      if Comps = null then
+         return;  -- Entity doesn't exist
+      end if;
+
+      if not Has_Component (Comps.all, Widget_Component_T'Tag) then
+         return;  -- Not a widget
+      end if;
+
+      -- Set position mode to Absolute (so FlexLayoutSystem skips it)
+      Pos_Mode.Mode := Absolute;
+      Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
+
+      -- Update widget position
+      Widget_ID := Get_Component_ID (Comps.all, Widget_Component_T'Tag);
+      Widget := Widget_Component_T (
+         Get_Component (Comps.all, Widget_ID)
+      );
+      Widget.Position_X := New_X;
+      Widget.Position_Y := New_Y;
+      Add_Component (Comps.all, Widget_ID, Widget);
+   end Move_Widget;
+
+   -- ================================================================
+   -- 4. MOVE WIDGET BY - Relative Movement
+   -- Moves a widget by a delta (useful for dragging, animation)
+   -- ================================================================
+
+   procedure Move_Widget_By (Entity_List : in out Entity_Components;
+                             Widget_Entity : Entity_Id;
+                             Delta_X : Integer;
+                             Delta_Y : Integer) is
+      Comps : Components_Ptr;
+      Widget : Widget_Component_T;
+      New_X : Integer;
+      New_Y : Integer;
+   begin
+      Comps := Get_Entity_Components (Entity_List, Widget_Entity);
+
+      if Comps = null then
+         return;
+      end if;
+
+      if not Has_Component (Comps.all, Widget_Component_T'Tag) then
+         return;
+      end if;
+
+      Widget := Widget_Component_T (
+         Get_Component (Comps.all, Widget_Component_T'Tag)
       );
 
-      -- Set dirty flag to trigger layout recalculation
-      Flex_C.Is_Dirty := True;
+      -- Calculate new position
+      New_X := Integer(Widget.Position_X) + Delta_X;
+      New_Y := Integer(Widget.Position_Y) + Delta_Y;
 
-      -- Save updated component
-      Add_Component (Flex_Components.all, To_CID ("FlexLayoutComponent"), Flex_C);
-   end loop;
-end Mark_All_Flex_Dirty;
+      -- Clamp to valid range (optional - prevents moving off-screen)
+      New_X := Integer'Max(Integer(TUI_Width'First), New_X);
+      New_Y := Integer'Max(Integer(TUI_Height'First), New_Y);
 
--- ================================================================
--- 3. MOVE WIDGET - Manual Positioning API
--- Moves a widget to absolute screen coordinates
--- Automatically sets the widget to Absolute positioning mode
--- ================================================================
-
-procedure Move_Widget (Entity_List : in out Entity_Components;
-                      Widget_Entity : Entity_Id;
-                      New_X : TUI_Width;
-                      New_Y : TUI_Height) is
-   Comps    : Components_Ptr;
-   Widget   : Widget_Component_T;
-   Pos_Mode : Position_Mode_Component_T;
-begin
-   Comps := Get_Entity_Components (Entity_List, Widget_Entity);
-
-   if Comps = null then
-      return;  -- Entity doesn't exist
-   end if;
-
-   if not Has_Component (Comps.all, To_CID ("WidgetComponent")) then
-      return;  -- Not a widget
-   end if;
-
-   -- Set position mode to Absolute (so FlexLayoutSystem skips it)
-   Pos_Mode.Mode := Absolute;
-   Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
-
-   -- Update widget position
-   Widget := Widget_Component_T (
-      Get_Component (Comps.all, To_CID ("WidgetComponent"))
-   );
-   Widget.Position_X := New_X;
-   Widget.Position_Y := New_Y;
-   Add_Component (Comps.all, To_CID ("WidgetComponent"), Widget);
-end Move_Widget;
-
--- ================================================================
--- 4. MOVE WIDGET BY - Relative Movement
--- Moves a widget by a delta (useful for dragging, animation)
--- ================================================================
-
-procedure Move_Widget_By (Entity_List : in out Entity_Components;
-                         Widget_Entity : Entity_Id;
-                         Delta_X : Integer;
-                         Delta_Y : Integer) is
-   Comps : Components_Ptr;
-   Widget : Widget_Component_T;
-   New_X : Integer;
-   New_Y : Integer;
-begin
-   Comps := Get_Entity_Components (Entity_List, Widget_Entity);
-
-   if Comps = null then
-      return;
-   end if;
-
-   if not Has_Component (Comps.all, To_CID ("WidgetComponent")) then
-      return;
-   end if;
-
-   Widget := Widget_Component_T (
-      Get_Component (Comps.all, To_CID ("WidgetComponent"))
-   );
-
-   -- Calculate new position
-   New_X := Integer(Widget.Position_X) + Delta_X;
-   New_Y := Integer(Widget.Position_Y) + Delta_Y;
-
-   -- Clamp to valid range (optional - prevents moving off-screen)
-   New_X := Integer'Max(Integer(TUI_Width'First), New_X);
-   New_Y := Integer'Max(Integer(TUI_Height'First), New_Y);
-
-   -- Move to new position
-   Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
-end Move_Widget_By;
+      -- Move to new position
+      Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
+   end Move_Widget_By;
 
 end ECS;
