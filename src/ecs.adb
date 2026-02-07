@@ -1085,28 +1085,31 @@ package body ECS is
    -- ================================================================
 
    procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components) is
-      Search_Component_Tags : Component_Tag_Vector.Vector;
+      Search_Component_Tags : Component_Tag_Vector.Vector :=
+        Component_Tag_Vector.To_Vector (Flex_Layout_Component_T'Tag);
       Matched_Entities      : Entity_ID_Vector.Vector;
 
       Flex_Components : Components_Ptr;
       Flex_C          : Flex_Layout_Component_T;
    begin
       -- Find all entities with FlexLayoutComponent
-      Search_Component_Tags.Append (Flex_Layout_Component_T'Tag);
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_Tags);
 
       -- Mark each flex container as dirty
       for Flex_Entity_ID of Matched_Entities loop
          Flex_Components := Get_Entity_Components (Entity_List, Flex_Entity_ID);
-         Flex_C := Flex_Layout_Component_T (
-            Get_Component (Flex_Components.all, Flex_Layout_Component_T'Tag)
-         );
+         declare
+            --  Obtain a view to the component allowing direct modification
+            Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
+              Get_First_Component_Ptr (Flex_Components, Flex_Layout_Component_T'Tag).all);
+         begin
+            Flex_C := Flex_Layout_Component_T (
+               Get_Component (Flex_Components.all, Flex_Layout_Component_T'Tag)
+            );
 
-         -- Set dirty flag to trigger layout recalculation
-         Flex_C.Is_Dirty := True;
-
-         -- Save updated component
-         Add_Component (Flex_Components.all, To_CID ("FlexLayoutComponent"), Flex_C);
+            -- Set dirty flag to trigger layout recalculation
+            Flex_C.Is_Dirty := True;
+         end;
       end loop;
    end Mark_All_Flex_Dirty;
 
