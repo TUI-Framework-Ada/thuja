@@ -957,24 +957,23 @@ begin
 
    for RI_Entity_ID of Matched_Entities loop
       RI_Components := Get_Entity_Components (Entity_List, RI_Entity_ID);
-      RI := Render_Info_Component_T (
-         Get_Component (RI_Components.all, To_CID ("RenderInfo"))
-      );
+      declare
+         RI : Render_Info_Component_T renames Render_Info_Component_T (
+           Get_Component_Ptr (RI_Components, "RenderInfo").all);
+      begin
 
-      -- Check if terminal size has changed
-      if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
-         RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
-      then
-         -- Terminal was resized! Mark all flex layouts as dirty
-         Mark_All_Flex_Dirty (Entity_List);
+         -- Check if terminal size has changed
+         if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
+            RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
+         then
+            -- Terminal was resized! Mark all flex layouts as dirty
+            Mark_All_Flex_Dirty (Entity_List);
 
-         -- Update previous size to current size
-         RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
-         RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
-
-         -- Save updated component
-         Add_Component (RI_Components.all, To_CID ("RenderInfo"), RI);
-      end if;
+            -- Update previous size to current size
+            RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
+            RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
+         end if;
+      end;
    end loop;
    Entity_List_PO.Release_Reading;
 end TerminalResizeSystem;
