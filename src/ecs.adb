@@ -1085,7 +1085,7 @@ package body ECS is
 
    procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components) is
       Search_Component_Tags : Component_Tag_Vector.Vector :=
-        Component_Tag_Vector.To_Vector (Flex_Layout_Component_T'Tag);
+        Component_Tag_Vector.To_Vector (Flex_Layout_Component_T'Tag, 1);
       Matched_Entities      : Entity_ID_Vector.Vector;
 
       Flex_Components : Components_Ptr;
