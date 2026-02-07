@@ -7,6 +7,7 @@ with Ada.Characters.Conversions;
 
 package body ECS is
 
+      -- Conversion removed here and moved into "Convert" function in BufferDrawSystem
       -- function ConvertWW (S : String) return Wide_Wide_String 
       -- renames Ada.Characters.Conversions.To_Wide_Wide_String;
 
@@ -602,17 +603,11 @@ end FlexLayoutSystem;
    -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
    -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
+      -- Shorthand for Graphics file
+      package GFX renames Graphics;
+      
       --  Both pixel rendering and ANSI codes
       CSI : constant String := Character'Val (16#1B#) & '[';
-      Hide_Cursor  : constant String := CSI & "?25l"; -- not hiding cursor?
-      Show_Cursor  : constant String := CSI & "?25h"; -- unsure if show is occuring
-      Save_Pos     : constant String := CSI & "s";
-      Restore_Pos  : constant String := CSI & "u";
-      --Reset_SGR    : constant String := CSI & "0m"; -- Resets colors and styles
-
-      -- Helper to bundle cleanup commands
-      --Cleanup_Str  : constant Wide_Wide_String :=
-      --   Ada.Characters.Conversions.To_Wide_Wide_String(Reset_SGR & Restore_Pos & Show_Cursor);
 
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
       function FG (P : Pixel_t) return String is
@@ -663,14 +658,14 @@ end FlexLayoutSystem;
       type Drawing_Ptr is access all Buffer_T;
       Drawing : Drawing_Ptr;
    begin
-
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
       --  Search for entities matching the list of components
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
 
       -- PRE-RENDER: Hide the cursor and save its current position
-      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Hide_Cursor & Save_Pos));
+      GFX.Hide_Cursor;
+      GFX.Save_Cursor_Position;
 
       -- PROTECTED RENDER LOOP
       begin
@@ -711,17 +706,18 @@ end FlexLayoutSystem;
 
       exception
          when others =>
-            -- CRASH-ClEANUP: restore position, show cursor
-            Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
-            Ada.Wide_Wide_Text_IO.Flush;
+            -- Exception (Crash-Cleanup): restore position, show cursor, reset styling and then flush
+            GFX.Restore_Cursor_Position;
+            GFX.Show_Cursor;
+            GFX.Reset_Styling;
+            Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
             raise; -- Rethrow the error for debug just incase
       end;
-
-      -- POST-RENDER: Normal cleanup, reset text, restore position, show cursor
-      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
-
-      -- Ensure commands are sent to the hardware immediately
-      Ada.Wide_Wide_Text_IO.Flush;
+      -- POST-RENDER (Normal-Cleanup) Restore cursor pos, show cursor, reset styling and then flush
+      GFX.Restore_Cursor_Position;
+      GFX.Show_Cursor;
+      GFX.Reset_Styling;
+      Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
 
       --  Release lock on entity list
       Entity_List_PO.Release_Reading;

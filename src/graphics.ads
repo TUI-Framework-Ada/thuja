@@ -110,6 +110,12 @@ package Graphics is
    --  Shows the terminal cursor
    procedure Show_Cursor;
 
+   --  Saves current position of cursor
+   procedure Save_Cursor_Position;
+
+   --  Restores saved position to cursor
+   procedure Restore_Cursor_Position;
+
    --  Resets terminal to normal state (shows cursor, resets colors).
    --  Call this before program exit.
    procedure Reset_Styling;
