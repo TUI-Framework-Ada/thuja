@@ -690,7 +690,7 @@ package body ECS is
                         FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
                         -- Draw to terminal
-                        Ada.Wide_Wide_Text_IO.Put (ConvertWW (Convert (FB_Pixel, Y, X)));
+                        Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
 
                         -- Update backbuffer
                         Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
