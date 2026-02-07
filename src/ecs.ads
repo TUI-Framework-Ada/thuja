@@ -43,7 +43,7 @@ package ECS is
                                Component_Str : String)
                                return Component_Class_Ptr;
 
-   function Get_First_Component_Ptr (Self : Components_Ptr;
+   function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Tag : in Ada.Tags.Tag)
                                return Component_Class_Ptr;
 

@@ -96,12 +96,12 @@ package body ECS is
       return Get_Component_Ptr (Self, To_CID (Component_Str));
    end Get_Component_Ptr;
 
-   function Get_First_Component_Ptr (Self : Components_Ptr;
+   function Get_Component_Ptr (Self : Components_Ptr;
                                      Component_Tag : Ada.Tags.Tag)
                                      return Component_Class_Ptr is
    begin
       return Get_Component_Ptr (Self, Get_Component_ID (Self.all, Component_Tag));
-   end Get_First_Component_Ptr;
+   end Get_Component_Ptr;
 
    function Has_Component (Self : in Components;
                            Component : in Component_Id) return Boolean is
@@ -395,7 +395,7 @@ package body ECS is
          declare
             --  Obtain writable view of the parent's flex-layout component
             Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
-              Get_First_Component_Ptr (Parent_Comps, Flex_Layout_Component_T'Tag).all);
+              Get_Component_Ptr (Parent_Comps, Flex_Layout_Component_T'Tag).all);
          begin
 
             --  Obtain read-only copy of the parent's widget component
@@ -448,7 +448,7 @@ package body ECS is
                         declare
                            --  Obtain a writable view of the child's widget
                            Child_Widget_C : Widget_Component_T renames Widget_Component_T (
-                             Get_First_Component_Ptr (Child_Comps, Widget_Component_T'Tag).all);
+                             Get_Component_Ptr (Child_Comps, Widget_Component_T'Tag).all);
                         begin
 
                         -- FIX: Use Integer math first to allow 0 offsets, then cast to TUI type
@@ -506,9 +506,9 @@ package body ECS is
          declare
             --  Obtain a view to the component allowing direct modification
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_First_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
             BGColor_C : Background_Color_Component_T renames Background_Color_Component_T (
-              Get_First_Component_Ptr (Component_List, Background_Color_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Background_Color_Component_T'Tag).all);
          begin
             BGColor := BGColor_C.Background_Color;
 
@@ -555,10 +555,10 @@ package body ECS is
          declare
             --  Obtain a view to the component allowing direct modification
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_First_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
 
             Text_C : Text_Component_T renames Text_Component_T (
-              Get_First_Component_Ptr (Component_List, Text_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Text_Component_T'Tag).all);
          begin
             Text := Text_C.Text;
 
@@ -679,7 +679,7 @@ package body ECS is
          declare
             --  Obtain a view to the render info
             RenderInfo_C : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_First_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
+              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
          begin
             --  Read directly without locking, since we know the flag is only changed by a system that runs later in the same thread
             RenderInfo_C.Drawing_FB.all.Read (Rendering_To_FB_2);
@@ -690,7 +690,7 @@ package body ECS is
                declare
                   --  Obtain a view to the component allowing direct modification
                   Root : Widget_Component_T renames Widget_Component_T (
-                    Get_First_Component_Ptr (Root_Components, Widget_Component_T'Tag).all);
+                    Get_Component_Ptr (Root_Components, Widget_Component_T'Tag).all);
                begin
 
                   --  For it and its children
@@ -782,7 +782,7 @@ package body ECS is
             declare
                --  Obtain a view to the component allowing direct modification
                RI : Render_Info_Component_T renames Render_Info_Component_T (
-                 Get_First_Component_Ptr (RI_Component_List, Render_Info_Component_T'Tag).all);
+                 Get_Component_Ptr (RI_Component_List, Render_Info_Component_T'Tag).all);
             begin
                RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
                -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
@@ -863,9 +863,9 @@ package body ECS is
          declare
             --  Get components
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_First_Component_Ptr (Comp_Ptr, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Comp_Ptr, Widget_Component_T'Tag).all);
             PB_C : Progress_Bar_Component_T renames Progress_Bar_Component_T (
-              Get_First_Component_Ptr (Comp_Ptr, Progress_Bar_Component_T'Tag).all);
+              Get_Component_Ptr (Comp_Ptr, Progress_Bar_Component_T'Tag).all);
          begin
 
             --  Check for optional background color component
@@ -1025,7 +1025,7 @@ package body ECS is
          declare
             --  Obtain a view to the component allowing direct modification
             Render_Info : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_First_Component_Ptr (Component_List, Render_Info_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Render_Info_Component_T'Tag).all);
          begin
             Render_Info.Drawing_FB.all.Wait (Drawing_From_FB_1);
             Render_Info.Drawing_FB.all.Swap;
@@ -1060,7 +1060,7 @@ package body ECS is
          RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
          declare
             RI : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_First_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
+              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
          begin
 
             -- Check if terminal size has changed
@@ -1101,7 +1101,7 @@ package body ECS is
          declare
             --  Obtain a view to the component allowing direct modification
             Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
-              Get_First_Component_Ptr (Flex_Components, Flex_Layout_Component_T'Tag).all);
+              Get_Component_Ptr (Flex_Components, Flex_Layout_Component_T'Tag).all);
          begin
             Flex_C := Flex_Layout_Component_T (
                Get_Component (Flex_Components.all, Flex_Layout_Component_T'Tag)
