@@ -7,8 +7,8 @@ with Ada.Characters.Conversions;
 
 package body ECS is
 
-      function ConvertWW (S : String) return Wide_Wide_String 
-      renames Ada.Characters.Conversions.To_Wide_Wide_String;
+      -- function ConvertWW (S : String) return Wide_Wide_String 
+      -- renames Ada.Characters.Conversions.To_Wide_Wide_String;
 
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
@@ -641,9 +641,12 @@ end FlexLayoutSystem;
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       Reset : constant String := CSI & "0m";
-      function Convert (P : Pixel_t; Row : TUI_Height;
-                        Col : TUI_Width) return String is
-        (Move (Row, Col) & Format (P) & P.Char & Reset);
+      function Convert (P : Pixel_t; Row : TUI_Height; Col : TUI_Width) return Wide_Wide_String is
+         use Ada.Characters.Conversions;
+         Result : constant String := Move (Row, Col) & Format (P) & P.Char & Reset;
+      begin 
+         return To_Wide_Wide_String (Result);
+      end Convert;
 
       --  Real stuff begins
       Entity_List : Entity_Components_Ptr;
