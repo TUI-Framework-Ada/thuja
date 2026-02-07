@@ -104,7 +104,7 @@ package ECS is
    -- When: Called by TerminalResizeSystem when a resize is detected
    --Why did I separate this? Cleaner code, makes it REUSABLE
    -- ================================================================
-   procedure Mark_All_Flex_Dirty (Entity_List : Entity_Components);
+   procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components);
 
    -- Widget movement API for absolute positioning
    procedure Move_Widget (Entity_List : in out Entity_Components;
