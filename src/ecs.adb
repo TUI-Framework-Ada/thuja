@@ -599,39 +599,38 @@ end FlexLayoutSystem;
    -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
    -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
+      
       -- Created an alias for the Graphics package
       package GFX renames Graphics;
       
       --  Both pixel rendering and ANSI codes
-      CSI : constant String := Character'Val (16#1B#) & '[';
-
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
       function FG (P : Pixel_t) return String is
-        (CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
+        (GFX.CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
              & Trim (P.Char_Color.Green'Image) & ";"
              & Trim (P.Char_Color.Blue'Image) & "m");
       function BG (P : Pixel_t) return String is
-        (CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
+        (GFX.CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
              & Trim (P.Background_Color.Green'Image) & ";"
              & Trim (P.Background_Color.Blue'Image) & "m");
       -- 1m sets Bold, 22m sets Bold off
       function Bold (P : Pixel_t) return String is
-        (CSI & (if P.Is_Bold then "1m" else "22m"));
+        (GFX.CSI & (if P.Is_Bold then "1m" else "22m"));
       -- 3m sets Italic, 23m sets Italic off
       function Italic (P : Pixel_t) return String is
-        (CSI & (if P.Is_Italic then "3m" else "23m"));
+        (GFX.CSI & (if P.Is_Italic then "3m" else "23m"));
       -- 4m sets Underline, 24m sets Underline off
       function Underline (P : Pixel_t) return String is
-        (CSI & (if P.Is_Underline then "4m" else "24m"));
+        (GFX.CSI & (if P.Is_Underline then "4m" else "24m"));
       -- 9m sets Strikethrough, 29 sets Strikethrough off
       function Strikethrough (P : Pixel_t) return String is
-        (CSI & (if P.Is_Strikethrough then "9m" else "29m"));
+        (GFX.CSI & (if P.Is_Strikethrough then "9m" else "29m"));
       -- Format function to include format styles
       function Format (P : Pixel_t) return String is
          (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
-        (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
-      Reset : constant String := CSI & "0m";
+        (GFX.CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
+      Reset : constant String := GFX.CSI & "0m";
       function Convert (P : Pixel_t; Row : TUI_Height; Col : TUI_Width) return Wide_Wide_String is
          use Ada.Characters.Conversions;
          Result : constant String := Move (Row, Col) & Format (P) & P.Char & Reset;

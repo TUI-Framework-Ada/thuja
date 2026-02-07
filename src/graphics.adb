@@ -4,9 +4,6 @@ with Interfaces.C; -- Not implemented yet, but may be needed for future FFI
 
 package body Graphics is
 
-   --  ANSI escape sequence prefix
-   CSI : constant String := Character'Val (16#1B#) & '[';
-
       --=============================================================================
    --TODO: Implement these for Windows using Win32 API calls
    procedure Enable_VT_Processing is
