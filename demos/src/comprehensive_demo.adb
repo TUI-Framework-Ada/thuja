@@ -324,6 +324,26 @@ procedure Comprehensive_Demo is
    --  Progress bar animation state
    Progress : Float := 0.0;
 
+   --  Thread stopping flag
+   protected Thread_Flag is
+      procedure Stop;
+      function Check return Boolean;
+      private
+         Should_End : Boolean := False;
+   end Thread_Flag;
+
+   protected body Thread_Flag is
+      procedure Stop is
+      begin
+         Should_End := True;
+      end Stop;
+
+      function Check return Boolean is
+      begin
+         return Should_End;
+      end Check;
+   end Thread_Flag;
+
    --  Render thread declaration
    task Render_Thread;
 
@@ -332,17 +352,14 @@ procedure Comprehensive_Demo is
    begin
       Graphics.Clear_Screen;
       loop
-         --  Claim reading access
-         Entities_PO.Claim_Reading (Entity_List);
-         
-         --  Run draw system
+         --  Run draw system (automatically claims access)
          ECS.BufferDrawSystem (Entities_PO);
-         
-         --  Release reading access
-         Entities_PO.Release_Reading;
 
          --  30 FPS
          delay Duration (1.0 / 30.0);
+
+         --  Stop render thread when Thread_Flag set
+         exit when Thread_Flag.Check;
       end loop;
    end Render_Thread;
 
@@ -398,17 +415,12 @@ begin
       declare
          Entity_List : ECS.Entity_Components_Ptr;
       begin
-         --  Claim reading access
-         Entities_PO.Claim_Reading (Entity_List);
 
          --  SYSTEM 1: Terminal Resize Detection (NEW FEATURE!)
-         ECS.TerminalResizeSystem (Entity_List.all);
+         ECS.TerminalResizeSystem (Entities_PO);
 
          --  SYSTEM 2: Flexbox Layout (positions flex children)
-         ECS.FlexLayoutSystem (Entity_List.all);
-
-         --  Release reading access
-         Entities_PO.Release_Reading;
+         ECS.FlexLayoutSystem (Entities_PO);
 
          --  UPDATE PROGRESS BAR (Animate from 0% to 100%)
          Progress := Float (Loop_Index) / Float (Loop_Count);
@@ -418,7 +430,7 @@ begin
          --  MOVE THE DOT (keep it constrained inside the SIDEBAR)
          --  Compute next position then clamp/bounce against the live Sidebar widget bounds
          declare
-            Entity_List_Read : ECS.Entity_Components_Ptr;
+            Entity_List_Write : ECS.Entity_Components_Ptr;
             Target_Comps : ECS.Components_Ptr;
             Target_Widget : Components.Widget_Component_T;
             Min_X, Min_Y, Max_X, Max_Y : Integer;
@@ -430,9 +442,9 @@ begin
             Proposed_Y := Integer (Dot_Y) + Dot_DY;
 
             -- Snapshot ECS to read the Sidebar widget
-            Entities_PO.Claim_Reading (Entity_List_Read);
+            Entities_PO.Claim_Writing (Entity_List_Write);
 
-            Target_Comps := ECS.Get_Entity_Components (Entity_List_Read.all, E_Sidebar);
+            Target_Comps := ECS.Get_Entity_Components (Entity_List_Write.all, E_Sidebar);
             -- Try to read the sidebar widget; fall back to root if anything fails
             begin
                Target_Widget := Components.Widget_Component_T (
@@ -453,7 +465,7 @@ begin
             -- Bounce and clamp: ensure the entire moving widget fits inside target bounds
             -- If the moving widget has width/height > 1, account for that by using its size
             declare
-               Mov_Comps : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List_Read.all, E_MovingDot);
+               Mov_Comps : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List_Write.all, E_MovingDot);
                Mov_W : Integer := 1;
                Mov_H : Integer := 1;
             begin
@@ -502,10 +514,11 @@ begin
                Dot_Y := Graphics.TUI_Height (New_Dot_Y);
 
                -- Apply movement using Move_Widget API
-               ECS.Move_Widget (Entity_List_Read.all, E_MovingDot, Dot_X, Dot_Y);
+               --  This method *can* add a component, so writing access is required
+               ECS.Move_Widget (Entity_List_Write.all, E_MovingDot, Dot_X, Dot_Y);
             end;
 
-            Entities_PO.Release_Reading;
+            Entities_PO.Release_Writing;
          end;
 
          --  SYSTEM 3-7: Rendering pipeline
@@ -518,6 +531,9 @@ begin
          delay Duration (0.033);  -- ~30 FPS
       end;
    end loop;
+
+   --  Stop render thread before applying manual screen updates
+   Thread_Flag.Stop;
 
    Graphics.Clear_Screen;
    Ada.Text_IO.Put_Line ("==============================================");
