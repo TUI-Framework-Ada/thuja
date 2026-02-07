@@ -146,10 +146,10 @@ begin
       declare
          Entity_List : ECS.Entity_Components_Ptr;
       begin
-         Entities_PO.Claim_Reading (Entity_List);
-
          --  FEATURE 1: Detect terminal resize
-         ECS.TerminalResizeSystem (Entity_List.all);
+         ECS.TerminalResizeSystem (Entities_PO);
+
+         Entities_PO.Claim_Writing (Entity_List);
 
          -- If the terminal is smaller than the bouncer, shrink the widget and its render buffer to fit
          declare
@@ -259,7 +259,7 @@ begin
 
          --  Apply movement
          ECS.Move_Widget (Entity_List.all, E_Bouncer, X, Y);
-         Entities_PO.Release_Reading;
+         Entities_PO.Release_Writing;
 
          --  Render
          ECS.WidgetBackgroundSystem (Entities_PO);

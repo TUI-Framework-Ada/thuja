@@ -83,10 +83,10 @@ package ECS is
    -- How: Compares current size vs. previous size each frame
    -- When called: FIRST in main loop (before FlexLayoutSystem)
    -- ================================================================
-   procedure TerminalResizeSystem (Entity_List : Entity_Components);
+   procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO);
 
    -- EXISTING: Current systems, not changed.
-   procedure FlexLayoutSystem (Entity_List : Entity_Components);
+   procedure FlexLayoutSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure BufferCopySystem (Entity_List_PO : in out Entity_Components_PO);
@@ -104,7 +104,7 @@ package ECS is
    -- When: Called by TerminalResizeSystem when a resize is detected
    --Why did I separate this? Cleaner code, makes it REUSABLE
    -- ================================================================
-   procedure Mark_All_Flex_Dirty (Entity_List : Entity_Components);
+   procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components);
 
    -- Widget movement API for absolute positioning
    procedure Move_Widget (Entity_List : in out Entity_Components;
