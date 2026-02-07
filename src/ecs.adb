@@ -1,7 +1,7 @@
 --ecs.adb
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
-with IDs; use type IDs.Component_ID_Vector.Vector; use type IDs.Component_Tag_Vector.Vector;
+with IDs; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Wide_Wide_Text_IO;
 with Ada.Characters.Conversions;
 with Ada.Tags; use Ada.Tags;
@@ -1084,12 +1084,11 @@ package body ECS is
    -- ================================================================
 
    procedure Mark_All_Flex_Dirty (Entity_List : in out Entity_Components) is
-      Search_Component_Tags : Component_Tag_Vector.Vector :=
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
         Component_Tag_Vector.To_Vector (Flex_Layout_Component_T'Tag, 1);
       Matched_Entities      : Entity_ID_Vector.Vector;
 
       Flex_Components : Components_Ptr;
-      Flex_C          : Flex_Layout_Component_T;
    begin
       -- Find all entities with FlexLayoutComponent
       Matched_Entities := Get_Entities_Matching (Entity_List, Search_Component_Tags);
