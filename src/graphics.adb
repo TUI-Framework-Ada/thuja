@@ -4,9 +4,6 @@ with Interfaces.C; -- Not implemented yet, but may be needed for future FFI
 
 package body Graphics is
 
-   --  ANSI escape sequence prefix
-   CSI : constant String := Character'Val (16#1B#) & '[';
-
       --=============================================================================
    --TODO: Implement these for Windows using Win32 API calls
    procedure Enable_VT_Processing is
@@ -103,6 +100,16 @@ package body Graphics is
    begin
       Ada.Text_IO.Put (CSI & "?25h");
    end Show_Cursor;
+
+   procedure Save_Cursor_Position is
+   begin
+      Ada.Text_IO.Put (CSI & "s");
+   end Save_Cursor_Position;
+
+   procedure Restore_Cursor_Position is
+   begin
+      Ada.Text_IO.Put (CSI & "u");
+   end Restore_Cursor_Position;
 
    --  Sends ANSI code to the terminal to wipe the screen.
    --  This should be run once before any of the systems.

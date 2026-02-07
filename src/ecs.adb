@@ -7,9 +7,6 @@ with Ada.Characters.Conversions;
 
 package body ECS is
 
-      function ConvertWW (S : String) return Wide_Wide_String
-      renames Ada.Characters.Conversions.To_Wide_Wide_String;
-
    --  Easy access to unbounded strings
    package SU renames Ada.Strings.Unbounded;
 
@@ -606,48 +603,44 @@ package body ECS is
    -- NOTE: Currently for resetting cursor position the cursor retains its position but is still shown.
    -- Additionally, when ctrl + c the position of the cursor may be getting saved but isn't saved when forced out on ctrl + c.
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
+      
+      -- Created an alias for the Graphics package
+      package GFX renames Graphics;
+      
       --  Both pixel rendering and ANSI codes
-      CSI : constant String := Character'Val (16#1B#) & '[';
-      Hide_Cursor  : constant String := CSI & "?25l"; -- not hiding cursor?
-      Show_Cursor  : constant String := CSI & "?25h"; -- unsure if show is occuring
-      Save_Pos     : constant String := CSI & "s";
-      Restore_Pos  : constant String := CSI & "u";
-      --Reset_SGR    : constant String := CSI & "0m"; -- Resets colors and styles
-
-      -- Helper to bundle cleanup commands
-      --Cleanup_Str  : constant Wide_Wide_String :=
-      --   Ada.Characters.Conversions.To_Wide_Wide_String(Reset_SGR & Restore_Pos & Show_Cursor);
-
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
       function FG (P : Pixel_t) return String is
-        (CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
+        (GFX.CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
              & Trim (P.Char_Color.Green'Image) & ";"
              & Trim (P.Char_Color.Blue'Image) & "m");
       function BG (P : Pixel_t) return String is
-        (CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
+        (GFX.CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
              & Trim (P.Background_Color.Green'Image) & ";"
              & Trim (P.Background_Color.Blue'Image) & "m");
       -- 1m sets Bold, 22m sets Bold off
       function Bold (P : Pixel_t) return String is
-        (CSI & (if P.Is_Bold then "1m" else "22m"));
+        (GFX.CSI & (if P.Is_Bold then "1m" else "22m"));
       -- 3m sets Italic, 23m sets Italic off
       function Italic (P : Pixel_t) return String is
-        (CSI & (if P.Is_Italic then "3m" else "23m"));
+        (GFX.CSI & (if P.Is_Italic then "3m" else "23m"));
       -- 4m sets Underline, 24m sets Underline off
       function Underline (P : Pixel_t) return String is
-        (CSI & (if P.Is_Underline then "4m" else "24m"));
+        (GFX.CSI & (if P.Is_Underline then "4m" else "24m"));
       -- 9m sets Strikethrough, 29 sets Strikethrough off
       function Strikethrough (P : Pixel_t) return String is
-        (CSI & (if P.Is_Strikethrough then "9m" else "29m"));
+        (GFX.CSI & (if P.Is_Strikethrough then "9m" else "29m"));
       -- Format function to include format styles
       function Format (P : Pixel_t) return String is
          (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
-        (CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
-      Reset : constant String := CSI & "0m";
-      function Convert (P : Pixel_t; Row : TUI_Height;
-                        Col : TUI_Width) return String is
-        (Move (Row, Col) & Format (P) & P.Char & Reset);
+        (GFX.CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
+      Reset : constant String := GFX.CSI & "0m";
+      function Convert (P : Pixel_t; Row : TUI_Height; Col : TUI_Width) return Wide_Wide_String is
+         use Ada.Characters.Conversions;
+         Result : constant String := Move (Row, Col) & Format (P) & P.Char & Reset;
+      begin 
+         return To_Wide_Wide_String (Result);
+      end Convert;
 
       --  Real stuff begins
       Entity_List : Entity_Components_Ptr;
@@ -664,14 +657,14 @@ package body ECS is
       type Drawing_Ptr is access all Buffer_T;
       Drawing : Drawing_Ptr;
    begin
-
       --  Wait for inclusive lock for entity list
       Entity_List_PO.Claim_Reading (Entity_List);
       --  Search for entities matching the list of components
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
 
       -- PRE-RENDER: Hide the cursor and save its current position
-      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Hide_Cursor & Save_Pos));
+      GFX.Hide_Cursor;
+      GFX.Save_Cursor_Position;
 
       -- PROTECTED RENDER LOOP
       begin
@@ -712,17 +705,18 @@ package body ECS is
 
       exception
          when others =>
-            -- CRASH-ClEANUP: restore position, show cursor
-            Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
-            Ada.Wide_Wide_Text_IO.Flush;
+            -- Exception (Crash-Cleanup): restore position, show cursor, reset styling and then flush
+            GFX.Restore_Cursor_Position;
+            GFX.Show_Cursor;
+            GFX.Reset_Styling;
+            Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
             raise; -- Rethrow the error for debug just incase
       end;
-
-      -- POST-RENDER: Normal cleanup, reset text, restore position, show cursor
-      Ada.Wide_Wide_Text_IO.Put (Ada.Characters.Conversions.To_Wide_Wide_String(Restore_Pos & Show_Cursor));
-
-      -- Ensure commands are sent to the hardware immediately
-      Ada.Wide_Wide_Text_IO.Flush;
+      -- POST-RENDER (Normal-Cleanup) Restore cursor pos, show cursor, reset styling and then flush
+      GFX.Restore_Cursor_Position;
+      GFX.Show_Cursor;
+      GFX.Reset_Styling;
+      Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
 
       --  Release lock on entity list
       Entity_List_PO.Release_Reading;

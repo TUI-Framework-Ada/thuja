@@ -83,6 +83,9 @@ package Graphics is
    end Protected_DB;
    type Protected_DB_Ptr is access Protected_DB;
 
+   --  ANSI escape sequence prefix used in ecs.adb and graphics.adb
+   CSI : constant String := Character'Val (16#1B#) & '[';
+
    --  Constructor to create and initialize buffer instance
    function Create_Buffer (Width  : in TUI_Width;
                            Height : in TUI_Height)
@@ -109,6 +112,12 @@ package Graphics is
 
    --  Shows the terminal cursor
    procedure Show_Cursor;
+
+   --  Saves current position of cursor
+   procedure Save_Cursor_Position;
+
+   --  Restores saved position to cursor
+   procedure Restore_Cursor_Position;
 
    --  Resets terminal to normal state (shows cursor, resets colors).
    --  Call this before program exit.
