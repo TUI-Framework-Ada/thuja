@@ -7,8 +7,7 @@ with Ada.Characters.Handling;
 with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 with Command_Sequence_Handling;
-with Ada.Calendar;
-
+use type Command_Sequence_Handling.Result_Kind_t;
 procedure Keyboard_Widget is
 
    package SU renames Ada.Strings.Unbounded;
@@ -62,7 +61,7 @@ procedure Keyboard_Widget is
    Pressed_Key : Character_t := Character_t'Val (0);
 
    --  ECS world
-   World : Entity_Components;
+   World : Entity_Components_PO;
 
    --  Check if a character is a valid key on our keyboard
    function Is_Valid_Key (C : Character_t) return Boolean_t is
@@ -203,12 +202,16 @@ procedure Keyboard_Widget is
       Add_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"), BG);
    end Create_Text_Entity;
 
-   --  Update text content of a text entity
-   procedure Update_Text_Entity (Entity_Name : String_t; New_Text : String_t) is
+   --  Update text content of a text entity (caller must hold lock)
+   procedure Update_Text_Entity (
+      Entity_List : Entity_Components_Ptr;
+      Entity_Name : String_t;
+      New_Text    : String_t
+   ) is
       Comp_Ptr : Components_Ptr;
       Text : Text_Component_T;
    begin
-      Comp_Ptr := Get_Entity_Components (World, To_EID (Entity_Name));
+      Comp_Ptr := Get_Entity_Components (Entity_List.all, To_EID (Entity_Name));
       if Comp_Ptr /= null and then Has_Component (Comp_Ptr.all, To_CID ("TextComponent")) then
          Text := Text_Component_T (Get_Component (Comp_Ptr.all, To_CID ("TextComponent")));
          Text.Text := SU.To_Unbounded_String (New_Text);
@@ -227,8 +230,12 @@ procedure Keyboard_Widget is
       Comp_Ptr := Add_Entity (World, To_EID ("render_info"));
       RI.Terminal_Width := Term_Width;
       RI.Terminal_Height := Term_Height;
+      RI.Prev_Terminal_Width := Natural (Term_Width);
+      RI.Prev_Terminal_Height := Natural (Term_Height);
       RI.BackBuffer := Create_Buffer (Term_Width, Term_Height);
-      RI.FrameBuffer := Create_Buffer (Term_Width, Term_Height);
+      RI.Framebuffer_1 := Create_Buffer (Term_Width, Term_Height);
+      RI.Framebuffer_2 := Create_Buffer (Term_Width, Term_Height);
+      RI.Drawing_FB := new Protected_DB;
 
       --  Force a full initial render by setting the Backbuffer to sentinel
       --  values so every pixel differs from the Framebuffer on the first frame.
@@ -241,7 +248,10 @@ procedure Keyboard_Widget is
                (Char             => Character_t'Val (1),
                 Char_Color       => White,
                 Background_Color => White,
-                Is_Bold          => True));
+                Is_Bold          => True,
+                Is_Italic        => False,
+                Is_Underline     => False,
+                Is_Strikethrough => False));
          end loop;
       end loop;
 
@@ -415,10 +425,12 @@ procedure Keyboard_Widget is
       --  Iterate the vector-of-vectors keyboard layout
       --  =============================================
       declare
+         Entity_List : Entity_Components_Ptr;
          Root_Comp : Components_Ptr;
          Root_W    : Widget_Component_T;
       begin
-         Root_Comp := Get_Entity_Components (World, To_EID ("root"));
+         World.Claim_Writing (Entity_List);
+         Root_Comp := Get_Entity_Components (Entity_List.all, To_EID ("root"));
          Root_W := Widget_Component_T (
             Get_Component (Root_Comp.all, To_CID ("WidgetComponent"))
          );
@@ -437,11 +449,12 @@ procedure Keyboard_Widget is
          Root_W.Children.Append (To_EID ("status_line"));
 
          Add_Component (Root_Comp.all, To_CID ("WidgetComponent"), Root_W);
+         World.Release_Writing;
       end;
    end Create_Keyboard_Entities;
 
-   --  Update key colors based on pressed key
-   procedure Update_Key_Colors is
+   --  Update key colors based on pressed key (caller must hold lock)
+   procedure Update_Key_Colors (Entity_List : Entity_Components_Ptr) is
       Comp_Ptr : Components_Ptr;
       BG : Background_Color_Component_T;
       Key_Char : Character_t;
@@ -454,7 +467,7 @@ procedure Keyboard_Widget is
          Entity_Name_Len := 5;
          Entity_Name (1 .. 5) := "key_" & Key_Char;
 
-         Comp_Ptr := Get_Entity_Components (World, To_EID (Entity_Name (1 .. Entity_Name_Len)));
+         Comp_Ptr := Get_Entity_Components (Entity_List.all, To_EID (Entity_Name (1 .. Entity_Name_Len)));
          if Comp_Ptr /= null and then Has_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent")) then
             BG := Background_Color_Component_T (
                Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
@@ -473,7 +486,7 @@ procedure Keyboard_Widget is
 
       --  Handle special keys
       --  TAB
-      Comp_Ptr := Get_Entity_Components (World, To_EID ("key_TAB"));
+      Comp_Ptr := Get_Entity_Components (Entity_List.all, To_EID ("key_TAB"));
       if Comp_Ptr /= null then
          BG := Background_Color_Component_T (
             Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
@@ -483,7 +496,7 @@ procedure Keyboard_Widget is
       end if;
 
       --  ENTER
-      Comp_Ptr := Get_Entity_Components (World, To_EID ("key_ENT"));
+      Comp_Ptr := Get_Entity_Components (Entity_List.all, To_EID ("key_ENT"));
       if Comp_Ptr /= null then
          BG := Background_Color_Component_T (
             Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
@@ -493,7 +506,7 @@ procedure Keyboard_Widget is
       end if;
 
       --  SPACE
-      Comp_Ptr := Get_Entity_Components (World, To_EID ("key_SPACE"));
+      Comp_Ptr := Get_Entity_Components (Entity_List.all, To_EID ("key_SPACE"));
       if Comp_Ptr /= null then
          BG := Background_Color_Component_T (
             Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
@@ -503,7 +516,7 @@ procedure Keyboard_Widget is
       end if;
 
       --  BACKSPACE
-      Comp_Ptr := Get_Entity_Components (World, To_EID ("key_BKSP"));
+      Comp_Ptr := Get_Entity_Components (Entity_List.all, To_EID ("key_BKSP"));
       if Comp_Ptr /= null then
          BG := Background_Color_Component_T (
             Get_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
@@ -513,10 +526,11 @@ procedure Keyboard_Widget is
                                   then Red else Gray);
          Add_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"), BG);
       end if;
+
    end Update_Key_Colors;
 
-   --  Update status line using ECS text component
-   procedure Update_Status is
+   --  Update status line using ECS text component (caller must hold lock)
+   procedure Update_Status (Entity_List : Entity_Components_Ptr) is
       Status_Text : String_t (1 .. 55) := [others => ' '];
    begin
       if Pressed_Key >= ' ' and Pressed_Key <= '~' then
@@ -530,7 +544,7 @@ procedure Keyboard_Widget is
       elsif Pressed_Key = Character_t'Val (8) or Pressed_Key = Character_t'Val (127) then
          Status_Text (1 .. 20) := "Last key: BACKSPACE ";
       end if;
-      Update_Text_Entity ("status_line", Status_Text);
+      Update_Text_Entity (Entity_List, "status_line", Status_Text);
    end Update_Status;
 
    --  Run all render systems
@@ -539,11 +553,15 @@ procedure Keyboard_Widget is
       WidgetBackgroundSystem (World);
       TextRenderSystem (World);
       BufferCopySystem (World);
+      DoubleBufferFlagSystem (World);  --  Swap before draw so Draw reads the just-written buffer
       BufferDrawSystem (World);
    end Render;
 
-   --  Highlight specific keys with Gold for command activation
-   procedure Highlight_Command_Keys (Result : Command_Sequence_Handling.Handler_Result_t) is
+   --  Highlight specific keys with Gold for command activation (caller must hold lock)
+   procedure Highlight_Command_Keys (
+      Entity_List : Entity_Components_Ptr;
+      Result      : Command_Sequence_Handling.Handler_Result_t
+   ) is
       Comp_Ptr : Components_Ptr;
       BG : Background_Color_Component_T;
    begin
@@ -551,7 +569,7 @@ procedure Keyboard_Widget is
          declare
             Key_Name : constant String_t := "key_" & SU.Element (Result.Keys, I);
          begin
-            Comp_Ptr := Get_Entity_Components (World, To_EID (Key_Name));
+            Comp_Ptr := Get_Entity_Components (Entity_List.all, To_EID (Key_Name));
             if Comp_Ptr /= null and then
                Has_Component (Comp_Ptr.all, To_CID ("BackgroundColorComponent"))
             then
@@ -564,8 +582,11 @@ procedure Keyboard_Widget is
       end loop;
    end Highlight_Command_Keys;
 
-   --  Update status line to show which command was activated
-   procedure Update_Command_Status (Result : Command_Sequence_Handling.Handler_Result_t) is
+   --  Update status line to show which command was activated (caller must hold lock)
+   procedure Update_Command_Status (
+      Entity_List : Entity_Components_Ptr;
+      Result      : Command_Sequence_Handling.Handler_Result_t
+   ) is
       Status_Text : String_t (1 .. 55) := [others => ' '];
       Pos : Natural_t := 1;
       Prefix : constant String_t := "Command: ";
@@ -582,41 +603,15 @@ procedure Keyboard_Widget is
          Pos := Pos + 1;
       end loop;
 
-      Update_Text_Entity ("status_line", Status_Text);
+      Update_Text_Entity (Entity_List, "status_line", Status_Text);
    end Update_Command_Status;
-
-   --  Handle the result from the command sequence handler
-   procedure Handle_Command_Result (Result : Command_Sequence_Handling.Handler_Result_t) is
-   begin
-      case Result.Kind is
-         when Command_Sequence_Handling.No_Result =>
-            null;
-
-         when Command_Sequence_Handling.Command_Activated =>
-            --  Reset all keys to their default colors
-            Pressed_Key := Character_t'Val (0);
-            Update_Key_Colors;
-            --  Highlight the command keys with Gold
-            Highlight_Command_Keys (Result);
-            --  Show command info on the status line
-            Update_Command_Status (Result);
-            Render;
-
-         when Command_Sequence_Handling.Keys_Passed_Through =>
-            --  Process the last passed-through key as a normal key press
-            if SU.Length (Result.Keys) > 0 then
-               Pressed_Key := SU.Element (Result.Keys, SU.Length (Result.Keys));
-               Update_Key_Colors;
-               Update_Status;
-               Render;
-            end if;
-      end case;
-   end Handle_Command_Result;
 
    Event            : Input_Event_t;
    Cmd_Result       : Command_Sequence_Handling.Handler_Result_t;
+   Last_Result      : Command_Sequence_Handling.Handler_Result_t;
+   Needs_Render     : Boolean_t := False;
    Running          : Boolean_t := True;
-   Last_Full_Render : Ada.Calendar.Time := Ada.Calendar.Clock;
+   Entity_List      : Entity_Components_Ptr;
 
 begin
    --  Initialize
@@ -635,55 +630,59 @@ begin
 
    --  Main loop
    while Running loop
-      Input_Buffer.Consume (Event);
+      Needs_Render := False;
 
-      if Event.Cmd /= None or Event.Char_Value /= Character_t'Val (0) then
+      --  Drain all pending events from the buffer
+      loop
+         Input_Buffer.Consume (Event);
+         exit when Event.Cmd = None and Event.Char_Value = Character_t'Val (0);
+
          if Event.Cmd = Quit and Event.Char_Value = Character_t'Val (27) then
             Running := False;
+            exit;
          elsif Is_Valid_Key (Event.Char_Value) then
-            --  Feed key through the command sequence handler
+            --  Feed each key through the command sequence handler
             Cmd_Result := Command_Sequence_Handling.Process_Key (Event.Char_Value);
-            Handle_Command_Result (Cmd_Result);
+            if Cmd_Result.Kind /= Command_Sequence_Handling.No_Result then
+               Last_Result := Cmd_Result;
+               Needs_Render := True;
+            end if;
          end if;
-      end if;
+      end loop;
 
-      --  Periodically force a full re-render to recover from visual
-      --  corruption caused by terminal resizes.  Resetting the Backbuffer
-      --  to sentinel values makes every pixel differ from the Framebuffer,
-      --  so the next Render pass redraws the entire screen.
-      declare
-         use Ada.Calendar;
-         Now : constant Ada.Calendar.Time := Clock;
-      begin
-         if (Now - Last_Full_Render) > 0.5 then
-            Last_Full_Render := Now;
-            declare
-               RI_Comp : Components_Ptr;
-               RI      : Render_Info_Component_T;
-            begin
-               RI_Comp := Get_Entity_Components (World, To_EID ("render_info"));
-               RI := Render_Info_Component_T (
-                  Get_Component (RI_Comp.all, To_CID ("RenderInfo")));
-               for RX in TUI_Width'First .. Term_Width loop
-                  for RY in TUI_Height'First .. Term_Height loop
-                     Set_Buffer_Pixel (RI.Backbuffer, RX, RY,
-                        (Char             => Character_t'Val (1),
-                         Char_Color       => White,
-                         Background_Color => White,
-                         Is_Bold          => True));
-                  end loop;
-               end loop;
-               Add_Component (RI_Comp.all, To_CID ("RenderInfo"), RI);
-            end;
-            Render;
-         end if;
-      end;
+      --  Apply final state and render once for all drained events
+      if Needs_Render and Running then
+         case Last_Result.Kind is
+            when Command_Sequence_Handling.No_Result =>
+               null;
+
+            when Command_Sequence_Handling.Command_Activated =>
+               Pressed_Key := Character_t'Val (0);
+               World.Claim_Writing (Entity_List);
+               Update_Key_Colors (Entity_List);
+               Highlight_Command_Keys (Entity_List, Last_Result);
+               Update_Command_Status (Entity_List, Last_Result);
+               World.Release_Writing;
+               Render;
+
+            when Command_Sequence_Handling.Keys_Passed_Through =>
+               if SU.Length (Last_Result.Keys) > 0 then
+                  Pressed_Key := SU.Element (Last_Result.Keys, SU.Length (Last_Result.Keys));
+                  World.Claim_Writing (Entity_List);
+                  Update_Key_Colors (Entity_List);
+                  Update_Status (Entity_List);
+                  World.Release_Writing;
+                  Render;
+               end if;
+         end case;
+      end if;
 
       delay Input_Consume_Delay;
    end loop;
 
    --  Cleanup
    Input_Reader.Stop;
-   Graphics.Restore_Screen;
+   Graphics.Clear_Screen;
+   Graphics.Reset_Styling;
 
 end Keyboard_Widget;
