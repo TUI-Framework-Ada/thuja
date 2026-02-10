@@ -124,6 +124,12 @@ package ECS is
    --  Should be called after all other systems
    procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO);
 
+   --  Selection System: Processes Tab input to cycle Has_Focus among
+   --  entities that have both Widget_Component_T and Selectable_Component_T.
+   --  Call after input consumption, before WidgetBackgroundSystem.
+   procedure SelectionSystem (Entity_List_PO : in out Entity_Components_PO;
+                              Tab_Pressed : in Boolean);
+
    -- ================================================================
    -- NEW: Helper procedures for resize and widget movement
    -- How: Sets to Is_Dirty = True for all Flex_Layout_Component_T containers

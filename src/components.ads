@@ -126,4 +126,12 @@ package Components is
       Border_Right    : Character := ']';    --  Right border character
    end record;
 
+   --  Selectable Component
+   --  Marks an entity as participating in Tab-cycle focus selection.
+   --  Tab_Order controls the cycling sequence (0 = auto, nonzero = explicit).
+   --  The actual focus state is stored in Widget_Component_T.Has_Focus.
+   type Selectable_Component_T is new Component_T with record
+      Tab_Order : Natural := 0;
+   end record;
+
 end Components;

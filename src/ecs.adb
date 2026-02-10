@@ -522,6 +522,17 @@ package body ECS is
                   Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
                end loop;
             end loop;
+
+            --  Focus indicator: asterisk at top-left when widget is focused and selectable
+            if Widget_C.Has_Focus
+              and then Has_Component (Component_List.all, Selectable_Component_T'Tag)
+            then
+               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer,
+                                       TUI_Width'First, TUI_Height'First);
+               Px.Char := '*';
+               Set_Buffer_Pixel (Widget_C.Render_Buffer,
+                                 TUI_Width'First, TUI_Height'First, Px);
+            end if;
          end;
       end loop;
 
@@ -1035,6 +1046,116 @@ package body ECS is
       --  Release lock on entity list
       Entity_List_PO.Release_Reading;
    end DoubleBufferFlagSystem;
+
+   -- ================================================================
+   -- SELECTION SYSTEM
+   -- Cycles Has_Focus among entities with Selectable_Component_T
+   -- on Tab press. Entities are sorted by Tab_Order.
+   -- ================================================================
+
+   procedure SelectionSystem (Entity_List_PO : in out Entity_Components_PO;
+                              Tab_Pressed : in Boolean) is
+      Entity_List : Entity_Components_Ptr;
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Widget_Component_T'Tag &
+        Selectable_Component_T'Tag;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+
+      --  Simple sorted list of selectable entities
+      Max_Selectables : constant := 64;
+      type Selectable_Info is record
+         EID   : Entity_Id;
+         Order : Natural;
+      end record;
+      Selectables : array (1 .. Max_Selectables) of Selectable_Info;
+      Count : Natural := 0;
+      Current_Focus : Natural := 0;
+
+      --  Temp for insertion sort
+      Temp : Selectable_Info;
+      J    : Natural;
+   begin
+      if not Tab_Pressed then
+         return;
+      end if;
+
+      Entity_List_PO.Claim_Reading (Entity_List);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
+
+      --  Build list of enabled selectable entities
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
+         declare
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+            Sel_C : Selectable_Component_T renames Selectable_Component_T (
+              Get_Component_Ptr (Component_List, Selectable_Component_T'Tag).all);
+         begin
+            if Widget_C.Is_Enabled and Count < Max_Selectables then
+               Count := Count + 1;
+               Selectables (Count) := (EID => EID, Order => Sel_C.Tab_Order);
+               if Widget_C.Has_Focus then
+                  Current_Focus := Count;
+               end if;
+            end if;
+         end;
+      end loop;
+
+      --  Sort by Tab_Order (insertion sort, small N)
+      for I in 2 .. Count loop
+         Temp := Selectables (I);
+         J := I - 1;
+         while J >= 1 and then Selectables (J).Order > Temp.Order loop
+            Selectables (J + 1) := Selectables (J);
+            J := J - 1;
+         end loop;
+         Selectables (J + 1) := Temp;
+      end loop;
+
+      --  Find Current_Focus in sorted order (index may have shifted)
+      Current_Focus := 0;
+      for I in 1 .. Count loop
+         Component_List := Get_Entity_Components (Entity_List.all, Selectables (I).EID);
+         declare
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+         begin
+            if Widget_C.Has_Focus then
+               Current_Focus := I;
+            end if;
+         end;
+      end loop;
+
+      if Count = 0 then
+         Entity_List_PO.Release_Reading;
+         return;
+      end if;
+
+      --  Compute next focus index
+      declare
+         Next_Focus : Natural;
+      begin
+         if Current_Focus = 0 or Current_Focus >= Count then
+            Next_Focus := 1;
+         else
+            Next_Focus := Current_Focus + 1;
+         end if;
+
+         --  Clear all Has_Focus, then set the next one
+         for I in 1 .. Count loop
+            Component_List := Get_Entity_Components (Entity_List.all, Selectables (I).EID);
+            declare
+               Widget_C : Widget_Component_T renames Widget_Component_T (
+                 Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+            begin
+               Widget_C.Has_Focus := (I = Next_Focus);
+            end;
+         end loop;
+      end;
+
+      Entity_List_PO.Release_Reading;
+   end SelectionSystem;
 
    -- ================================================================
    -- 1. TERMINAL RESIZE SYSTEM
