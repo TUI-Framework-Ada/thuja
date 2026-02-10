@@ -2,6 +2,7 @@
 --  Component definitions for the TUI ECS framework
 
 with Ada.Strings.Unbounded;
+with Ada.Containers.Vectors;
 with Graphics; use Graphics;
 with IDs; use IDs;
 with Flexbox; use Flexbox;
@@ -132,6 +133,23 @@ package Components is
    --  The actual focus state is stored in Widget_Component_T.Has_Focus.
    type Selectable_Component_T is new Component_T with record
       Tab_Order : Natural := 0;
+   end record;
+
+   --  Widget Command Entry — a single key sequence + display name pair
+   type Widget_Command_Entry_T is record
+      Keys : SU.Unbounded_String;
+      Name : SU.Unbounded_String;
+   end record;
+
+   package Widget_Command_Vectors is new Ada.Containers.Vectors
+      (Index_Type => Natural, Element_Type => Widget_Command_Entry_T);
+
+   --  Command Set Component
+   --  Attach to a selectable widget to give it its own set of key-sequence commands.
+   --  When the widget gains focus, these commands become active.
+   --  When the widget loses focus, they are deactivated.
+   type Command_Set_Component_T is new Component_T with record
+      Commands : Widget_Command_Vectors.Vector;
    end record;
 
 end Components;

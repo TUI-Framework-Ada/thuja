@@ -5,6 +5,7 @@ with IDs; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Wide_Wide_Text_IO;
 with Ada.Characters.Conversions;
 with Ada.Tags; use Ada.Tags;
+with Selection;
 
 package body ECS is
 
@@ -1152,6 +1153,19 @@ package body ECS is
                Widget_C.Has_Focus := (I = Next_Focus);
             end;
          end loop;
+
+         --  Swap widget command table based on new focus
+         Component_List := Get_Entity_Components (Entity_List.all, Selectables (Next_Focus).EID);
+         if Has_Component (Component_List.all, Command_Set_Component_T'Tag) then
+            declare
+               Cmd_Set : Command_Set_Component_T renames Command_Set_Component_T (
+                 Get_Component_Ptr (Component_List, Command_Set_Component_T'Tag).all);
+            begin
+               Selection.Activate_Widget_Commands (Cmd_Set.Commands);
+            end;
+         else
+            Selection.Deactivate_Widget_Commands;
+         end if;
       end;
 
       Entity_List_PO.Release_Reading;
