@@ -1,26 +1,68 @@
 --  Package Body for Graphics
 with Ada.Text_IO;
-with Interfaces.C; -- Not implemented yet, but may be needed for future FFI
+with Interfaces.C; use Interfaces.C; -- Not implemented yet, but may be needed for future FFI
+with System;
 
 package body Graphics is
 
-      --=============================================================================
+   -- Win32 Types and Constants
+   type HANDLE is new System.Address;
+   type BOOL is new int;
+   type DWORD is new unsigned;
+   
+   INVALID_HANDLE_VALUE : constant HANDLE := HANDLE(System.Null_Address);
+   STD_OUTPUT_HANDLE    : constant DWORD := 4294967285; -- -11
+   
+   -- Console Mode Flags
+   ENABLE_VIRTUAL_TERMINAL_PROCESSING : constant DWORD := 16#0004#;
+
+   -- Cursor Info Structure
+   type CONSOLE_CURSOR_INFO is record
+      Size    : DWORD;
+      Visible : BOOL;
+   end record;
+   pragma Convention (C, CONSOLE_CURSOR_INFO);
+
+   -- Win32 API Imports
+   function GetStdHandle (nStdHandle : DWORD) return HANDLE
+     with Import, Convention => Stdcall, External_Name => "GetStdHandle";
+
+   function GetConsoleMode (hConsoleHandle : HANDLE; lpMode : access DWORD) return BOOL
+     with Import, Convention => Stdcall, External_Name => "GetConsoleMode";
+
+   function SetConsoleMode (hConsoleHandle : HANDLE; dwMode : DWORD) return BOOL
+     with Import, Convention => Stdcall, External_Name => "SetConsoleMode";
+
+   function SetConsoleCursorInfo (hConsoleHandle : HANDLE; 
+                                 lpConsoleCursorInfo : access CONSOLE_CURSOR_INFO) return BOOL
+     with Import, Convention => Stdcall, External_Name => "SetConsoleCursorInfo";
+
+   --=============================================================================
    --TODO: Implement these for Windows using Win32 API calls
    procedure Enable_VT_Processing is
+      H    : constant HANDLE := GetStdHandle(STD_OUTPUT_HANDLE);
+      Mode : aliased DWORD;
+      Res  : BOOL;
    begin
-      --  On Windows, this would enable ANSI escape sequence processing
-      --  On Unix/Linux/macOS, ANSI sequences work by default
-      --  This is a no-op stub for cross-platform compatibility
-      null;
+      if H /= INVALID_HANDLE_VALUE then
+         Res := GetConsoleMode(H, Mode'Access);
+         -- Bitwise OR to enable VT processing
+         Res := SetConsoleMode(H, Mode or ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+      end if;
    end Enable_VT_Processing;
 
   
    procedure Set_Cursor_Visible (Visible : Boolean) is
+      H    : constant HANDLE := GetStdHandle(STD_OUTPUT_HANDLE);
+      Info : aliased CONSOLE_CURSOR_INFO;
+      Res  : BOOL;
    begin
-      --  On Windows, this would use Win32 API to show/hide cursor
-      --  On Unix/Linux/macOS, we use ANSI sequences instead
-      --  This is a no-op stub since ANSI sequences handle it
-      null;
+      if H /= INVALID_HANDLE_VALUE then
+         -- Typical cursor size is 25%
+         Info.Size := 25;
+         Info.Visible := (if Visible then 1 else 0);
+         Res := SetConsoleCursorInfo(H, Info'Access);
+      end if;
    end Set_Cursor_Visible;
 --=============================================================================
 

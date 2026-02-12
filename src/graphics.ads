@@ -123,4 +123,8 @@ package Graphics is
    --  Call this before program exit.
    procedure Reset_Styling;
 
+   procedure Enable_VT_Processing;
+
+   procedure Set_Cursor_Visible (Visible : Boolean);
+
 end Graphics;
