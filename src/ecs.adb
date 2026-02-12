@@ -38,10 +38,30 @@ package body ECS is
       Self.Components_Map.Include (Component, Component_Struct);
    end Add_Component;
 
+   procedure Add_Component (Self : in out Components;
+                            Component_Str : in String;
+                            Component_Struct : in Component_T'Class) is
+   begin
+      Add_Component (Self, To_CID (Component_Str), Component_Struct);
+   end Add_Component;
+
    procedure Remove_Component (Self : in out Components;
                                Component : in Component_Id) is
    begin
       Self.Components_Map.Exclude (Component);
+   end Remove_Component;
+
+   procedure Remove_Component (Self : in out Components;
+                               Component_Str : in String) is
+   begin
+      Remove_Component (Self, To_CID (Component_Str));
+   end Remove_Component;
+
+   procedure Remove_Component (Self : in out Components;
+                               Component_Tag : in Ada.Tags.Tag) is
+      Component : Component_Id := Get_Component_ID (Self, Component_Tag);
+   begin
+      Remove_Component (Self, Component);
    end Remove_Component;
 
    function Get_Component (Self : in out Components;
@@ -49,6 +69,13 @@ package body ECS is
                            return Component_T'Class is
    begin
       return Self.Components_Map (Component);
+   end Get_Component;
+
+   function Get_Component (Self : in out Components;
+                           Component_Str : in String)
+                           return Component_T'Class is
+   begin
+      return Self.Components_Map (To_CID (Component_Str));
    end Get_Component;
 
    function Get_Component (Self : in Components;
@@ -122,6 +149,12 @@ package body ECS is
                            Component : in Component_Id) return Boolean is
    begin
       return Self.Components_Map.Contains (Component);
+   end Has_Component;
+
+   function Has_Component (Self : in Components;
+                           Component_Str : in String) return Boolean is
+   begin
+      return Has_Component (Self, To_CID (Component_Str));
    end Has_Component;
 
    function Has_Component (Self : in Components;
@@ -820,9 +853,9 @@ package body ECS is
    --===========================================================================
 
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
-      
+
       package GFX renames Graphics;
-      
+
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
       function FG (P : Pixel_t) return String is
         (GFX.CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
@@ -949,7 +982,7 @@ package body ECS is
                   Ada.Text_IO.Put (SU.To_String (Frame_Output));
                end if;
             end;
-            
+
             --  Release RenderInfo
             RI.Drawing_FB.all.Post;
          end;
