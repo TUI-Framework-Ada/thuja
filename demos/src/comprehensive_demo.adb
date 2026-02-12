@@ -366,9 +366,9 @@ procedure Comprehensive_Demo is
 begin
 
    -- VT_PROCESSING with new Set_Cursor_Visible TEST ***
-   -- Graphics.Enable_VT_Processing;
-   -- Graphics.Set_Cursor_Visible (False);
-   -- Graphics.Clear_Screen;
+   Graphics.Enable_VT_Processing;
+   Graphics.Set_Cursor_Visible (False);
+   Graphics.Clear_Screen;
 
    --------------------------------------------------------
    -- REGISTER ALL COMPONENTS
@@ -541,9 +541,9 @@ begin
    Thread_Flag.Stop;
 
    -- VT_PROCESSING with new Set_Cursor_Visible TEST ***
-   -- delay 0.1;
-   -- Graphics.Set_Cursor_Visible (True);
-   -- Graphics.Clear_Screen;
+   delay 0.1;
+   Graphics.Set_Cursor_Visible (True);
+   Graphics.Clear_Screen;
 
    Graphics.Clear_Screen;
    Ada.Text_IO.Put_Line ("==============================================");
