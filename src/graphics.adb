@@ -1,6 +1,6 @@
 --  Package Body for Graphics
 with Ada.Text_IO;
-with Interfaces.C; use Interfaces.C; -- Not implemented yet, but may be needed for future FFI
+with Interfaces.C; use Interfaces.C;
 with System;
 
 package body Graphics is
@@ -12,6 +12,7 @@ package body Graphics is
    
    -- If GetStdHandle fails, it returns 0 this is a 'NULL' check
    INVALID_HANDLE_VALUE : constant HANDLE := HANDLE(System.Null_Address);
+
    -- A magic number telling windows that it wants to handle Standard output of the terminal
    STD_OUTPUT_HANDLE    : constant DWORD := 4294967285; -- -11
    
@@ -44,7 +45,8 @@ package body Graphics is
      with Import, Convention => Stdcall, External_Name => "SetConsoleCursorInfo";
 
    --=============================================================================
-   -- Implementation for Windows using Win32 API calls
+   -- Implementation for Windows using Win32 API calls to allow for ANSI codes
+   --=============================================================================
    procedure Enable_VT_Processing is
       H    : constant HANDLE := GetStdHandle(STD_OUTPUT_HANDLE); -- Get permission to edit terminal
       Mode : aliased DWORD; -- Holds current terminal settings
@@ -58,25 +60,26 @@ package body Graphics is
       end if;
    end Enable_VT_Processing;
 
+   --=============================================================================
    -- Implementation for Windows using Win32 API calls for hiding/showing cursor
+   --=============================================================================
    procedure Set_Cursor_Visible (Visible : Boolean) is
       H    : constant HANDLE := GetStdHandle(STD_OUTPUT_HANDLE);
       Info : aliased CONSOLE_CURSOR_INFO; -- Creates a record to send to Windows
-      Res  : BOOL;
+      Res  : BOOL; -- Returns a value if operation worked even if unused (True or False)
    begin
       if H /= INVALID_HANDLE_VALUE then
          -- Windows requires the cursor size to be valid (1-100) even when hiding
          -- Do not set to 0 otherwise could fail, 25 is a standard size
          Info.Size := 25;
+         -- True or False to set cursor visibility
          Info.Visible := (if Visible then 1 else 0);
 
          -- Send record to OS, even if Res isn't utilized it's to satisfy return type
          Res := SetConsoleCursorInfo(H, Info'Access);
       end if;
    end Set_Cursor_Visible;
---=============================================================================
-
-
+   
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is
       entry Wait (V : out Boolean)

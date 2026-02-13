@@ -365,7 +365,7 @@ procedure Comprehensive_Demo is
 
 begin
 
-   -- VT_PROCESSING with new Set_Cursor_Visible TEST ***
+   -- VT_PROCESSING with new Set_Cursor_Visible
    Graphics.Enable_VT_Processing;
    Graphics.Set_Cursor_Visible (False);
    Graphics.Clear_Screen;
@@ -540,7 +540,7 @@ begin
    --  Stop render thread before applying manual screen updates
    Thread_Flag.Stop;
 
-   -- VT_PROCESSING with new Set_Cursor_Visible TEST ***
+   -- VT_PROCESSING with new Set_Cursor_Visible
    delay 0.1;
    Graphics.Set_Cursor_Visible (True);
    Graphics.Clear_Screen;
