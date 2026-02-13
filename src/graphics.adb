@@ -2,9 +2,13 @@
 with Ada.Text_IO;
 with Interfaces.C; use Interfaces.C;
 with System;
+with Ada.Wide_Wide_Text_IO;
+with Ada.Characters.Conversions;
 
 package body Graphics is
 
+   use Ada.Characters.Conversions;
+   
    -- Win32 Types and Constants
    type HANDLE is new System.Address;
    type BOOL is new int;
@@ -144,26 +148,36 @@ package body Graphics is
       return B.Data.all (X, Y);
    end Get_Buffer_Pixel;
 
+   --=============================================================================
+   -- Implementation for Linux using regular ANSI escape codes (Confirm rationale)
+   --=============================================================================
+
    --  Hides the terminal cursor
    procedure Hide_Cursor is
    begin
-      Ada.Text_IO.Put (CSI & "?25l");
+      -- Ada.Text_IO.Put (CSI & "?25l");
+      Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "?25l"));
+      Ada.Wide_Wide_Text_IO.Flush; -- Force it to hide NOW
    end Hide_Cursor;
 
    --  Shows the terminal cursor
    procedure Show_Cursor is
    begin
-      Ada.Text_IO.Put (CSI & "?25h");
+      -- Ada.Text_IO.Put (CSI & "?25h");
+      Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "?25h"));
+      Ada.Wide_Wide_Text_IO.Flush; -- Force it to show NOW
    end Show_Cursor;
 
    procedure Save_Cursor_Position is
    begin
-      Ada.Text_IO.Put (CSI & "s");
+      -- Ada.Text_IO.Put (CSI & "s");
+      Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "s"));
    end Save_Cursor_Position;
 
    procedure Restore_Cursor_Position is
    begin
-      Ada.Text_IO.Put (CSI & "u");
+      -- Ada.Text_IO.Put (CSI & "u");
+      Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "u"));
    end Restore_Cursor_Position;
 
    --  Sends ANSI code to the terminal to wipe the screen.
@@ -171,22 +185,24 @@ package body Graphics is
    procedure Clear_Screen is
    begin
       --  Enable VT processing first so ANSI sequences are honoured
-      Enable_VT_Processing;
-      Ada.Text_IO.Put (
+      -- Enable_VT_Processing;
+      Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (
          CSI & "?1049h" &   --  Switch to alternate screen buffer
-         CSI & "?25l" &     --  Hide cursor (ANSI)
+         -- CSI & "?25l" &     --  Hide cursor (ANSI)
          CSI & "0m" &       --  Reset formatting
          CSI & "2J" &       --  Clear screen
-         CSI & "1;1H");     --  Move to top-left
+         CSI & "1;1H"));     --  Move to top-left
       --  Also hide cursor via Win32 API as a fallback
-      Set_Cursor_Visible (False);
+      -- Set_Cursor_Visible (False);
+      Ada.Wide_Wide_Text_IO.Flush;
    end Clear_Screen;
 
    --  Resets terminal to normal state (resets colors and typefaces)
    procedure Reset_Styling is
    begin
       --  Reset all styling / attributes
-      Ada.Text_IO.Put (CSI & "0m");
+      -- Ada.Text_IO.Put (CSI & "0m");
+      Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "0m"));
    end Reset_Styling;
 
 end Graphics;

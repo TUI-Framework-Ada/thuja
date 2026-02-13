@@ -35,6 +35,7 @@
 ------------------------------------------------------------------------------
 
 with Ada.Text_IO;
+with Ada.Wide_Wide_Text_IO;
 with Components;
 with ECS;
 with Graphics;
@@ -366,9 +367,15 @@ procedure Comprehensive_Demo is
 begin
 
    -- VT_PROCESSING with new Set_Cursor_Visible
+   -- NOTE: Hide_Cursor/Show_Cursor cannot be mixed with Set_Cursor_Visible otherwise
+   -- it may over all just be ignored and show cursor regardless of command
+   -- If running windows demo utilize Set_Cursor_Visible otherwise utilize
+   -- Hide_Cursor/Show_Cursor on Linux? Confirm this with Linix users.
    Graphics.Enable_VT_Processing;
    Graphics.Set_Cursor_Visible (False);
+   -- Graphics.Hide_Cursor;
    Graphics.Clear_Screen;
+   Ada.Wide_Wide_Text_IO.Flush;
 
    --------------------------------------------------------
    -- REGISTER ALL COMPONENTS
@@ -410,8 +417,6 @@ begin
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("WidgetComponent"), Comp_MovingDot_Widget);
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("BackgroundColorComponent"), Comp_MovingDot_BG);
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("PositionMode"), Comp_MovingDot_PositionMode);
-
-   Graphics.Clear_Screen;
 
    --------------------------------------------------------
    -- MAIN LOOP
@@ -540,11 +545,6 @@ begin
    --  Stop render thread before applying manual screen updates
    Thread_Flag.Stop;
 
-   -- VT_PROCESSING with new Set_Cursor_Visible
-   delay 0.1;
-   Graphics.Set_Cursor_Visible (True);
-   Graphics.Clear_Screen;
-
    Graphics.Clear_Screen;
    Ada.Text_IO.Put_Line ("==============================================");
    Ada.Text_IO.Put_Line ("  THUJA FRAMEWORK DEMO COMPLETE!");
@@ -559,5 +559,10 @@ begin
    Ada.Text_IO.Put_Line ("  - Multi-threaded rendering");
    Ada.Text_IO.Put_Line ("");
    Ada.Text_IO.Put_Line ("Thank you for using Thuja!");
+
+   -- VT_PROCESSING with new Set_Cursor_Visible
+   Graphics.Set_Cursor_Visible (True);
+   --Graphics.Show_Cursor;
+   Ada.Wide_Wide_Text_IO.Flush;
 
 end Comprehensive_Demo;
