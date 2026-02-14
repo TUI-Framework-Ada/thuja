@@ -863,51 +863,45 @@ package body ECS is
       Entity_List_PO.Claim_Reading (Entity_List);
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
 
-      GFX.Hide_Cursor;
-      GFX.Save_Cursor_Position;
+      -- PROTECTED RENDER LOOP
+      for EID of Matched_Entities loop
+         RI_Component_List := Get_Entity_Components (Entity_List.all, EID);
+         declare
+            --  Obtain a view to the component allowing direct modification
+            RI : Render_Info_Component_T renames
+              Render_Info_Component_T
+                (Get_Component_Ptr
+                   (RI_Component_List, Render_Info_Component_T'Tag).all);
+         begin
+            RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
+            -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
+            Drawing :=
+              (if Drawing_From_FB_1
+               then RI.Framebuffer_1'Access
+               else RI.Framebuffer_2'Access);
 
-      begin
-         for EID of Matched_Entities loop
-            RI_Component_List := Get_Entity_Components (Entity_List.all, EID);
+            --  Begin comparing FB to BB and drawing
+            for Y in TUI_Height'First .. RI.Terminal_Height loop
+               for X in TUI_Width'First .. RI.Terminal_Width loop
+                  if Get_Buffer_Pixel (Drawing.all, X, Y)
+                    /= Get_Buffer_Pixel (RI.Backbuffer, X, Y)
+                  then
+                     --  Fetch buffer pixels
+                     FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
-            declare
-               RI : Render_Info_Component_T renames Render_Info_Component_T (
-                 Get_Component_Ptr (RI_Component_List, Render_Info_Component_T'Tag).all);
-            begin
-               RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
-               Drawing := (if Drawing_From_FB_1 then RI.Framebuffer_1'Access else RI.Framebuffer_2'Access);
+                     -- Draw to terminal
+                     Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
 
-               for Y in TUI_Height'First .. RI.Terminal_Height loop
-                  for X in TUI_Width'First .. RI.Terminal_Width loop
-                     if Get_Buffer_Pixel (Drawing.all, X, Y) /=
-                       Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-                     then
-                        FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
-
-                        Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
-
-                        Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
-                     end if;
-                  end loop;
+                     -- Update backbuffer
+                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                  end if;
                end loop;
-
-               RI.Drawing_FB.all.Post;
-            end;
-         end loop;
-
-      exception
-         when others =>
-            GFX.Restore_Cursor_Position;
-            GFX.Show_Cursor;
-            GFX.Reset_Styling;
-            Ada.Wide_Wide_Text_IO.Flush;
-            raise;
-      end;
-
-      GFX.Restore_Cursor_Position;
-      GFX.Show_Cursor;
-      GFX.Reset_Styling;
-      Ada.Wide_Wide_Text_IO.Flush;
+            end loop;
+            
+            --  Release RenderInfo
+            RI.Drawing_FB.all.Post;
+         end;
+      end loop;
 
       Entity_List_PO.Release_Reading;
    end BufferDrawSystem;
