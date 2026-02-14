@@ -770,54 +770,44 @@ package body ECS is
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
 
       -- PROTECTED RENDER LOOP
-      begin
-         for EID of Matched_Entities loop
-            RI_Component_List := Get_Entity_Components (Entity_List.all, EID);
+      for EID of Matched_Entities loop
+         RI_Component_List := Get_Entity_Components (Entity_List.all, EID);
+         declare
+            --  Obtain a view to the component allowing direct modification
+            RI : Render_Info_Component_T renames
+              Render_Info_Component_T
+                (Get_Component_Ptr
+                   (RI_Component_List, Render_Info_Component_T'Tag).all);
+         begin
+            RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
+            -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
+            Drawing :=
+              (if Drawing_From_FB_1
+               then RI.Framebuffer_1'Access
+               else RI.Framebuffer_2'Access);
 
-            declare
-               --  Obtain a view to the component allowing direct modification
-               RI : Render_Info_Component_T renames Render_Info_Component_T (
-                 Get_Component_Ptr (RI_Component_List, Render_Info_Component_T'Tag).all);
-            begin
-               RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
-               -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
-               Drawing := (if Drawing_From_FB_1 then RI.Framebuffer_1'Access else RI.Framebuffer_2'Access);
+            --  Begin comparing FB to BB and drawing
+            for Y in TUI_Height'First .. RI.Terminal_Height loop
+               for X in TUI_Width'First .. RI.Terminal_Width loop
+                  if Get_Buffer_Pixel (Drawing.all, X, Y)
+                    /= Get_Buffer_Pixel (RI.Backbuffer, X, Y)
+                  then
+                     --  Fetch buffer pixels
+                     FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
-               --  Begin comparing FB to BB and drawing
-               for Y in TUI_Height'First .. RI.Terminal_Height loop
-                  for X in TUI_Width'First .. RI.Terminal_Width loop
-                     if Get_Buffer_Pixel (Drawing.all, X, Y) /=
-                       Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-                     then
-                        --  Fetch buffer pixels
-                        FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
+                     -- Draw to terminal
+                     Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
 
-                        -- Draw to terminal
-                        Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
-
-                        -- Update backbuffer
-                        Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
-                     end if;
-                  end loop;
+                     -- Update backbuffer
+                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                  end if;
                end loop;
-
-               --  Release RenderInfo
-               RI.Drawing_FB.all.Post;
-            end;
-         end loop;
-
-      exception
-         when others =>
-            -- Consider removing this section as anything placed here
-            -- will be forced to render every 30FPS, not optimal
-            -- Exception (Crash-Cleanup): Reset styling and then flush
-            -- GFX.Clear_Screen;
-            -- Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
-            raise; -- Rethrow the error for debug just incase
-      end;
-      -- POST-RENDER (Normal-Cleanup) Reset styling and then flush
-      -- GFX.Clear_Screen;
-      -- Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
+            end loop;
+            
+            --  Release RenderInfo
+            RI.Drawing_FB.all.Post;
+         end;
+      end loop;
 
       --  Release lock on entity list
       Entity_List_PO.Release_Reading;
