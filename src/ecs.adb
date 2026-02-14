@@ -769,11 +769,6 @@ package body ECS is
       --  Search for entities matching the list of components
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
 
-      -- PRE-RENDER: Hide the cursor and save its current position
-      -- GFX.Enable_VT_processing;
-      -- GFX.Hide_Cursor; -- Removed Hide_Cursor here to test VT Processing
-      -- GFX.Save_Cursor_Position;
-
       -- PROTECTED RENDER LOOP
       begin
          for EID of Matched_Entities loop
@@ -813,18 +808,16 @@ package body ECS is
 
       exception
          when others =>
-            -- Exception (Crash-Cleanup): restore position, show cursor, reset styling and then flush
-            -- GFX.Restore_Cursor_Position;
-            -- GFX.Show_Cursor;
-            GFX.Reset_Styling;
+            -- Consider removing this section as anything placed here
+            -- will be forced to render every 30FPS, not optimal
+            -- Exception (Crash-Cleanup): Reset styling and then flush
+            -- GFX.Clear_Screen;
             -- Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
             raise; -- Rethrow the error for debug just incase
       end;
-      -- POST-RENDER (Normal-Cleanup) Restore cursor pos, show cursor, reset styling and then flush
-      -- GFX.Restore_Cursor_Position;
-      -- GFX.Show_Cursor; -- removed show cursor here to test VT_Processing
-      GFX.Reset_Styling;
-      Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
+      -- POST-RENDER (Normal-Cleanup) Reset styling and then flush
+      -- GFX.Clear_Screen;
+      -- Ada.Wide_Wide_Text_IO.Flush; -- Ensure commands are sent to the hardware immediately
 
       --  Release lock on entity list
       Entity_List_PO.Release_Reading;

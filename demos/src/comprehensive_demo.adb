@@ -370,10 +370,11 @@ begin
    -- NOTE: Hide_Cursor/Show_Cursor cannot be mixed with Set_Cursor_Visible otherwise
    -- it may over all just be ignored and show cursor regardless of command
    -- If running windows demo utilize Set_Cursor_Visible otherwise utilize
-   -- Hide_Cursor/Show_Cursor on Linux? Confirm this with Linix users.
+   -- Hide_Cursor/Show_Cursor on Linux? Confirm this with Linux users.
    Graphics.Enable_VT_Processing;
    Graphics.Set_Cursor_Visible (False);
    -- Graphics.Hide_Cursor;
+   Graphics.Save_Cursor_Position;
    Graphics.Clear_Screen;
    Ada.Wide_Wide_Text_IO.Flush;
 
@@ -563,6 +564,7 @@ begin
    -- VT_PROCESSING with new Set_Cursor_Visible
    Graphics.Set_Cursor_Visible (True);
    --Graphics.Show_Cursor;
+   Graphics.Restore_Cursor_Position;
    Ada.Wide_Wide_Text_IO.Flush;
 
 end Comprehensive_Demo;

@@ -155,7 +155,6 @@ package body Graphics is
    --  Hides the terminal cursor
    procedure Hide_Cursor is
    begin
-      -- Ada.Text_IO.Put (CSI & "?25l");
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "?25l"));
       Ada.Wide_Wide_Text_IO.Flush; -- Force it to hide NOW
    end Hide_Cursor;
@@ -163,28 +162,28 @@ package body Graphics is
    --  Shows the terminal cursor
    procedure Show_Cursor is
    begin
-      -- Ada.Text_IO.Put (CSI & "?25h");
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "?25h"));
       Ada.Wide_Wide_Text_IO.Flush; -- Force it to show NOW
    end Show_Cursor;
 
    procedure Save_Cursor_Position is
    begin
-      -- Ada.Text_IO.Put (CSI & "s");
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "s"));
    end Save_Cursor_Position;
 
    procedure Restore_Cursor_Position is
    begin
-      -- Ada.Text_IO.Put (CSI & "u");
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "u"));
    end Restore_Cursor_Position;
 
    --  Sends ANSI code to the terminal to wipe the screen.
    --  This should be run once before any of the systems.
+   -- NOTE: Removed both hide cursors temporarily as hide/show
+   -- do not need to be re-called
    procedure Clear_Screen is
    begin
-      --  Enable VT processing first so ANSI sequences are honoured
+      -- Enable VT processing first so ANSI sequences are honoured 
+      -- VT_Processing only needs to be run once at start of any demo
       -- Enable_VT_Processing;
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (
          CSI & "?1049h" &   --  Switch to alternate screen buffer
@@ -201,7 +200,6 @@ package body Graphics is
    procedure Reset_Styling is
    begin
       --  Reset all styling / attributes
-      -- Ada.Text_IO.Put (CSI & "0m");
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "0m"));
    end Reset_Styling;
 
