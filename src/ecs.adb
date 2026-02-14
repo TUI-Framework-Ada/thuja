@@ -2,6 +2,7 @@
 -- ECS.ADB - Entity Component System Implementation
 --==============================================================================
 
+with Ada.Calendar; use type Ada.Calendar.Time;
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
@@ -12,6 +13,7 @@ with Selection;
 package body ECS is
 
    package SU renames Ada.Strings.Unbounded;
+   use type SU.Unbounded_String;
 
    --===========================================================================
    -- HASH FUNCTIONS
@@ -1208,5 +1210,89 @@ package body ECS is
 
       Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
    end Move_Widget_By;
+
+   procedure CalendarDisplaySystem (Entity_List_PO : in out Entity_Components_PO) is
+      function Format (S : String) return String is (
+         (if S'Length = 2 then "0" else "") & S (S'First + 1 .. S'Last)
+      );
+      Entity_List : Entity_Components_Ptr;
+      --  Search for widgets with text and calendar components
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Widget_Component_T'Tag &
+        Text_Component_T'Tag &
+        Calendar_Component_T'Tag;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+
+      --  Values for Rata Die calculation of weekdays
+      --  Earliest date possible with Ada.Calendar.Time
+      Rata_Die_Date : constant Ada.Calendar.Time := Ada.Calendar.Time_Of (1901, 1, 1);
+      --  Weekday range 0-6, Sunday is 0
+      Rata_Die_Weekday : constant Natural := 2; --  Tuesday, Jan. 1, 1901
+   begin
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
+
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
+         declare
+            --  Obtain views to the components
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+            Text_C : Text_Component_T renames Text_Component_T (
+              Get_Component_Ptr (Component_List, Text_Component_T'Tag).all);
+            Calendar_C : Calendar_Component_T renames Calendar_Component_T (
+              Get_Component_Ptr (Component_List, Calendar_Component_T'Tag).all);
+
+            Text_Width : constant Integer := Integer (Widget_C.Size_Width - Text_C.Offset_X) + 1;
+            Text_Height : constant Integer := Integer (Widget_C.Size_Height - Text_C.Offset_Y) + 1;
+            Date_Weekday : constant Natural := Natural (
+              (Ada.Calendar.Time_Of (Calendar_C.Year,
+                                     Calendar_C.Month,
+                                     Calendar_C.Day
+                                    ) - Rata_Die_Date) / 86400) mod 7 + Rata_Die_Weekday;
+         begin
+
+            if Calendar_C.Display_Mode = Month_Page
+              and Text_Width >= 20 and Text_Height >= 8 then
+               --  Month_Page mode selected and enough size for it
+               null;
+            else
+               --  Not enough size or Date_String mode selected
+
+               --  Initial string section
+               Text_C.Text := SU.To_Unbounded_String (
+                 Format (Calendar_C.Year'Image) & "/" &
+                 Format (Calendar_C.Month'Image) & "/" &
+                 Format (Calendar_C.Day'Image) & ", ");
+
+               --  Weekday
+               case Date_Weekday is
+                  when 0 =>
+                     Text_C.Text := Text_C.Text & "Sunday";
+                  when 1 =>
+                     Text_C.Text := Text_C.Text & "Monday";
+                  when 2 =>
+                     Text_C.Text := Text_C.Text & "Tuesday";
+                  when 3 =>
+                     Text_C.Text := Text_C.Text & "Wednesday";
+                  when 4 =>
+                     Text_C.Text := Text_C.Text & "Thursday";
+                  when 5 =>
+                     Text_C.Text := Text_C.Text & "Friday";
+                  when 6 =>
+                     Text_C.Text := Text_C.Text & "Saturday";
+                  when others =>
+                     Text_C.Text := Text_C.Text & "Unknown";
+               end case;
+            end if;
+         end;
+      end loop;
+
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
+   end CalendarDisplaySystem;
 
 end ECS;

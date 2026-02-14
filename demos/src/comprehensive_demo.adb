@@ -257,6 +257,13 @@ procedure Comprehensive_Demo is
       Is_Strikethrough => False
    );
 
+   Comp_Sidebar_Calendar : constant Components.Calendar_Component_T := (
+      Display_Mode => Components.Date_String,
+      Year => 2026,
+      Month => 2,
+      Day => 11
+   );
+
    Comp_Sidebar_PositionMode : constant Components.Position_Mode_Component_T := (
       Mode => Components.Flex
    );
@@ -403,6 +410,7 @@ begin
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("WidgetComponent"), Comp_Sidebar_Widget);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Sidebar_BG);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("TextComponent"), Comp_Sidebar_Text);
+   ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("Calendar"), Comp_Sidebar_Calendar);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("PositionMode"), Comp_Sidebar_PositionMode);
 
    --  Content
@@ -527,6 +535,7 @@ begin
 
          --  SYSTEM 3-7: Rendering pipeline
          ECS.WidgetBackgroundSystem (Entities_PO);
+         ECS.CalendarDisplaySystem (Entities_PO); --  New, writes calendar data to a text component
          ECS.TextRenderSystem (Entities_PO);
          ECS.ProgressBarRenderSystem (Entities_PO);  -- NEW FEATURE!
          ECS.BufferCopySystem (Entities_PO);

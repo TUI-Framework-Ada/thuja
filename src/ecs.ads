@@ -168,4 +168,6 @@ package ECS is
                             Delta_X : Integer;
                             Delta_Y : Integer);
 
+   procedure CalendarDisplaySystem (Entity_List_PO : in out Entity_Components_PO);
+
 end ECS;

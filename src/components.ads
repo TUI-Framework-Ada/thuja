@@ -1,6 +1,7 @@
 --  components.ads
 --  Component definitions for the TUI ECS framework
 
+with Ada.Calendar;
 with Ada.Strings.Unbounded;
 with Ada.Containers.Vectors;
 with Graphics; use Graphics;
@@ -150,6 +151,22 @@ package Components is
    --  When the widget loses focus, they are deactivated.
    type Command_Set_Component_T is new Component_T with record
       Commands : Widget_Command_Vectors.Vector;
+   end record;
+
+   --  Controls how a calendar component displays its preview
+   type Calendar_Display_Mode is (
+      --  Include all days of the month in a formatted preview, requires at least 20h x 8v pixels
+      Month_Page,
+      --  Minimal formatting of "YYYY/MM/DD, Weekday"
+      Date_String
+   );
+
+   type Calendar_Component_T is new Component_T with record
+      Display_Mode : Calendar_Display_Mode := Month_Page; --  How to render the calendar
+
+      Year  : Ada.Calendar.Year_Number;
+      Month : Ada.Calendar.Month_Number;
+      Day   : Ada.Calendar.Day_Number;
    end record;
 
 end Components;
