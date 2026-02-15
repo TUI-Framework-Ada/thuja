@@ -1212,9 +1212,21 @@ package body ECS is
    end Move_Widget_By;
 
    procedure CalendarDisplaySystem (Entity_List_PO : in out Entity_Components_PO) is
-      function Format (S : String) return String is (
-         (if S'Length = 2 then "0" else "") & S (S'First + 1 .. S'Last)
+      function Trim (S : String) return String is (
+         S (S'First + 1 .. S'Last)
       );
+      function Pad (S : String; C : Character := '0') return String is (
+         (if S'Length = 1 then String (C) else "") & S
+      );
+      function Weekday_Pad (S : String; N : in out Natural) return String is
+      begin
+         N := N + 1;
+         if N mod 7 = 0 then
+            return S;
+         else
+            return S & " ";
+         end if;
+      end Weekday_Pad;
       Entity_List : Entity_Components_Ptr;
       --  Search for widgets with text and calendar components
       Search_Component_Tags : constant Component_Tag_Vector.Vector :=
@@ -1223,6 +1235,19 @@ package body ECS is
         Calendar_Component_T'Tag;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
+
+      --  Values to strings
+      Weekdays : constant array (Natural) of String := ["Sunday",
+                                                        "Monday",
+                                                        "Tuesday",
+                                                        "Wednesday",
+                                                        "Thursday",
+                                                        "Friday",
+                                                        "Saturday"];
+      Months : constant array (Natural) of String := ["Jan", "Feb", "Mar",
+                                                      "Apr", "May", "Jun",
+                                                      "Jul", "Aug", "Sep",
+                                                      "Oct", "Nov", "Dec"];
 
       --  Values for Rata Die calculation of weekdays
       --  Earliest date possible with Ada.Calendar.Time
@@ -1253,40 +1278,68 @@ package body ECS is
                                      Calendar_C.Month,
                                      Calendar_C.Day
                                     ) - Rata_Die_Date) / 86400) mod 7 + Rata_Die_Weekday;
+            Weekday : String;
          begin
 
             if Calendar_C.Display_Mode = Month_Page
               and Text_Width >= 20 and Text_Height >= 8 then
                --  Month_Page mode selected and enough size for it
-               null;
+
+               --  Make Date_Weekday for the first of the month
+               Date_Weekday := (Date_Weekday - Calendar_C.Day + 1) mod 7;
+
+               --  Year, row 1, left aligned
+               Text_C.Text := SU.To_Unbounded_String (Trim (Calendar_C.Year'Image));
+               --  Padding. 7 = length of year + length of month abbreviation
+               Text_C.Text := Text_C.Text & (" " * (Text_Width - 7));
+               --  Month, row 1, right aligned
+               Text_C.Text := Text_C.Text * Months (Natural (Calendar_C.Month) - 1);
+
+               --  Row 2, spacer
+               Text_C.Text := Text_C.Text * ("-" * Text_Width);
+
+               --  Row 3, weekday abbreviations
+               for Weekday_I in Weekdays'First .. Weekdays'Last loop
+                  Weekday := Weekdays (Weekday_I);
+                  Weekday := Weekday (Weekday'First .. Weekday'First + 1);
+                  Text_C.Text := Text_C.Text & Weekday;
+                  if Weekday_I /= Weekdays'Last then
+                     Text_C.Text := Text_C.Text & " ";
+                  end if;
+               end loop;
+
+               --  Month-day section
+               declare
+                  Weekday_Pos : Natural := 0;
+                  Month_End : constant Ada.Calendar.Time :=
+                    (if Calendar_C.Month = 12 then
+                      Ada.Calendar.Time_Of (Calendar_C.Year + 1, 1, 1)
+                     else
+                      Ada.Calendar.Time_Of (Calendar_C.Year, Calendar_C.Month, 1)
+                    ) - Duration (1 * 24 * 60 * 60);
+                  Day_Count : constant Ada.Calendar.Day_Number := Month_End.Day;
+               begin
+                  --  Row 4, padding to align month days to weekdays
+                  for Padding_Index in 1 .. Date_Weekday loop
+                     Text_C.Text := Text_C.Text & Weekday_Pad ("  ", Weekday_Pos);
+                  end loop;
+
+                  --  Rows 4-8, month days
+                  for Month_Day in 1 .. Natural (Day_Count) loop
+                     Text_C.Text := Text_C.Text * Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos);
+                  end loop;
+               end;
             else
                --  Not enough size or Date_String mode selected
 
                --  Initial string section
                Text_C.Text := SU.To_Unbounded_String (
-                 Format (Calendar_C.Year'Image) & "/" &
-                 Format (Calendar_C.Month'Image) & "/" &
-                 Format (Calendar_C.Day'Image) & ", ");
+                 Pad (Trim (Calendar_C.Year'Image) & "/") &
+                 Pad (Trim (Calendar_C.Month'Image) & "/") &
+                 Pad (Trim (Calendar_C.Day'Image) & ", "));
 
                --  Weekday
-               case Date_Weekday is
-                  when 0 =>
-                     Text_C.Text := Text_C.Text & "Sunday";
-                  when 1 =>
-                     Text_C.Text := Text_C.Text & "Monday";
-                  when 2 =>
-                     Text_C.Text := Text_C.Text & "Tuesday";
-                  when 3 =>
-                     Text_C.Text := Text_C.Text & "Wednesday";
-                  when 4 =>
-                     Text_C.Text := Text_C.Text & "Thursday";
-                  when 5 =>
-                     Text_C.Text := Text_C.Text & "Friday";
-                  when 6 =>
-                     Text_C.Text := Text_C.Text & "Saturday";
-                  when others =>
-                     Text_C.Text := Text_C.Text & "Unknown";
-               end case;
+               Text_C.Text := Text_C.Text & Weekdays (Date_Weekday);
             end if;
          end;
       end loop;
