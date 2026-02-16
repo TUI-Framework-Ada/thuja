@@ -32,7 +32,7 @@ procedure Tab_Demo is
       Label : String_t (1 .. 2);
    end record;
 
-   Boxes : constant array (1 .. 10) of Box_Info := [
+   Boxes : constant array (1 .. 10) of Box_Info := (
       (X => 3,  Y => 3,  Order => 3,  Label => " 3"),
       (X => 17, Y => 3,  Order => 8,  Label => " 8"),
       (X => 31, Y => 3,  Order => 1,  Label => " 1"),
@@ -43,10 +43,10 @@ procedure Tab_Demo is
       (X => 31, Y => 9,  Order => 10, Label => "10"),
       (X => 45, Y => 9,  Order => 4,  Label => " 4"),
       (X => 59, Y => 9,  Order => 7,  Label => " 7")
-   ];
+   );
 
    --  Colors for the boxes
-   Box_Colors : constant array (1 .. 10) of Color_t := [
+   Box_Colors : constant array (1 .. 10) of Color_t := (
       (Red => 70,  Green => 130, Blue => 180),   --  Steel blue
       (Red => 180, Green => 80,  Blue => 80),     --  Soft red
       (Red => 80,  Green => 160, Blue => 80),     --  Soft green
@@ -57,7 +57,7 @@ procedure Tab_Demo is
       (Red => 100, Green => 140, Blue => 60),     --  Olive
       (Red => 160, Green => 80,  Blue => 120),    --  Rose
       (Red => 80,  Green => 100, Blue => 180)     --  Cornflower
-   ];
+   );
 
    --  Create the RenderInfo entity
    procedure Create_Render_Info is

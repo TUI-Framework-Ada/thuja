@@ -43,6 +43,7 @@ with Ada.Strings;
 with Ada.Strings.Unbounded;
 use Graphics;
 with IDs;
+use type IDs.Entity_ID_Vector.Vector;
 with Flexbox;
 
 procedure Comprehensive_Demo is
@@ -86,10 +87,10 @@ procedure Comprehensive_Demo is
       Terminal_Height     => 24,
       Prev_Terminal_Width => 80,
       Prev_Terminal_Height => 24,
-      Framebuffer_1       => (Width => 80, Height => 24, Data => <>),
-      Framebuffer_2       => (Width => 80, Height => 24, Data => <>),
+      Framebuffer_1       => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_2       => (Width => 80, Height => 24, Data => new Pixel_Array),
       Drawing_FB          => new Graphics.Protected_DB,
-      Backbuffer          => (Width => 80, Height => 24, Data => <>)
+      Backbuffer          => (Width => 80, Height => 24, Data => new Pixel_Array)
    );
 
    --  Root Widget: Main container using Column layout
@@ -98,9 +99,9 @@ procedure Comprehensive_Demo is
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 24,
-      Children      => [E_Header, E_ProgressBar, E_Sidebar, E_Content, E_MovingDot],
+      Children      => IDs.Entity_ID_Vector.To_Vector (E_Header, 1) & E_ProgressBar & E_Sidebar & E_Content & E_MovingDot,
       --Children      => [E_Header, E_ProgressBar, E_Middle, E_MovingDot],
-      Render_Buffer => (Width => 80, Height => 24, Data => <>),
+      Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -173,8 +174,8 @@ procedure Comprehensive_Demo is
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 3,
-      Children      => [],
-      Render_Buffer => (Width => 80, Height => 3, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 80, Height => 3, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -205,8 +206,8 @@ procedure Comprehensive_Demo is
       Position_Y    => 4,
       Size_Width    => 80,
       Size_Height   => 1,
-      Children      => [],
-      Render_Buffer => (Width => 80, Height => 1, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 80, Height => 1, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -237,8 +238,8 @@ procedure Comprehensive_Demo is
       Position_Y    => 5,
       Size_Width    => 20,
       Size_Height   => 10,
-      Children      => [],
-      Render_Buffer => (Width => 20, Height => 10, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 20, Height => 10, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -269,8 +270,8 @@ procedure Comprehensive_Demo is
       Position_Y    => 5,
       Size_Width    => 60,
       Size_Height   => 10,
-      Children      => [],
-      Render_Buffer => (Width => 60, Height => 10, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 60, Height => 10, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -301,8 +302,8 @@ procedure Comprehensive_Demo is
       Position_Y    => 12,
       Size_Width    => 1,
       Size_Height   => 1,
-      Children      => [],
-      Render_Buffer => (Width => 1, Height => 1, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 1, Height => 1, Data => new Pixel_Array),
       Has_Focus     => True,
       Is_Visible    => True,
       Is_Enabled    => True

@@ -46,7 +46,7 @@ procedure Command_Palette is
       Order  : Natural;
    end record;
 
-   Panels : constant array (1 .. 6) of Panel_Info := [
+   Panels : constant array (1 .. 6) of Panel_Info := (
       (Name  => SU.To_Unbounded_String ("panel_a"),
        Label => SU.To_Unbounded_String ("Files"),
        X => 2,  Y => 4,  W => 24, H => 4,
@@ -76,7 +76,7 @@ procedure Command_Palette is
        Label => SU.To_Unbounded_String ("Config"),
        X => 54, Y => 10, W => 24, H => 5,
        Color => Teal, Order => 6)
-   ];
+   );
 
    --  Original panel colors (for reverting after flash)
    Panel_Default_Colors : array (1 .. 6) of Color_t;

@@ -122,6 +122,7 @@ package body Graphics is
       --  Store dimensions in the record
       New_Buffer.Width := Width;
       New_Buffer.Height := Height;
+      New_Buffer.Data := new Pixel_Array;
 
       return New_Buffer;
    end Create_Buffer;

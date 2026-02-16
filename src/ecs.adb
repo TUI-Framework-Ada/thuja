@@ -148,14 +148,14 @@ package body ECS is
         when not Write_Using is
       begin
          Read_Using := Read_Using + 1;
-         Entity_List := Entities'Access;
+         Entity_List := Entities'Unchecked_Access;
       end Claim_Reading;
 
       entry Claim_Writing (Entity_List : in out Entity_Components_Ptr)
         when (Read_Using = 0) and (not Write_Using) is
       begin
          Write_Using := True;
-         Entity_List := Entities'Access;
+         Entity_List := Entities'Unchecked_Access;
       end Claim_Writing;
 
       procedure Release_Reading is
@@ -202,25 +202,19 @@ package body ECS is
             Search_Component_IDs : Component_ID_Vector.Vector;
             Matched_Entities : Entity_ID_Vector.Vector;
             Component_List : Components_Ptr;
-            Widget_C : Widget_Component_T;
          begin
             Search_Component_IDs.Append (To_CID ("WidgetComponent"));
             Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
             for EID of Matched_Entities loop
                Component_List := Get_Entity_Components (Entity_List.all, EID);
-               Widget_C := Widget_Component_T (
-                  Get_Component (Component_List.all, To_CID ("WidgetComponent"))
-                                              );
-
-               if Widget_C.Children.Contains (Id) then
-                  Widget_C.Children.Delete (Widget_C.Children.Find_Index (Id));
-               end if;
-
-               Add_Component (
-                  Get_Entity_Components (Entity_List.all, EID).all,
-                  To_CID ("WidgetComponent"),
-                  Widget_C
-               );
+               declare
+                  Widget_C : Widget_Component_T renames Widget_Component_T (
+                     Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+               begin
+                  if Widget_C.Children.Contains (Id) then
+                     Widget_C.Children.Delete (Widget_C.Children.Find_Index (Id));
+                  end if;
+               end;
             end loop;
          end;
       end if;
@@ -377,7 +371,6 @@ package body ECS is
       Matched_Entities     : Entity_ID_Vector.Vector;
 
       Parent_Comps         : Components_Ptr;
-      Parent_Widget_C      : Widget_Component_T;
 
       Child_Comps          : Components_Ptr;
       Child_Id             : Entity_Id;
@@ -396,11 +389,9 @@ package body ECS is
          declare
             Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
               Get_Component_Ptr (Parent_Comps, Flex_Layout_Component_T'Tag).all);
+            Parent_Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Parent_Comps, Widget_Component_T'Tag).all);
          begin
-
-            Parent_Widget_C := Widget_Component_T (
-               Get_Component (Parent_Comps.all, Widget_Component_T'Tag)
-            );
 
             Flex_C.Flex_Container.Width := Integer (Parent_Widget_C.Size_Width);
             Flex_C.Flex_Container.Height := Integer (Parent_Widget_C.Size_Height);
@@ -740,7 +731,6 @@ package body ECS is
                                      Root : Widget_Component_T;
                                      Parent : Widget_Component_T) is
          Child_Component_List : Components_Ptr;
-         Child_Widget : Widget_Component_T;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
       begin
@@ -773,10 +763,12 @@ package body ECS is
             Child_Component_List := Get_Entity_Components (
                Entity_List.all, Child_Entity_ID
                                                           );
-            Child_Widget := Widget_Component_T (
-               Get_Component (Child_Component_List.all, Widget_Component_T'Tag)
-                                               );
-            RecursiveBufferCopy (Framebuffer, Parent, Child_Widget);
+            declare
+               Child_Widget : Widget_Component_T renames Widget_Component_T (
+                  Get_Component_Ptr (Child_Component_List, Widget_Component_T'Tag).all);
+            begin
+               RecursiveBufferCopy (Framebuffer, Parent, Child_Widget);
+            end;
          end loop;
       end RecursiveBufferCopy;
 
@@ -889,8 +881,8 @@ package body ECS is
             -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
             Drawing :=
               (if Drawing_From_FB_1
-               then RI.Framebuffer_1'Access
-               else RI.Framebuffer_2'Access);
+               then RI.Framebuffer_1'Unchecked_Access
+               else RI.Framebuffer_2'Unchecked_Access);
 
             --  Begin comparing FB to BB and drawing
             for Y in TUI_Height'First .. RI.Terminal_Height loop
@@ -1080,8 +1072,6 @@ package body ECS is
                           New_X : TUI_Width;
                           New_Y : TUI_Height) is
       Comps     : Components_Ptr;
-      Widget_ID : Component_Id;
-      Widget    : Widget_Component_T;
       Pos_Mode  : Position_Mode_Component_T;
    begin
       Comps := Get_Entity_Components (Entity_List, Widget_Entity);
@@ -1097,13 +1087,13 @@ package body ECS is
       Pos_Mode.Mode := Absolute;
       Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
 
-      Widget_ID := Get_Component_ID (Comps.all, Widget_Component_T'Tag);
-      Widget := Widget_Component_T (
-         Get_Component (Comps.all, Widget_ID)
-      );
-      Widget.Position_X := New_X;
-      Widget.Position_Y := New_Y;
-      Add_Component (Comps.all, Widget_ID, Widget);
+      declare
+         Widget : Widget_Component_T renames Widget_Component_T (
+            Get_Component_Ptr (Comps, Widget_Component_T'Tag).all);
+      begin
+         Widget.Position_X := New_X;
+         Widget.Position_Y := New_Y;
+      end;
    end Move_Widget;
 
    procedure Move_Widget_By (Entity_List : in out Entity_Components;
@@ -1111,7 +1101,6 @@ package body ECS is
                              Delta_X : Integer;
                              Delta_Y : Integer) is
       Comps : Components_Ptr;
-      Widget : Widget_Component_T;
       New_X : Integer;
       New_Y : Integer;
    begin
@@ -1125,12 +1114,13 @@ package body ECS is
          return;
       end if;
 
-      Widget := Widget_Component_T (
-         Get_Component (Comps.all, Widget_Component_T'Tag)
-      );
-
-      New_X := Integer(Widget.Position_X) + Delta_X;
-      New_Y := Integer(Widget.Position_Y) + Delta_Y;
+      declare
+         Widget : Widget_Component_T renames Widget_Component_T (
+            Get_Component_Ptr (Comps, Widget_Component_T'Tag).all);
+      begin
+         New_X := Integer(Widget.Position_X) + Delta_X;
+         New_Y := Integer(Widget.Position_Y) + Delta_Y;
+      end;
 
       New_X := Integer'Max(Integer(TUI_Width'First), New_X);
       New_Y := Integer'Max(Integer(TUI_Height'First), New_Y);

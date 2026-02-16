@@ -135,7 +135,7 @@ package Components is
       Tab_Order : Natural := 0;
    end record;
 
-   --  Widget Command Entry — a single key sequence + display name pair
+   --  Widget Command Entry, a single key sequence + display name pair
    type Widget_Command_Entry_T is record
       Keys : SU.Unbounded_String;
       Name : SU.Unbounded_String;
