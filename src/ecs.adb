@@ -1220,13 +1220,13 @@ package body ECS is
       function Pad (S : String; C : Character := '0') return String is (
          (if S'Length = 1 then "" & C else "") & S
       );
-      function Weekday_Pad (S : String; N : in out Natural) return String is
+      function Weekday_Pad (S : String; N : in out Natural; SAE : Positive; TS : Natural) return SU.Unbounded_String is
       begin
          N := N + 1;
          if N mod 7 = 0 then
-            return S;
+            return S & (Ada.Strings.Unbounded."*" (TS, " "));
          else
-            return S & " ";
+            return S & (Ada.Strings.Unbounded."*" (SAE, " "));
          end if;
       end Weekday_Pad;
       Entity_List : Entity_Components_Ptr;
@@ -1274,20 +1274,23 @@ package body ECS is
 
             Text_Width : constant Integer := Integer (Widget_C.Size_Width - Text_C.Offset_X) + 1;
             Text_Height : constant Integer := Integer (Widget_C.Size_Height - Text_C.Offset_Y) + 1;
+            Week_Length : constant Positive := 7;
             Date_Weekday : Natural := Natural (
               (Ada.Calendar.Time_Of (Calendar_C.Year,
                                      Calendar_C.Month,
                                      Calendar_C.Day
-                                    ) - Rata_Die_Date) / 86400) mod 7 + Rata_Die_Weekday;
+                                    ) - Rata_Die_Date) / 86400) mod Week_Length + Rata_Die_Weekday;
             Weekday : SU.Unbounded_String;
+            Space_After_Entry : Positive;
+            Trailing_Space : Natural;
          begin
 
             if Calendar_C.Display_Mode = Month_Page
-              and Text_Width >= 20 and Text_Height >= 8 then
+              and Text_Width >= 3*Week_Length-1 and Text_Height >= 8 then
                --  Month_Page mode selected and enough size for it
 
                --  Make Date_Weekday for the first of the month
-               Date_Weekday := (Date_Weekday - Calendar_C.Day + 1) mod 7;
+               Date_Weekday := (Date_Weekday - Calendar_C.Day + 1) mod Week_Length;
 
                --  Year, row 1, left aligned
                Text_C.Text := SU.To_Unbounded_String (Trim (Calendar_C.Year'Image));
@@ -1300,6 +1303,8 @@ package body ECS is
                Text_C.Text := Text_C.Text & (Text_Width * "-");
 
                --  Row 3, weekday abbreviations
+               Space_After_Entry := (Text_Width-2*Week_Length) / (Week_Length-1);
+               Trailing_Space := Text_Width - 2*Week_Length - Space_After_Entry*(Week_Length-1);
                for Weekday_I in Weekdays.First_Index .. Weekdays.Last_Index loop
                   Weekday := SU.To_Unbounded_String (Weekdays (Weekday_I));
                   --Weekday := Weekday (Weekday'First .. Weekday'First + 1);
@@ -1310,7 +1315,9 @@ package body ECS is
                   );
                   Text_C.Text := Text_C.Text & Weekday;
                   if Weekday_I /= Weekdays.Last_Index then
-                     Text_C.Text := Text_C.Text & " ";
+                     Text_C.Text := Text_C.Text & (Space_After_Entry * " ");
+                  else
+                     Text_C.Text := Text_C.Text & (Trailing_Space * " ");
                   end if;
                end loop;
 
@@ -1321,18 +1328,18 @@ package body ECS is
                     (if Calendar_C.Month = 12 then
                       Ada.Calendar.Time_Of (Calendar_C.Year + 1, 1, 1)
                      else
-                      Ada.Calendar.Time_Of (Calendar_C.Year, Calendar_C.Month, 1)
+                      Ada.Calendar.Time_Of (Calendar_C.Year, Calendar_C.Month + 1, 1)
                     ) - Duration (1 * 24 * 60 * 60);
                   Day_Count : constant Ada.Calendar.Day_Number := Ada.Calendar.Day (Month_End);
                begin
                   --  Row 4, padding to align month days to weekdays
                   for Padding_Index in 1 .. Date_Weekday loop
-                     Text_C.Text := Text_C.Text & Weekday_Pad ("  ", Weekday_Pos);
+                     Text_C.Text := Text_C.Text & Weekday_Pad ("  ", Weekday_Pos, Space_After_Entry, Trailing_Space);
                   end loop;
 
                   --  Rows 4-8, month days
                   for Month_Day in 1 .. Natural (Day_Count) loop
-                     Text_C.Text := Text_C.Text & Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos);
+                     Text_C.Text := Text_C.Text & Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos, Space_After_Entry, Trailing_Space);
                   end loop;
                end;
             else
