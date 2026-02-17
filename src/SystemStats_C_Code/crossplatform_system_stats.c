@@ -376,15 +376,17 @@ process_info_t* get_process_list(int *count) {
         return NULL;
     }
     
-    // Count processes - use PROCESSENTRY32A (ANSI version, no wide chars)
-    PROCESSENTRY32A pe32;
-    pe32.dwSize = sizeof(PROCESSENTRY32A);
+    // Removed 'A' at end of PROCESSENTRY32A to allow for compiler to map
+    //  to the correct ANSI/Unicode version to avoid "unknown type" errors 
+    // Count processes - use PROCESSENTRY32 (ANSI version, no wide chars)
+    PROCESSENTRY32 pe32;
+    pe32.dwSize = sizeof(PROCESSENTRY32);
     int proc_count = 0;
     
-    if (Process32FirstA(snapshot, &pe32)) {
+    if (Process32First(snapshot, &pe32)) {
         do {
             proc_count++;
-        } while (Process32NextA(snapshot, &pe32));
+        } while (Process32Next(snapshot, &pe32));
     }
     
     if (proc_count == 0) {
@@ -401,10 +403,11 @@ process_info_t* get_process_list(int *count) {
     }
     
     // Get process info - restart from beginning
-    pe32.dwSize = sizeof(PROCESSENTRY32A);
+    pe32.dwSize = sizeof(PROCESSENTRY32);
     int index = 0;
     
-    if (Process32FirstA(snapshot, &pe32)) {
+    // Use generic Process32First/Next to match generic PROCESSENTRY32 struct type
+    if (Process32First(snapshot, &pe32)) {
         do {
             procs[index].pid = (int)pe32.th32ProcessID;
             
@@ -433,7 +436,7 @@ process_info_t* get_process_list(int *count) {
             }
             
             index++;
-        } while (Process32NextA(snapshot, &pe32) && index < proc_count);
+        } while (Process32Next(snapshot, &pe32) && index < proc_count);
     }
     
     CloseHandle(snapshot);

@@ -23,4 +23,9 @@ project Demos is
       for Artifacts (".") use ("share");
    end Install;
 
+   -- Added linker so that way Windows can find system libraries
+   package Linker is
+      for Default_Switches ("Ada") use ("-lpsapi");
+   end Linker;
+
 end Demos;
