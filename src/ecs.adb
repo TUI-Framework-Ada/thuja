@@ -594,10 +594,11 @@ package body ECS is
 
                Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
-               Pos_W := Pos_W + 1;
-               if Pos_W > Widget_C.Size_Width then
+               if Pos_W = TUI_Width'Last or Pos_W >= Widget_C.Size_Width then
                   Pos_W := 1;
                   Pos_H := Pos_H + 1;
+               else
+                  Pos_W := Pos_W + 1;
                end if;
                exit when Pos_H > Widget_C.Size_Height;
             end loop;
@@ -1217,7 +1218,7 @@ package body ECS is
          S (S'First + 1 .. S'Last)
       );
       function Pad (S : String; C : Character := '0') return String is (
-         (if S'Length = 1 then C'Image else "") & S
+         (if S'Length = 1 then "" & C else "") & S
       );
       function Weekday_Pad (S : String; N : in out Natural) return String is
       begin
