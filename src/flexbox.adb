@@ -136,7 +136,7 @@ package body Flexbox is
       if Total_Grow > 0.0 then
           declare
              Used_Space   : Integer := 0;
-             Target_Space : Integer := 
+             Target_Space : constant Integer :=
                 (if Container.Direction = Row 
                  then Container.Width 
                  else Container.Height);
