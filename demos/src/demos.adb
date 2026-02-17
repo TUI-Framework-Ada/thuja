@@ -103,8 +103,7 @@ procedure Demos is
       Is_Enabled => True     -- Required Field
    );
 
-   -- We can use others => <> here if the type has defaults for everything else
-   E2_RWC : constant Components.Root_Widget_Component_T := (others => <>);
+   E2_RWC : constant Components.Root_Widget_Component_T := (null record);
 
    -- FLEXBOX INTEGRATION: Define the Layout Logic
    -- PROOF OF WORK:

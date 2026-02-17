@@ -1,5 +1,4 @@
 --  Package Body for Graphics
-with Ada.Text_IO;
 with Interfaces.C; use Interfaces.C;
 with System;
 with Ada.Wide_Wide_Text_IO;
@@ -54,7 +53,8 @@ package body Graphics is
    procedure Enable_VT_Processing is
       H    : constant HANDLE := GetStdHandle(STD_OUTPUT_HANDLE); -- Get permission to edit terminal
       Mode : aliased DWORD; -- Holds current terminal settings
-      Res  : BOOL; -- Holds the success or failure of a call
+      Res  : BOOL;
+      pragma Warnings (Off, Res);
    begin
       if H /= INVALID_HANDLE_VALUE then
          -- Get current settings first Mode'Acess points to the variable
@@ -70,7 +70,8 @@ package body Graphics is
    procedure Set_Cursor_Visible (Visible : Boolean) is
       H    : constant HANDLE := GetStdHandle(STD_OUTPUT_HANDLE);
       Info : aliased CONSOLE_CURSOR_INFO; -- Creates a record to send to Windows
-      Res  : BOOL; -- Returns a value if operation worked even if unused (True or False)
+      Res  : BOOL;
+      pragma Warnings (Off, Res);
    begin
       if H /= INVALID_HANDLE_VALUE then
          -- Windows requires the cursor size to be valid (1-100) even when hiding

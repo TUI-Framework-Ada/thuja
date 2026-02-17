@@ -64,7 +64,6 @@ procedure Comprehensive_Demo is
    E_Sidebar      : constant IDs.Entity_Id := IDs.To_EID ("Sidebar");
    E_Content      : constant IDs.Entity_Id := IDs.To_EID ("Content");
    E_MovingDot    : constant IDs.Entity_Id := IDs.To_EID ("MovingDot");
-   E_Middle : constant IDs.Entity_Id := IDs.To_EID ("Middle");
    --------------------------------------------------------
 
    --  Register entities
@@ -75,8 +74,7 @@ procedure Comprehensive_Demo is
    C_Sidebar      : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Sidebar);
    C_Content      : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Content);
    C_MovingDot    : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_MovingDot);
-   C_Middle : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Middle);
-   
+
    --------------------------------------------------------
    -- COMPONENT DEFINITIONS
    --------------------------------------------------------
@@ -100,14 +98,13 @@ procedure Comprehensive_Demo is
       Size_Width    => 80,
       Size_Height   => 24,
       Children      => IDs.Entity_ID_Vector.To_Vector (E_Header, 1) & E_ProgressBar & E_Sidebar & E_Content & E_MovingDot,
-      --Children      => [E_Header, E_ProgressBar, E_Middle, E_MovingDot],
       Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
    );
 
-   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (others => <>);
+   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (null record);
 
    --  Root Flexbox Layout: Vertical stacking (Column)
    Comp_Root_Flex : constant Components.Flex_Layout_Component_T := (
@@ -297,7 +294,7 @@ procedure Comprehensive_Demo is
    );
 
    --  Moving Dot Widget: Yellow, uses ABSOLUTE positioning
-   Comp_MovingDot_Widget : Components.Widget_Component_T := (
+   Comp_MovingDot_Widget : constant Components.Widget_Component_T := (
       Position_X    => 40,
       Position_Y    => 12,
       Size_Width    => 1,
@@ -350,7 +347,6 @@ procedure Comprehensive_Demo is
    task Render_Thread;
 
    task body Render_Thread is
-      Entity_List : ECS.Entity_Components_Ptr;
    begin
       Graphics.Clear_Screen;
       loop
@@ -424,10 +420,6 @@ begin
    -- MAIN LOOP
    --------------------------------------------------------
    for Loop_Index in 1 .. Loop_Count loop
-      declare
-         Entity_List : ECS.Entity_Components_Ptr;
-      begin
-
          --  SYSTEM 1: Terminal Resize Detection (NEW FEATURE!)
          ECS.TerminalResizeSystem (Entities_PO);
 
@@ -477,7 +469,7 @@ begin
             -- Bounce and clamp: ensure the entire moving widget fits inside target bounds
             -- If the moving widget has width/height > 1, account for that by using its size
             declare
-               Mov_Comps : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List_Write.all, E_MovingDot);
+               Mov_Comps : constant ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List_Write.all, E_MovingDot);
                Mov_W : Integer := 1;
                Mov_H : Integer := 1;
             begin
@@ -541,7 +533,6 @@ begin
          ECS.DoubleBufferFlagSystem (Entities_PO);
 
          delay Duration (0.033);  -- ~30 FPS
-      end;
    end loop;
 
    --  Stop render thread before applying manual screen updates

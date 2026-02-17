@@ -12,7 +12,10 @@ project Demos is
    for Main use ("comprehensive_demo", "resize_and_movement_demo", "keyboard_widget", "tab_demo", "command_palette", "demos", "presentation_2_demo");
 
    package Compiler is
-      for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches & ("-gnat2022");
+      for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches &
+        ("-gnat2022",
+         "-gnatwB",   --  Suppress fixed-point Small rounding (1.0/30.0 can't be exact)
+         "-gnatwJ");  --  Suppress obsolescent () array syntax (toolchain lacks [] support)
    end Compiler;
 
    package Binder is
