@@ -8,7 +8,7 @@ licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
 website = ""
 tags = []
 
-executables = ["comprehensive_demo"]
+executables = ["htop_demo"]
 
 [test]
 runner = "alire"

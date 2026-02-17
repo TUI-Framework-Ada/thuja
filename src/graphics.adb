@@ -7,6 +7,114 @@ package body Graphics is
 
    use Ada.Characters.Conversions;
 
+   --=============================================================================
+   -- PLATFORM DETECTION
+   --=============================================================================
+
+   Is_Windows : constant Boolean :=
+      (Standard'Target_Name = "x86_64-pc-mingw32" or
+       Standard'Target_Name = "i686-pc-mingw32" or
+       Standard'Target_Name = "x86_64-w64-mingw32");
+
+   --=============================================================================
+   -- WINDOWS-SPECIFIC CODE
+   --=============================================================================
+
+   -- Win32 Types and Constants
+   type HANDLE is new System.Address;
+   type BOOL is new int;
+   type DWORD is new unsigned;
+
+   -- If GetStdHandle fails, it returns 0 this is a 'NULL' check
+   INVALID_HANDLE_VALUE : constant HANDLE := HANDLE(System.Null_Address);
+
+   -- A magic number telling windows that it wants to handle Standard output of the terminal
+   STD_OUTPUT_HANDLE    : constant DWORD := 4294967285; -- -11
+
+   -- Hex value is a bit flag to telling windows to interpret ANSI sequences
+   -- such sequences like ESC[31m instead of printing them as text
+   ENABLE_VIRTUAL_TERMINAL_PROCESSING : constant DWORD := 16#0004#;
+
+   -- Cursor Info Structure
+   type CONSOLE_CURSOR_INFO is record
+      Size    : DWORD; -- Size of cursor 1-100
+      Visible : BOOL;  -- 0 for hidden, 1 for visible
+   end record;
+
+   -- Pragma tells Ada to arrange memory similar to a C 'struct'
+   -- so Windows API can interpret it correctly
+   pragma Convention (C, CONSOLE_CURSOR_INFO);
+
+   -- Win32 API Imports that link to Windows kernel32.dll
+   -- These will only be linked on Windows platforms
+   function GetStdHandle (nStdHandle : DWORD) return HANDLE
+     with Import, Convention => Stdcall, External_Name => "GetStdHandle";
+   pragma Weak_External (GetStdHandle);
+
+   function GetConsoleMode (hConsoleHandle : HANDLE; lpMode : access DWORD) return BOOL
+     with Import, Convention => Stdcall, External_Name => "GetConsoleMode";
+   pragma Weak_External (GetConsoleMode);
+
+   function SetConsoleMode (hConsoleHandle : HANDLE; dwMode : DWORD) return BOOL
+     with Import, Convention => Stdcall, External_Name => "SetConsoleMode";
+   pragma Weak_External (SetConsoleMode);
+
+   function SetConsoleCursorInfo (hConsoleHandle : HANDLE;
+                                 lpConsoleCursorInfo : access CONSOLE_CURSOR_INFO) return BOOL
+     with Import, Convention => Stdcall, External_Name => "SetConsoleCursorInfo";
+   pragma Weak_External (SetConsoleCursorInfo);
+
+   --=============================================================================
+   -- Implementation for Windows using Win32 API calls to allow for ANSI codes
+   --=============================================================================
+   procedure Enable_VT_Processing is
+      H    : HANDLE;
+      Mode : aliased DWORD; -- Holds current terminal settings
+      Res  : BOOL; -- Holds the success or failure of a call
+   begin
+      if Is_Windows then
+         H := GetStdHandle(STD_OUTPUT_HANDLE); -- Get permission to edit terminal
+         if H /= INVALID_HANDLE_VALUE then
+            -- Get current settings first Mode'Access points to the variable
+            Res := GetConsoleMode(H, Mode'Access);
+            -- Bitwise OR to enable VT processing
+            Res := SetConsoleMode(H, Mode or ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+         end if;
+      end if;
+      -- On Linux, ANSI codes work by default, no initialization needed
+   end Enable_VT_Processing;
+
+   --=============================================================================
+   -- Implementation for Windows using Win32 API calls for hiding/showing cursor
+   --=============================================================================
+   procedure Set_Cursor_Visible (Visible : Boolean) is
+      H    : HANDLE;
+      Info : aliased CONSOLE_CURSOR_INFO; -- Creates a record to send to Windows
+      Res  : BOOL; -- Returns a value if operation worked even if unused (True or False)
+   begin
+      if Is_Windows then
+         H := GetStdHandle(STD_OUTPUT_HANDLE);
+         if H /= INVALID_HANDLE_VALUE then
+            -- Windows requires the cursor size to be valid (1-100) even when hiding
+            -- Do not set to 0 otherwise could fail, 25 is a standard size
+            Info.Size := 25;
+            -- True or False to set cursor visibility
+            Info.Visible := (if Visible then 1 else 0);
+
+            -- Send record to OS, even if Res isn't utilized it's to satisfy return type
+            Res := SetConsoleCursorInfo(H, Info'Access);
+         end if;
+      else
+         -- On Linux, use ANSI escape sequences
+         if Visible then
+            Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "?25h"));
+         else
+            Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "?25l"));
+         end if;
+         Ada.Wide_Wide_Text_IO.Flush;
+      end if;
+   end Set_Cursor_Visible;
+
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is
       entry Wait (V : out Boolean)
@@ -73,7 +181,7 @@ package body Graphics is
    end Get_Buffer_Pixel;
 
    --=============================================================================
-   -- Implementation for Linux using regular ANSI escape codes (Confirm rationale)
+   -- Implementation using ANSI escape codes (works on both Windows 10+ and Linux)
    --=============================================================================
 
    --  Hides the terminal cursor
@@ -102,8 +210,6 @@ package body Graphics is
 
    --  Sends ANSI code to the terminal to wipe the screen.
    --  This should be run once before any of the systems.
-   -- NOTE: Removed both hide cursors temporarily as hide/show
-   -- do not need to be re-called
    procedure Clear_Screen is
    begin
       -- Enable VT processing first so ANSI sequences are honoured
@@ -111,12 +217,10 @@ package body Graphics is
       -- Enable_VT_Processing;
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (
          CSI & "?1049h" &   --  Switch to alternate screen buffer
-         -- CSI & "?25l" &     --  Hide cursor (ANSI)
          CSI & "0m" &       --  Reset formatting
          CSI & "2J" &       --  Clear screen
          CSI & "1;1H"));     --  Move to top-left
-      --  Also hide cursor via Win32 API as a fallback
-      -- Set_Cursor_Visible (False);
+
       Ada.Wide_Wide_Text_IO.Flush;
    end Clear_Screen;
 
