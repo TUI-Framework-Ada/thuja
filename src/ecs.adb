@@ -3,6 +3,7 @@
 --==============================================================================
 
 with Ada.Calendar; use type Ada.Calendar.Time;
+with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
@@ -1216,7 +1217,7 @@ package body ECS is
          S (S'First + 1 .. S'Last)
       );
       function Pad (S : String; C : Character := '0') return String is (
-         (if S'Length = 1 then String (C) else "") & S
+         (if S'Length = 1 then C'Image else "") & S
       );
       function Weekday_Pad (S : String; N : in out Natural) return String is
       begin
@@ -1236,18 +1237,17 @@ package body ECS is
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
 
+      package String_Vector_P is new
+        Ada.Containers.Indefinite_Vectors
+          (Index_Type => Natural,
+           Element_Type => String);
+      use String_Vector_P;
+
       --  Values to strings
-      Weekdays : constant array (Natural) of String := ["Sunday",
-                                                        "Monday",
-                                                        "Tuesday",
-                                                        "Wednesday",
-                                                        "Thursday",
-                                                        "Friday",
-                                                        "Saturday"];
-      Months : constant array (Natural) of String := ["Jan", "Feb", "Mar",
-                                                      "Apr", "May", "Jun",
-                                                      "Jul", "Aug", "Sep",
-                                                      "Oct", "Nov", "Dec"];
+      Weekdays : constant String_Vector_P.Vector := String_Vector_P.To_Vector ("Sunday", 1)
+        & "Monday" & "Tuesday" & "Wednesday" & "Thursday" & "Friday" & "Saturday";
+      Months : constant String_Vector_P.Vector := String_Vector_P.To_Vector ("Jan", 1)
+        & "Feb" & "Mar" & "Apr" & "May" & "Jun" & "Jul" & "Aug" & "Sep" & "Oct" & "Nov" & "Dec";
 
       --  Values for Rata Die calculation of weekdays
       --  Earliest date possible with Ada.Calendar.Time
@@ -1273,12 +1273,12 @@ package body ECS is
 
             Text_Width : constant Integer := Integer (Widget_C.Size_Width - Text_C.Offset_X) + 1;
             Text_Height : constant Integer := Integer (Widget_C.Size_Height - Text_C.Offset_Y) + 1;
-            Date_Weekday : constant Natural := Natural (
+            Date_Weekday : Natural := Natural (
               (Ada.Calendar.Time_Of (Calendar_C.Year,
                                      Calendar_C.Month,
                                      Calendar_C.Day
                                     ) - Rata_Die_Date) / 86400) mod 7 + Rata_Die_Weekday;
-            Weekday : String;
+            Weekday : SU.Unbounded_String;
          begin
 
             if Calendar_C.Display_Mode = Month_Page
@@ -1291,19 +1291,24 @@ package body ECS is
                --  Year, row 1, left aligned
                Text_C.Text := SU.To_Unbounded_String (Trim (Calendar_C.Year'Image));
                --  Padding. 7 = length of year + length of month abbreviation
-               Text_C.Text := Text_C.Text & (" " * (Text_Width - 7));
+               Text_C.Text := Text_C.Text & ((Text_Width - 7) * " ");
                --  Month, row 1, right aligned
-               Text_C.Text := Text_C.Text * Months (Natural (Calendar_C.Month) - 1);
+               Text_C.Text := Text_C.Text & Months (Natural (Calendar_C.Month) - 1);
 
                --  Row 2, spacer
-               Text_C.Text := Text_C.Text * ("-" * Text_Width);
+               Text_C.Text := Text_C.Text & (Text_Width * "-");
 
                --  Row 3, weekday abbreviations
-               for Weekday_I in Weekdays'First .. Weekdays'Last loop
-                  Weekday := Weekdays (Weekday_I);
-                  Weekday := Weekday (Weekday'First .. Weekday'First + 1);
+               for Weekday_I in Weekdays.First_Index .. Weekdays.Last_Index loop
+                  Weekday := SU.To_Unbounded_String (Weekdays (Weekday_I));
+                  --Weekday := Weekday (Weekday'First .. Weekday'First + 1);
+                  Weekday := SU.To_Unbounded_String (
+                     SU.Slice (Weekday,
+                        SU.To_String (Weekday)'First,
+                        SU.To_String (Weekday)'First + 1)
+                  );
                   Text_C.Text := Text_C.Text & Weekday;
-                  if Weekday_I /= Weekdays'Last then
+                  if Weekday_I /= Weekdays.Last_Index then
                      Text_C.Text := Text_C.Text & " ";
                   end if;
                end loop;
@@ -1317,7 +1322,7 @@ package body ECS is
                      else
                       Ada.Calendar.Time_Of (Calendar_C.Year, Calendar_C.Month, 1)
                     ) - Duration (1 * 24 * 60 * 60);
-                  Day_Count : constant Ada.Calendar.Day_Number := Month_End.Day;
+                  Day_Count : constant Ada.Calendar.Day_Number := Ada.Calendar.Day (Month_End);
                begin
                   --  Row 4, padding to align month days to weekdays
                   for Padding_Index in 1 .. Date_Weekday loop
@@ -1326,7 +1331,7 @@ package body ECS is
 
                   --  Rows 4-8, month days
                   for Month_Day in 1 .. Natural (Day_Count) loop
-                     Text_C.Text := Text_C.Text * Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos);
+                     Text_C.Text := Text_C.Text & Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos);
                   end loop;
                end;
             else
