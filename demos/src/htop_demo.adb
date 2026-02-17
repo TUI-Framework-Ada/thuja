@@ -1,542 +1,721 @@
 -------------------------------------------------------------------------------
---  HTop_Demo.adb
---  
---  htop-style task manager - simplified version
+--  ETop_Demo.adb - etop-style system monitor using Thuja ECS
 -------------------------------------------------------------------------------
 
-with Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
+with Components; use Components;
+with ECS; use ECS;
+with IDs; use IDs;
 with System_Stats;
 with Input_Handling;
 
-procedure HTop_Demo is
+procedure ETop_Demo is
 
    package SU renames Ada.Strings.Unbounded;
    package SS renames System_Stats;
+   use type SS.Platform_Type;
    use type SS.Process_Array_Ptr;
 
-   --  Process list display
-   Max_Processes_Shown : constant := 15;  -- Smaller list
-   Scroll_Offset : Natural := 0;
+   --  Main entity system
+   Entity_System : Entity_Components_PO;
    
-   --  State
-   Running : Boolean := True;
+   --  Entity IDs
+   Render_Info_Entity : Entity_Id;
+   Root_Widget_Entity : Entity_Id;
+   Title_Entity       : Entity_Id;
    
-   --  Update timing
+   --  CPU widgets (8 cores max for simplicity)
+   CPU_Label_Entities : array (0 .. 7) of Entity_Id;
+   CPU_Bar_Entities   : array (0 .. 7) of Entity_Id;
+   
+   --  Memory widgets
+   Mem_Label_Entity   : Entity_Id;
+   RAM_Bar_Entity     : Entity_Id;
+   SWP_Bar_Entity     : Entity_Id;
+   
+   --  Disk widgets
+   Disk_Label_Entity  : Entity_Id;
+   Disk_Bar_Entity    : Entity_Id;
+   
+   --  Process widgets (10 rows)
+   Proc_Header_Entity : Entity_Id;
+   Proc_Row_Entities  : array (0 .. 9) of Entity_Id;
+
    Update_Interval : constant Time_Span := Milliseconds(1000);
-   Last_Key_Check : Time := Clock;
+   Running : Boolean := True;
+   Scroll_Offset : Natural := 0;
+
+   function Img(N : Natural) return String is
+      S : constant String := Natural'Image(N);
+   begin
+      return S(S'First + 1 .. S'Last);
+   end Img;
    
+   function Img_F1(F : Float) return String is
+      W : constant Natural := Natural(Float'Floor(F));
+      D : constant Natural := Natural(Float'Floor((F - Float'Floor(F)) * 10.0));
+   begin
+      return Img(W) & "." & Img(D);
+   end Img_F1;
+   
+   function Pad(S : String; Len : Natural) return String is
+      Result : String(1 .. Len) := (others => ' ');
+      Copy_Len : constant Natural := Natural'Min(S'Length, Len);
+   begin
+      Result(1 .. Copy_Len) := S(S'First .. S'First + Copy_Len - 1);
+      return Result;
+   end Pad;
+
    --------------------------------------------------------
-   -- Utility Functions
+   -- Initialize ECS and Create Widgets
    --------------------------------------------------------
-   
-   function Trim (S : String) return String is
+   procedure Initialize_Demo is
+      Comps : Components_Ptr;
+      
+      --  RenderInfo setup
+      RI : Render_Info_Component_T;
+      
+      --  Widget components
+      Root_Widget : Widget_Component_T;
+      Widget_C : Widget_Component_T;
+      Text_C : Text_Component_T;
+      BG_C : Background_Color_Component_T;
+      PB_C : Progress_Bar_Component_T;
+      
+      Num_Cores : constant Natural := Natural'Min(SS.Get_CPU_Count, 8);
+      Current_Row : Natural := 1;
+      
    begin
-      if S'Length = 0 then
-         return "";
-      end if;
+      --  Initialize terminal
+      Clear_Screen;
+      Enable_VT_Processing;
+      Set_Cursor_Visible(False);
       
-      for I in S'Range loop
-         if S(I) /= ' ' then
-            return S(I .. S'Last);
-         end if;
-      end loop;
-      return "";
-   end Trim;
-   
-   function Format_Percent (Value : Float) return String is
-      Percent : Natural := Natural(Value * 100.0);
-   begin
-      if Percent > 100 then
-         Percent := 100;
-      end if;
+      --  Create RenderInfo entity
+      Render_Info_Entity := To_EID("RenderInfo");
+      Comps := Add_Entity(Entity_System, Render_Info_Entity);
       
-      if Percent < 10 then
-         return "  " & Trim(Natural'Image(Percent)) & "%";
-      elsif Percent < 100 then
-         return " " & Trim(Natural'Image(Percent)) & "%";
-      else
-         return "100%";
-      end if;
-   end Format_Percent;
-   
-   function Format_Memory (KB : Natural) return String is
-   begin
-      if KB < 1024 then
-         return Trim(Natural'Image(KB)) & "K";
-      elsif KB < 1024 * 1024 then
-         return Trim(Natural'Image(KB / 1024)) & "M";
-      else
-         return Trim(Natural'Image(KB / (1024 * 1024))) & "G";
-      end if;
-   end Format_Memory;
-   
-   function Format_Uptime (Seconds : Natural) return String is
-      Days : constant Natural := Seconds / 86400;
-      Hours : constant Natural := (Seconds mod 86400) / 3600;
-      Minutes : constant Natural := (Seconds mod 3600) / 60;
-   begin
-      if Days > 0 then
-         return Trim(Natural'Image(Days)) & "d " & 
-                Trim(Natural'Image(Hours)) & "h";
-      elsif Hours > 0 then
-         return Trim(Natural'Image(Hours)) & "h " & 
-                Trim(Natural'Image(Minutes)) & "m";
-      else
-         return Trim(Natural'Image(Minutes)) & "min";
-      end if;
-   end Format_Uptime;
-   
-   function State_Char (State : SS.Process_State) return Character is
-   begin
-      case State is
-         when SS.Running => return 'R';
-         when SS.Sleeping => return 'S';
-         when SS.Stopped => return 'T';
-         when SS.Zombie => return 'Z';
-         when SS.Unknown_State => return '?';
-      end case;
-   end State_Char;
-   
-   function Get_Bar_Color (Percent : Float) return Color_t is
-   begin
-      if Percent < 0.33 then
-         return Green;
-      elsif Percent < 0.66 then
-         return Yellow;
-      else
-         return Red;
-      end if;
-   end Get_Bar_Color;
-   
-   procedure Draw_Bar (Y : Natural; X : Natural; Width : Natural; 
-                       Value : Float; Label : String) is
-      Filled : Natural := Natural(Value * Float(Width));
-      Bar_Color : constant Color_t := Get_Bar_Color(Value);
-      Percent_Str : constant String := Format_Percent(Value);
-   begin
-      if Filled > Width then
-         Filled := Width;
-      end if;
+      RI.Framebuffer_1 := Create_Buffer(80, 50);
+      RI.Framebuffer_2 := Create_Buffer(80, 50);
+      RI.Backbuffer := Create_Buffer(80, 50);
+      RI.Drawing_FB := new Protected_DB;
+      RI.Terminal_Width := 80;
+      RI.Terminal_Height := 50;
+      RI.Prev_Terminal_Width := 80;
+      RI.Prev_Terminal_Height := 50;
       
-      -- Move cursor and draw label
-      Ada.Text_IO.Put(CSI & Trim(Natural'Image(Y)) & ";" & 
-                      Trim(Natural'Image(X)) & "H");
-      Ada.Text_IO.Put(Label & "[");
+      Add_Component(Comps.all, To_CID("RenderInfo"), RI);
       
-      -- Set bar color
-      Ada.Text_IO.Put(CSI & "38;2;" & 
-                      Trim(U8'Image(Bar_Color.Red)) & ";" &
-                      Trim(U8'Image(Bar_Color.Green)) & ";" &
-                      Trim(U8'Image(Bar_Color.Blue)) & "m");
+      --  Create root widget
+      Root_Widget_Entity := To_EID("RootWidget");
+      Comps := Add_Entity(Entity_System, Root_Widget_Entity);
       
-      -- Draw filled portion with = signs
-      for I in 1 .. Filled loop
-         Ada.Text_IO.Put('=');
-      end loop;
+      Root_Widget.Position_X := 1;
+      Root_Widget.Position_Y := 1;
+      Root_Widget.Size_Width := 80;
+      Root_Widget.Size_Height := 50;
+      Root_Widget.Is_Visible := True;
+      Root_Widget.Render_Buffer := Create_Buffer(80, 50);
       
-      -- Reset color and draw empty portion with spaces
-      Ada.Text_IO.Put(CSI & "0m");
-      for I in Filled + 1 .. Width loop
-         Ada.Text_IO.Put(' ');
-      end loop;
+      Add_Component(Comps.all, To_CID("RootWidget"), Root_Widget_Component_T'(null record));
+      Add_Component(Comps.all, To_CID("Widget"), Root_Widget);
       
-      -- Close bracket
-      Ada.Text_IO.Put("]" & Percent_Str);
-   end Draw_Bar;
-   
-   --------------------------------------------------------
-   -- Main Display
-   --------------------------------------------------------
-   
-   procedure Draw_Header is
-      Num_Cores : constant Natural := SS.Get_CPU_Count;
-      Uptime : constant Natural := SS.Get_Uptime;
-      Load_Avg : constant String := SS.Get_Load_Average;
+      BG_C.Background_Color := Black;
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
       
-      Total_Mem, Used_Mem, Avail_Mem, Free_Mem : Natural;
-      Buffers, Cached, Swap_Total, Swap_Used : Natural;
-   begin
-      --  Clear screen and move to top
-      Ada.Text_IO.Put(CSI & "2J" & CSI & "1;1H");
+      --  Title Widget
+      Title_Entity := To_EID("Title");
+      Comps := Add_Entity(Entity_System, Title_Entity);
       
-      --  Top border - CYAN for title
-      Ada.Text_IO.Put(CSI & "1;36m");  -- Bright Cyan
-      Ada.Text_IO.Put("  ");
-      for I in 1 .. 76 loop
-         Ada.Text_IO.Put('-');
-      end loop;
-      Ada.Text_IO.Put(CSI & "0m");
-      Ada.Text_IO.New_Line;
+      Widget_C.Position_X := 2;
+      Widget_C.Position_Y := TUI_Height(Current_Row);
+      Widget_C.Size_Width := 76;
+      Widget_C.Size_Height := 1;
+      Widget_C.Is_Visible := True;
+      Widget_C.Render_Buffer := Create_Buffer(76, 1);
       
-      --  Title bar
-      Ada.Text_IO.Put(CSI & "1;36m");  -- Bright Cyan
-      Ada.Text_IO.Put("  |");
-      Ada.Text_IO.Put(" THUJA TASK MANAGER - htop style");
-      Ada.Text_IO.Put("     Press q to quit              ");
-      Ada.Text_IO.Put("|");
-      Ada.Text_IO.Put(CSI & "0m");
-      Ada.Text_IO.New_Line;
+      Add_Component(Comps.all, To_CID("Widget"), Widget_C);
       
-      --  Separator
-      Ada.Text_IO.Put(CSI & "1;36m");
-      Ada.Text_IO.Put("  ");
-      for I in 1 .. 76 loop
-         Ada.Text_IO.Put('-');
-      end loop;
-      Ada.Text_IO.Put(CSI & "0m");
-      Ada.Text_IO.New_Line;
+      Text_C.Text := SU.To_Unbounded_String("THUJA ETOP - [j]down [k]up [q]quit");
+      Text_C.Text_Color := Cyan;
+      Text_C.Offset_X := 1;
+      Text_C.Offset_Y := 1;
+      Text_C.Is_Bold := True;
       
-      --  System info line
-      Ada.Text_IO.Put(CSI & "1;36m  |" & CSI & "0m");
-      Ada.Text_IO.Put(" Cores: " & Trim(Natural'Image(Num_Cores)));
-      Ada.Text_IO.Put(" | Uptime: " & Format_Uptime(Uptime));
-      Ada.Text_IO.Put(" | Load: " & Load_Avg & "   ");
-      Ada.Text_IO.Put(CSI & "1;36m|" & CSI & "0m");
-      Ada.Text_IO.New_Line;
+      Add_Component(Comps.all, To_CID("Text"), Text_C);
+      BG_C.Background_Color := (0, 40, 60);
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
       
-      --  Separator
-      Ada.Text_IO.Put(CSI & "1;36m");
-      Ada.Text_IO.Put("  ");
-      for I in 1 .. 76 loop
-         Ada.Text_IO.Put('-');
-      end loop;
-      Ada.Text_IO.Put(CSI & "0m");
-      Ada.Text_IO.New_Line;
-      
-      --  CPU section - GREEN borders
-      Ada.Text_IO.Put(CSI & "1;32m  |" & CSI & "1m");  -- Bright Green
-      Ada.Text_IO.Put(" CPU Usage:");
-      Ada.Text_IO.Put(CSI & "0;32m");
-      for I in 1 .. 64 loop
-         Ada.Text_IO.Put(' ');
-      end loop;
-      Ada.Text_IO.Put(CSI & "1;32m|" & CSI & "0m");
-      Ada.Text_IO.New_Line;
-      
-      for Core in 0 .. Num_Cores - 1 loop
-         declare
-            Usage : constant Float := SS.Get_CPU_Usage(Core);
-            Row : constant Natural := 8 + Core;
-            Core_Label : constant String := "  " & Trim(Natural'Image(Core)) & " ";
-         begin
-            Ada.Text_IO.Put(CSI & "1;32m  |" & CSI & "0m");  -- Green border
-            Draw_Bar(Row, 5, 40, Usage, Core_Label);
-            Ada.Text_IO.Put(CSI & Trim(Natural'Image(Row)) & ";78H");
-            Ada.Text_IO.Put(CSI & "1;32m|" & CSI & "0m");
-         end;
-      end loop;
-      
-      --  Separator before memory - YELLOW
+      --  Add to root
       declare
-         Sep_Row : constant Natural := 8 + Num_Cores;
+         Entity_List : Entity_Components_Ptr;
+         Root_Comps : Components_Ptr;
+         RW : Widget_Component_T;
       begin
-         Ada.Text_IO.Put(CSI & Trim(Natural'Image(Sep_Row)) & ";1H");
-         Ada.Text_IO.Put(CSI & "1;33m");  -- Bright Yellow
-         Ada.Text_IO.Put("  ");
-         for I in 1 .. 76 loop
-            Ada.Text_IO.Put('-');
-         end loop;
-         Ada.Text_IO.Put(CSI & "0m");
+         Entity_System.Claim_Writing(Entity_List);
+         Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+         RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+         RW.Children.Append(Title_Entity);
+         Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+         Entity_System.Release_Writing;
       end;
       
-      --  Memory section - YELLOW borders
-      SS.Get_Memory_Detailed(Total_Mem, Used_Mem, Free_Mem, Avail_Mem,
-                             Buffers, Cached, Swap_Total, Swap_Used);
+      Current_Row := Current_Row + 2;
+      
+      --  CPU bars
+      for C in 0 .. Num_Cores - 1 loop
+         --  Label
+         CPU_Label_Entities(C) := To_EID("CPULabel" & Img(C));
+         Comps := Add_Entity(Entity_System, CPU_Label_Entities(C));
+         
+         Widget_C.Position_X := 2;
+         Widget_C.Position_Y := TUI_Height(Current_Row);
+         Widget_C.Size_Width := 10;
+         Widget_C.Size_Height := 1;
+         Widget_C.Render_Buffer := Create_Buffer(10, 1);
+         
+         Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+         
+         Text_C.Text := SU.To_Unbounded_String("CPU" & Img(C) & ":");
+         Text_C.Text_Color := White;
+         Text_C.Offset_X := 1;
+         Text_C.Offset_Y := 1;
+         Text_C.Is_Bold := False;
+         
+         Add_Component(Comps.all, To_CID("Text"), Text_C);
+         BG_C.Background_Color := (10, 20, 10);
+         Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+         
+         declare
+            Entity_List : Entity_Components_Ptr;
+            Root_Comps : Components_Ptr;
+            RW : Widget_Component_T;
+         begin
+            Entity_System.Claim_Writing(Entity_List);
+            Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+            RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+            RW.Children.Append(CPU_Label_Entities(C));
+            Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+            Entity_System.Release_Writing;
+         end;
+         
+         --  Bar
+         CPU_Bar_Entities(C) := To_EID("CPUBar" & Img(C));
+         Comps := Add_Entity(Entity_System, CPU_Bar_Entities(C));
+         
+         Widget_C.Position_X := 13;
+         Widget_C.Position_Y := TUI_Height(Current_Row);
+         Widget_C.Size_Width := 60;
+         Widget_C.Size_Height := 1;
+         Widget_C.Render_Buffer := Create_Buffer(60, 1);
+         
+         Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+         
+         PB_C.Value := 0.0;
+         PB_C.Filled_Char := '=';
+         PB_C.Empty_Char := ' ';
+         PB_C.Filled_Color := Green;
+         PB_C.Empty_Color := Gray;
+         PB_C.Show_Percentage := True;
+         
+         Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+         BG_C.Background_Color := (10, 20, 10);
+         Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+         
+         declare
+            Entity_List : Entity_Components_Ptr;
+            Root_Comps : Components_Ptr;
+            RW : Widget_Component_T;
+         begin
+            Entity_System.Claim_Writing(Entity_List);
+            Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+            RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+            RW.Children.Append(CPU_Bar_Entities(C));
+            Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+            Entity_System.Release_Writing;
+         end;
+         
+         Current_Row := Current_Row + 1;
+      end loop;
+      
+      Current_Row := Current_Row + 1;
+      
+      --  Memory Label
+      Mem_Label_Entity := To_EID("MemLabel");
+      Comps := Add_Entity(Entity_System, Mem_Label_Entity);
+      
+      Widget_C.Position_X := 2;
+      Widget_C.Position_Y := TUI_Height(Current_Row);
+      Widget_C.Size_Width := 76;
+      Widget_C.Size_Height := 1;
+      Widget_C.Render_Buffer := Create_Buffer(76, 1);
+      
+      Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+      
+      Text_C.Text := SU.To_Unbounded_String("Memory:");
+      Text_C.Text_Color := White;
+      Text_C.Offset_X := 1;
+      Text_C.Offset_Y := 1;
+      Text_C.Is_Bold := True;
+      
+      Add_Component(Comps.all, To_CID("Text"), Text_C);
+      BG_C.Background_Color := (20, 15, 5);
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
       
       declare
-         Mem_Row : constant Natural := 9 + Num_Cores;
-         Mem_Percent : Float := 0.0;
+         Entity_List : Entity_Components_Ptr;
+         Root_Comps : Components_Ptr;
+         RW : Widget_Component_T;
       begin
-         if Total_Mem > 0 then
-            Mem_Percent := Float(Used_Mem) / Float(Total_Mem);
-         end if;
-         
-         Ada.Text_IO.Put(CSI & Trim(Natural'Image(Mem_Row)) & ";1H");
-         Ada.Text_IO.Put(CSI & "1;33m  |" & CSI & "1m");  -- Yellow border
-         Ada.Text_IO.Put(" Memory:");
-         Ada.Text_IO.Put(CSI & "0m");
-         Ada.Text_IO.Put(" " & Format_Memory(Used_Mem * 1024) & "/" & 
-                        Format_Memory(Total_Mem * 1024));
-         for I in 1 .. 56 loop
-            Ada.Text_IO.Put(' ');
-         end loop;
-         Ada.Text_IO.Put(CSI & "1;33m|" & CSI & "0m");
-         Ada.Text_IO.New_Line;
-         
-         Ada.Text_IO.Put(CSI & "1;33m  |" & CSI & "0m");
-         Draw_Bar(Mem_Row + 1, 5, 50, Mem_Percent, " RAM ");
-         Ada.Text_IO.Put(CSI & Trim(Natural'Image(Mem_Row + 1)) & ";78H");
-         Ada.Text_IO.Put(CSI & "1;33m|" & CSI & "0m");
-         
-         if Swap_Total > 0 then
-            declare
-               Swap_Percent : constant Float := Float(Swap_Used) / Float(Swap_Total);
-            begin
-               Ada.Text_IO.New_Line;
-               Ada.Text_IO.Put(CSI & "1;33m  |" & CSI & "0m");
-               Draw_Bar(Mem_Row + 2, 5, 50, Swap_Percent, " SWP ");
-               Ada.Text_IO.Put(CSI & Trim(Natural'Image(Mem_Row + 2)) & ";78H");
-               Ada.Text_IO.Put(CSI & "1;33m|" & CSI & "0m");
-            end;
-         end if;
-         
-         --  Bottom border of memory box
-         declare
-            Bottom_Row : constant Natural := Mem_Row + 3;
-         begin
-            Ada.Text_IO.Put(CSI & Trim(Natural'Image(Bottom_Row)) & ";1H");
-            Ada.Text_IO.Put(CSI & "1;33m");  -- Yellow
-            Ada.Text_IO.Put("  ");
-            for I in 1 .. 76 loop
-               Ada.Text_IO.Put('-');
-            end loop;
-            Ada.Text_IO.Put(CSI & "0m");
-         end;
+         Entity_System.Claim_Writing(Entity_List);
+         Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+         RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+         RW.Children.Append(Mem_Label_Entity);
+         Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+         Entity_System.Release_Writing;
       end;
-   end Draw_Header;
-   
-   procedure Draw_Process_List is
-      Procs : SS.Process_Array_Ptr := SS.Get_Process_List;
-      Start_Row : constant Natural := 22;
-      Displayed : Natural := 0;
-      Total_Procs : Natural := 0;
-   begin
-      if Procs /= null then
-         Total_Procs := Procs'Length;
-      end if;
       
-      --  Box border top - MAGENTA
-      Ada.Text_IO.Put(CSI & Trim(Natural'Image(Start_Row - 1)) & ";1H");
-      Ada.Text_IO.Put(CSI & "1;35m  ");  -- Bright Magenta
-      for I in 1 .. 76 loop
-         Ada.Text_IO.Put('-');
-      end loop;
-      Ada.Text_IO.Put(CSI & "0m");
+      Current_Row := Current_Row + 1;
       
-      --  Header with scroll info
-      Ada.Text_IO.Put(CSI & Trim(Natural'Image(Start_Row)) & ";1H");
-      Ada.Text_IO.Put(CSI & "1;35m  |" & CSI & "1m");  -- Magenta border
-      Ada.Text_IO.Put(" PID   USER     CPU% MEM%  S COMMAND");
-      Ada.Text_IO.Put(CSI & "0m");
-      Ada.Text_IO.Put("  ");
-      Ada.Text_IO.Put(CSI & "33m");  -- Yellow
-      Ada.Text_IO.Put("[j/k]scroll");
-      Ada.Text_IO.Put(CSI & "0m ");
-      Ada.Text_IO.Put(Trim(Natural'Image(Scroll_Offset + 1)));
-      Ada.Text_IO.Put("-");
-      if Total_Procs > 0 then
-         Ada.Text_IO.Put(Trim(Natural'Image(Natural'Min(Scroll_Offset + Max_Processes_Shown, Total_Procs))));
-      else
-         Ada.Text_IO.Put("0");
-      end if;
-      Ada.Text_IO.Put("/");
-      Ada.Text_IO.Put(Trim(Natural'Image(Total_Procs)));
-      for I in 1 .. 10 loop
-         Ada.Text_IO.Put(' ');
-      end loop;
-      Ada.Text_IO.Put(CSI & "1;35m|" & CSI & "0m");
+      --  RAM Bar
+      RAM_Bar_Entity := To_EID("RAMBar");
+      Comps := Add_Entity(Entity_System, RAM_Bar_Entity);
       
-      --  Separator
-      Ada.Text_IO.Put(CSI & Trim(Natural'Image(Start_Row + 1)) & ";1H");
-      Ada.Text_IO.Put(CSI & "1;35m  ");  -- Magenta
-      for I in 1 .. 76 loop
-         Ada.Text_IO.Put('-');
-      end loop;
-      Ada.Text_IO.Put(CSI & "0m");
+      Widget_C.Position_X := 2;
+      Widget_C.Position_Y := TUI_Height(Current_Row);
+      Widget_C.Size_Width := 60;
+      Widget_C.Size_Height := 1;
+      Widget_C.Render_Buffer := Create_Buffer(60, 1);
       
-      if Procs = null then
-         Ada.Text_IO.Put(CSI & Trim(Natural'Image(Start_Row + 2)) & ";1H");
-         Ada.Text_IO.Put(CSI & "1;35m  |" & CSI & "0m");
-         Ada.Text_IO.Put("  No process information available");
-         return;
-      end if;
+      Add_Component(Comps.all, To_CID("Widget"), Widget_C);
       
-      --  Process rows (compact format)
-      for I in 1 .. Procs'Length loop
-         exit when Displayed >= Max_Processes_Shown;
+      PB_C.Value := 0.0;
+      PB_C.Filled_Color := Yellow;
+      
+      Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+      BG_C.Background_Color := (20, 15, 5);
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+      
+      declare
+         Entity_List : Entity_Components_Ptr;
+         Root_Comps : Components_Ptr;
+         RW : Widget_Component_T;
+      begin
+         Entity_System.Claim_Writing(Entity_List);
+         Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+         RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+         RW.Children.Append(RAM_Bar_Entity);
+         Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+         Entity_System.Release_Writing;
+      end;
+      
+      Current_Row := Current_Row + 1;
+      
+      --  Swap Bar
+      SWP_Bar_Entity := To_EID("SWPBar");
+      Comps := Add_Entity(Entity_System, SWP_Bar_Entity);
+      
+      Widget_C.Position_X := 2;
+      Widget_C.Position_Y := TUI_Height(Current_Row);
+      Widget_C.Size_Width := 60;
+      Widget_C.Size_Height := 1;
+      Widget_C.Render_Buffer := Create_Buffer(60, 1);
+      
+      Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+      
+      PB_C.Value := 0.0;
+      PB_C.Filled_Color := Hot_Pink;
+      
+      Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+      BG_C.Background_Color := (20, 15, 5);
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+      
+      declare
+         Entity_List : Entity_Components_Ptr;
+         Root_Comps : Components_Ptr;
+         RW : Widget_Component_T;
+      begin
+         Entity_System.Claim_Writing(Entity_List);
+         Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+         RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+         RW.Children.Append(SWP_Bar_Entity);
+         Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+         Entity_System.Release_Writing;
+      end;
+      
+      Current_Row := Current_Row + 2;
+      
+      --  Disk Label
+      Disk_Label_Entity := To_EID("DiskLabel");
+      Comps := Add_Entity(Entity_System, Disk_Label_Entity);
+      
+      Widget_C.Position_X := 2;
+      Widget_C.Position_Y := TUI_Height(Current_Row);
+      Widget_C.Size_Width := 76;
+      Widget_C.Size_Height := 1;
+      Widget_C.Render_Buffer := Create_Buffer(76, 1);
+      
+      Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+      
+      Text_C.Text := SU.To_Unbounded_String("Disk (/):");
+      Text_C.Text_Color := White;
+      Text_C.Offset_X := 1;
+      Text_C.Offset_Y := 1;
+      Text_C.Is_Bold := True;
+      
+      Add_Component(Comps.all, To_CID("Text"), Text_C);
+      BG_C.Background_Color := (5, 15, 20);
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+      
+      declare
+         Entity_List : Entity_Components_Ptr;
+         Root_Comps : Components_Ptr;
+         RW : Widget_Component_T;
+      begin
+         Entity_System.Claim_Writing(Entity_List);
+         Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+         RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+         RW.Children.Append(Disk_Label_Entity);
+         Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+         Entity_System.Release_Writing;
+      end;
+      
+      Current_Row := Current_Row + 1;
+      
+      --  Disk Bar
+      Disk_Bar_Entity := To_EID("DiskBar");
+      Comps := Add_Entity(Entity_System, Disk_Bar_Entity);
+      
+      Widget_C.Position_X := 2;
+      Widget_C.Position_Y := TUI_Height(Current_Row);
+      Widget_C.Size_Width := 60;
+      Widget_C.Size_Height := 1;
+      Widget_C.Render_Buffer := Create_Buffer(60, 1);
+      
+      Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+      
+      PB_C.Value := 0.0;
+      PB_C.Filled_Color := Cyan;
+      
+      Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+      BG_C.Background_Color := (5, 15, 20);
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+      
+      declare
+         Entity_List : Entity_Components_Ptr;
+         Root_Comps : Components_Ptr;
+         RW : Widget_Component_T;
+      begin
+         Entity_System.Claim_Writing(Entity_List);
+         Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+         RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+         RW.Children.Append(Disk_Bar_Entity);
+         Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+         Entity_System.Release_Writing;
+      end;
+      
+      Current_Row := Current_Row + 2;
+      
+      --  Process Header
+      Proc_Header_Entity := To_EID("ProcHeader");
+      Comps := Add_Entity(Entity_System, Proc_Header_Entity);
+      
+      Widget_C.Position_X := 2;
+      Widget_C.Position_Y := TUI_Height(Current_Row);
+      Widget_C.Size_Width := 76;
+      Widget_C.Size_Height := 1;
+      Widget_C.Render_Buffer := Create_Buffer(76, 1);
+      
+      Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+      
+      Text_C.Text := SU.To_Unbounded_String(
+         Pad("PID", 7) & Pad("USER", 10) & Pad("CPU%", 6) & 
+         Pad("MEM%", 6) & "S  COMMAND"
+      );
+      Text_C.Text_Color := Violet;
+      Text_C.Offset_X := 1;
+      Text_C.Offset_Y := 1;
+      Text_C.Is_Bold := True;
+      
+      Add_Component(Comps.all, To_CID("Text"), Text_C);
+      BG_C.Background_Color := (15, 15, 30);
+      Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+      
+      declare
+         Entity_List : Entity_Components_Ptr;
+         Root_Comps : Components_Ptr;
+         RW : Widget_Component_T;
+      begin
+         Entity_System.Claim_Writing(Entity_List);
+         Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+         RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+         RW.Children.Append(Proc_Header_Entity);
+         Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+         Entity_System.Release_Writing;
+      end;
+      
+      Current_Row := Current_Row + 1;
+      
+      --  Process Rows
+      for R in 0 .. 9 loop
+         Proc_Row_Entities(R) := To_EID("ProcRow" & Img(R));
+         Comps := Add_Entity(Entity_System, Proc_Row_Entities(R));
          
-         if I > Scroll_Offset then
-            declare
-               Proc : SS.Process_Info renames Procs(I);
-               Row : constant Natural := Start_Row + 2 + Displayed;
-               PID_Str : String(1 .. 5);
-               User_Str : String(1 .. 8);
-               CPU_Str : constant String := Format_Percent(Proc.CPU / 100.0);
-               Mem_Str : constant String := Format_Percent(Proc.Memory / 100.0);
-               Name : constant String := SU.To_String(Proc.Name);
-            begin
-               --  Format PID (right-aligned)
-               declare
-                  PID_Image : constant String := Trim(Natural'Image(Proc.PID));
-               begin
-                  PID_Str := [others => ' '];
-                  for J in 1 .. Natural'Min(PID_Image'Length, 5) loop
-                     PID_Str(6 - Natural'Min(PID_Image'Length, 5) + J - 1) := 
-                        PID_Image(PID_Image'First + J - 1);
-                  end loop;
-               end;
+         Widget_C.Position_X := 2;
+         Widget_C.Position_Y := TUI_Height(Current_Row);
+         Widget_C.Size_Width := 76;
+         Widget_C.Size_Height := 1;
+         Widget_C.Render_Buffer := Create_Buffer(76, 1);
+         
+         Add_Component(Comps.all, To_CID("Widget"), Widget_C);
+         
+         Text_C.Text := SU.To_Unbounded_String("");
+         Text_C.Text_Color := White;
+         Text_C.Offset_X := 1;
+         Text_C.Offset_Y := 1;
+         Text_C.Is_Bold := False;
+         
+         Add_Component(Comps.all, To_CID("Text"), Text_C);
+         BG_C.Background_Color := Black;
+         Add_Component(Comps.all, To_CID("BackgroundColor"), BG_C);
+         
+         declare
+            Entity_List : Entity_Components_Ptr;
+            Root_Comps : Components_Ptr;
+            RW : Widget_Component_T;
+         begin
+            Entity_System.Claim_Writing(Entity_List);
+            Root_Comps := Get_Entity_Components(Entity_List.all, Root_Widget_Entity);
+            RW := Widget_Component_T(Get_Component(Root_Comps.all, Widget_Component_T'Tag));
+            RW.Children.Append(Proc_Row_Entities(R));
+            Add_Component(Root_Comps.all, To_CID("Widget"), RW);
+            Entity_System.Release_Writing;
+         end;
+         
+         Current_Row := Current_Row + 1;
+      end loop;
+      
+      --  Warm up CPU stats
+      declare
+         Dummy : Float := SS.Get_CPU_Usage_Average;
+      begin
+         null;
+      end;
+      
+   end Initialize_Demo;
+
+   --------------------------------------------------------
+   -- Update System Stats
+   --------------------------------------------------------
+   procedure Update_Stats is
+      Entity_List : Entity_Components_Ptr;
+      Comps : Components_Ptr;
+      PB_C : Progress_Bar_Component_T;
+      Text_C : Text_Component_T;
+      
+      Num_Cores : constant Natural := Natural'Min(SS.Get_CPU_Count, 8);
+      Procs : SS.Process_Array_Ptr;
+      
+      --  Memory
+      Tot_MB, Used_MB, Free_MB, Avail_MB,
+      Buff_MB, Cache_MB, Swap_Tot_MB, Swap_Used_MB : Natural;
+      Real_Used_MB : Natural;
+      
+      --  Disk
+      Disk_Path : constant String := (if SS.Get_Platform = SS.Windows then "C:\" else "/");
+      Disk_Total_GB, Disk_Used_GB : Float;
+      
+   begin
+      Entity_System.Claim_Writing(Entity_List);
+      
+      --  Update CPU bars
+      for C in 0 .. Num_Cores - 1 loop
+         declare
+            Usage : constant Float := SS.Get_CPU_Usage(C) / 100.0;
+         begin
+            Comps := Get_Entity_Components(Entity_List.all, CPU_Bar_Entities(C));
+            if Comps /= null then
+               PB_C := Progress_Bar_Component_T(
+                  Get_Component(Comps.all, Progress_Bar_Component_T'Tag)
+               );
+               PB_C.Value := Usage;
                
-               --  Format User (left-aligned, truncated)
-               declare
-                  User_Image : constant String := SU.To_String(Proc.User);
-               begin
-                  User_Str := [others => ' '];
-                  for J in 1 .. Natural'Min(User_Image'Length, 8) loop
-                     User_Str(J) := User_Image(User_Image'First + J - 1);
-                  end loop;
-               end;
-               
-               --  Draw compact row
-               Ada.Text_IO.Put(CSI & Trim(Natural'Image(Row)) & ";1H");
-               Ada.Text_IO.Put(CSI & "1;35m  |" & CSI & "0m ");  -- Magenta border
-               Ada.Text_IO.Put(PID_Str & " " & User_Str & " ");
-               Ada.Text_IO.Put(CPU_Str & " " & Mem_Str & "  ");
-               Ada.Text_IO.Put(State_Char(Proc.State) & " ");
-               
-               --  Truncate command name to fit (35 chars)
-               if Name'Length > 35 then
-                  Ada.Text_IO.Put(Name(Name'First .. Name'First + 34));
+               if Usage < 0.33 then
+                  PB_C.Filled_Color := Green;
+               elsif Usage < 0.66 then
+                  PB_C.Filled_Color := Yellow;
                else
-                  Ada.Text_IO.Put(Name);
-                  for J in Name'Length + 1 .. 35 loop
-                     Ada.Text_IO.Put(' ');
-                  end loop;
+                  PB_C.Filled_Color := Red;
                end if;
                
-               Ada.Text_IO.Put(CSI & "1;35m|" & CSI & "0m");  -- Magenta border
-               
-               Displayed := Displayed + 1;
-            end;
+               Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+            end if;
+         end;
+      end loop;
+      
+      --  Update Memory
+      SS.Get_Memory_Detailed(Tot_MB, Used_MB, Free_MB, Avail_MB,
+                             Buff_MB, Cache_MB, Swap_Tot_MB, Swap_Used_MB);
+      Real_Used_MB := Tot_MB - Free_MB - Buff_MB - Cache_MB;
+      
+      declare
+         Mem_Pct : constant Float := (if Tot_MB > 0 then Float(Real_Used_MB) / Float(Tot_MB) else 0.0);
+         Swap_Pct : constant Float := (if Swap_Tot_MB > 0 then Float(Swap_Used_MB) / Float(Swap_Tot_MB) else 0.0);
+      begin
+         Comps := Get_Entity_Components(Entity_List.all, Mem_Label_Entity);
+         if Comps /= null then
+            Text_C := Text_Component_T(Get_Component(Comps.all, Text_Component_T'Tag));
+            Text_C.Text := SU.To_Unbounded_String(
+               "Memory: " & Img_F1(Float(Real_Used_MB) / 1024.0) & "G / " &
+                            Img_F1(Float(Tot_MB) / 1024.0) & "G"
+            );
+            Add_Component(Comps.all, To_CID("Text"), Text_C);
          end if;
+         
+         Comps := Get_Entity_Components(Entity_List.all, RAM_Bar_Entity);
+         if Comps /= null then
+            PB_C := Progress_Bar_Component_T(Get_Component(Comps.all, Progress_Bar_Component_T'Tag));
+            PB_C.Value := Mem_Pct;
+            if Mem_Pct < 0.5 then PB_C.Filled_Color := Green;
+            elsif Mem_Pct < 0.75 then PB_C.Filled_Color := Yellow;
+            else PB_C.Filled_Color := Red;
+            end if;
+            Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+         end if;
+         
+         Comps := Get_Entity_Components(Entity_List.all, SWP_Bar_Entity);
+         if Comps /= null then
+            PB_C := Progress_Bar_Component_T(Get_Component(Comps.all, Progress_Bar_Component_T'Tag));
+            PB_C.Value := Swap_Pct;
+            if Swap_Pct < 0.5 then PB_C.Filled_Color := Green;
+            elsif Swap_Pct < 0.75 then PB_C.Filled_Color := Yellow;
+            else PB_C.Filled_Color := Red;
+            end if;
+            Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+         end if;
+      end;
+      
+      --  Update Disk
+      SS.Get_Disk_Space_GB(Disk_Path, Disk_Total_GB, Disk_Used_GB);
+      declare
+         Disk_Pct : constant Float := SS.Get_Disk_Usage(Disk_Path);
+      begin
+         Comps := Get_Entity_Components(Entity_List.all, Disk_Label_Entity);
+         if Comps /= null then
+            Text_C := Text_Component_T(Get_Component(Comps.all, Text_Component_T'Tag));
+            Text_C.Text := SU.To_Unbounded_String(
+               "Disk: " & Img_F1(Disk_Used_GB) & "G / " & Img_F1(Disk_Total_GB) & "G"
+            );
+            Add_Component(Comps.all, To_CID("Text"), Text_C);
+         end if;
+         
+         Comps := Get_Entity_Components(Entity_List.all, Disk_Bar_Entity);
+         if Comps /= null then
+            PB_C := Progress_Bar_Component_T(Get_Component(Comps.all, Progress_Bar_Component_T'Tag));
+            PB_C.Value := Disk_Pct;
+            if Disk_Pct < 0.5 then PB_C.Filled_Color := Green;
+            elsif Disk_Pct < 0.75 then PB_C.Filled_Color := Yellow;
+            else PB_C.Filled_Color := Red;
+            end if;
+            Add_Component(Comps.all, To_CID("ProgressBar"), PB_C);
+         end if;
+      end;
+      
+      --  Update Processes
+      Procs := SS.Get_Process_List;
+      for R in 0 .. 9 loop
+         declare
+            Idx : constant Natural := R + Scroll_Offset;
+         begin
+            Comps := Get_Entity_Components(Entity_List.all, Proc_Row_Entities(R));
+            if Comps /= null then
+               Text_C := Text_Component_T(Get_Component(Comps.all, Text_Component_T'Tag));
+               
+               if Procs /= null and then Idx < Procs'Length then
+                  declare
+                     P : SS.Process_Info renames Procs(Idx + 1);
+                     CPU_Pct : constant Natural := Natural'Min(100, Natural(P.CPU));
+                     Mem_Pct : constant Natural := Natural'Min(100, Natural(P.Memory));
+                     St : constant Character := (case P.State is
+                        when SS.Running => 'R', when SS.Sleeping => 'S',
+                        when SS.Stopped => 'T', when SS.Zombie => 'Z',
+                        when SS.Unknown_State => '?');
+                  begin
+                     Text_C.Text := SU.To_Unbounded_String(
+                        Pad(Img(P.PID), 7) &
+                        Pad(SU.To_String(P.User), 10) &
+                        Pad(Img(CPU_Pct) & "%", 6) &
+                        Pad(Img(Mem_Pct) & "%", 6) &
+                        St & "  " &
+                        Pad(SU.To_String(P.Name), 30)
+                     );
+                     Text_C.Text_Color := (if CPU_Pct > 50 then Red elsif CPU_Pct > 20 then Gold else White);
+                  end;
+               else
+                  Text_C.Text := SU.To_Unbounded_String("");
+               end if;
+               
+               Add_Component(Comps.all, To_CID("Text"), Text_C);
+            end if;
+         end;
       end loop;
       
-      --  Clear any remaining rows and add borders
-      for I in Displayed + 1 .. Max_Processes_Shown loop
-         Ada.Text_IO.Put(CSI & Trim(Natural'Image(Start_Row + 1 + I)) & ";1H");
-         Ada.Text_IO.Put(CSI & "1;35m  |" & CSI & "0m");  -- Magenta
-         for J in 1 .. 74 loop
-            Ada.Text_IO.Put(' ');
-         end loop;
-         Ada.Text_IO.Put(CSI & "1;35m|" & CSI & "0m");
-      end loop;
+      if Procs /= null then
+         SS.Free_Process_List(Procs);
+      end if;
       
-      --  Bottom border
-      Ada.Text_IO.Put(CSI & Trim(Natural'Image(Start_Row + 2 + Max_Processes_Shown)) & ";1H");
-      Ada.Text_IO.Put(CSI & "1;35m  ");  -- Magenta
-      for I in 1 .. 76 loop
-         Ada.Text_IO.Put('-');
-      end loop;
-      Ada.Text_IO.Put(CSI & "0m");
-      
-      SS.Free_Process_List(Procs);
-   end Draw_Process_List;
-   
-   --------------------------------------------------------
-   -- Keyboard Handling with Simple Input
-   --------------------------------------------------------
+      Entity_System.Release_Writing;
+   end Update_Stats;
    
    procedure Check_Keyboard is
       use Input_Handling;
       Event : Input_Event_t;
    begin
       Input_Buffer.Consume(Event);
-      
-      -- Check if we got a real event (not NUL)
-      if Event.Char_Value = Character'Val(0) then
-         return;  -- No input available
-      end if;
-      
-      -- Check for quit commands
-      if Event.Cmd = Quit then
+      if Event.Char_Value = Character'Val(0) then return; end if;
+      if Event.Cmd = Quit or Event.Char_Value = 'q' or Event.Char_Value = 'Q' then
          Running := False;
-         return;
+      elsif Event.Char_Value = 'j' or Event.Char_Value = 'J' then
+         Scroll_Offset := Scroll_Offset + 1;
+      elsif Event.Char_Value = 'k' or Event.Char_Value = 'K' then
+         if Scroll_Offset > 0 then Scroll_Offset := Scroll_Offset - 1; end if;
       end if;
-      
-      -- Also check raw character for quit
-      if Event.Char_Value = 'q' or Event.Char_Value = 'Q' then
-         Running := False;
-         return;
-      end if;
-      
-      -- Check for scroll keys
-      case Event.Char_Value is
-         when 'j' | 'J' =>  -- Scroll down
-            Scroll_Offset := Scroll_Offset + 1;
-            
-         when 'k' | 'K' =>  -- Scroll up
-            if Scroll_Offset > 0 then
-               Scroll_Offset := Scroll_Offset - 1;
-            end if;
-            
-         when others =>
-            null;
-      end case;
    end Check_Keyboard;
    
-   --------------------------------------------------------
-   -- Main Loop
-   --
-   -- Root cause of broken input: main loop spent ~1 full second
-   -- blocked on "delay until Next_Update", so keypresses only
-   -- registered once per second and felt completely ignored.
-   --
-   -- Fix: Display_Task redraws every 1s in the background.
-   -- Main task polls Input_Buffer every 50ms -> instant response.
-   --------------------------------------------------------
-
-   --  Declared here (inside procedure, before begin) so it can
-   --  see Running and the draw procedures.
-   task Display_Task is
-      entry Stop;
-   end Display_Task;
-
+   task Display_Task;
    task body Display_Task is
-      Next_Draw : Time := Clock;
+      Next_Update : Time := Clock;
    begin
-      loop
-         select
-            accept Stop;
-            exit;
-         else
-            if not Running then
-               exit;
-            end if;
-            Draw_Header;
-            Draw_Process_List;
-            Ada.Text_IO.Flush;
-            Next_Draw := Next_Draw + Update_Interval;
-            delay until Next_Draw;
-         end select;
+      while Running loop
+         Update_Stats;
+         WidgetBackgroundSystem(Entity_System);
+         TextRenderSystem(Entity_System);
+         ProgressBarRenderSystem(Entity_System);
+         BufferCopySystem(Entity_System);
+         BufferDrawSystem(Entity_System);
+         DoubleBufferFlagSystem(Entity_System);
+         Next_Update := Next_Update + Update_Interval;
+         delay until Next_Update;
       end loop;
    end Display_Task;
 
+   --------------------------------------------------------
+   -- Main Loop
+   --------------------------------------------------------
+   Next_Update : Time := Clock;
+   
 begin
-   --  Initialize terminal
-   Clear_Screen;
-   Enable_VT_Processing;
-   Set_Cursor_Visible(False);
-
-   --  Start Input_Reader task (calls Get_Immediate in background)
+   Initialize_Demo;
    Input_Handling.Input_Reader.Start;
-
-   --  Warm up CPU stats (first call always returns 0)
-   declare
-      Dummy : constant Float := SS.Get_CPU_Usage_Average;
-   begin
-      null;
-   end;
-
-   --  Poll keyboard every 50ms - feels instant to the user
+   
    while Running loop
       Check_Keyboard;
       delay 0.05;
    end loop;
-
-   --  Shut down display task cleanly
-   Display_Task.Stop;
+   
+   delay 0.1;
    Input_Handling.Input_Reader.Stop;
    Set_Cursor_Visible(True);
    Reset_Styling;
@@ -544,10 +723,11 @@ begin
 
 exception
    when others =>
+      Running := False;
+      delay 0.1;
       Input_Handling.Input_Reader.Stop;
       Set_Cursor_Visible(True);
       Reset_Styling;
-      Clear_Screen;
       raise;
-
-end HTop_Demo;
+   
+end ETop_Demo;
