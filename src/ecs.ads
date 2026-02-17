@@ -133,6 +133,9 @@ package ECS is
    procedure ProgressBarRenderSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO);
 
+   procedure SelectionSystem (Entity_List_PO : in out Entity_Components_PO;
+                              Tab_Pressed : in Boolean);
+
    --===========================================================================
    -- HELPER PROCEDURES
    --===========================================================================

@@ -11,6 +11,7 @@ with Ada.Text_IO;
 with Graphics; use Graphics;
 with ECS; use ECS;
 with IDs; use IDs;
+use type Entity_ID_Vector.Vector;
 with User_Library; use User_Library;
 
 procedure Presentation_2_Demo is
@@ -80,7 +81,7 @@ begin
    --  Setup infrastructure
    Setup_Render_Info (Entities_PO, Render_Info_ID, Term_Width, Term_Height);
    Setup_Root_Widget (Entities_PO, Root_ID, Term_Width, Term_Height,
-                      [Progress1_ID, Progress2_ID, Progress3_ID, Animation_ID]);
+                      Entity_ID_Vector.To_Vector (Progress1_ID, 1) & Progress2_ID & Progress3_ID & Animation_ID);
 
    --  Create progress bars with different styles
    --  Progress Bar 1: Download (Cyan/Blue theme)

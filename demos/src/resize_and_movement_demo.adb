@@ -49,10 +49,10 @@ procedure Resize_And_Movement_Demo is
       Terminal_Height      => 24,
       Prev_Terminal_Width  => 80,
       Prev_Terminal_Height => 24,
-      Framebuffer_1        => (Width => 80, Height => 24, Data => <>),
-      Framebuffer_2        => (Width => 80, Height => 24, Data => <>),
+      Framebuffer_1        => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_2        => (Width => 80, Height => 24, Data => new Pixel_Array),
       Drawing_FB           => new Graphics.Protected_DB,
-      Backbuffer           => (Width => 80, Height => 24, Data => <>)
+      Backbuffer           => (Width => 80, Height => 24, Data => new Pixel_Array)
    );
 
    Comp_Root_Widget : constant Components.Widget_Component_T := (
@@ -60,8 +60,8 @@ procedure Resize_And_Movement_Demo is
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 24,
-      Children      => [E_Bouncer],
-      Render_Buffer => (Width => 80, Height => 24, Data => <>),
+      Children      => IDs.Entity_ID_Vector.To_Vector (E_Bouncer, 1),
+      Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -74,8 +74,8 @@ procedure Resize_And_Movement_Demo is
       Position_Y    => 6,
       Size_Width    => 3,
       Size_Height   => 1,
-      Children      => [],
-      Render_Buffer => (Width => 3, Height => 1, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 3, Height => 1, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True

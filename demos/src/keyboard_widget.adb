@@ -149,7 +149,7 @@ procedure Keyboard_Widget is
       Add_Component (Comp_Ptr.all, To_CID ("WidgetComponent"), Widget);
 
       --  Center the label in the key
-      Label := [others => ' '];
+      Label := (others => ' ');
       Label (1) := '[';
       Label (Natural_t (Width)) := ']';
       Label_Start := (Natural_t (Width) - Key_Name'Length) / 2 + 1;
@@ -531,7 +531,7 @@ procedure Keyboard_Widget is
 
    --  Update status line using ECS text component (caller must hold lock)
    procedure Update_Status (Entity_List : Entity_Components_Ptr) is
-      Status_Text : String_t (1 .. 55) := [others => ' '];
+      Status_Text : String_t (1 .. 55) := (others => ' ');
    begin
       if Pressed_Key >= ' ' and Pressed_Key <= '~' then
          Status_Text (1 .. 11) := "Last key: '";
@@ -587,7 +587,7 @@ procedure Keyboard_Widget is
       Entity_List : Entity_Components_Ptr;
       Result      : Command_Sequence_Handling.Handler_Result_t
    ) is
-      Status_Text : String_t (1 .. 55) := [others => ' '];
+      Status_Text : String_t (1 .. 55) := (others => ' ');
       Pos : Natural_t := 1;
       Prefix : constant String_t := "Command: ";
    begin

@@ -76,9 +76,6 @@ package body Input_Handling is
                   --  ESC triggers quit immediately, no state change needed
                   Cmd := Quit;
 
-               when 'q' | 'Q' =>
-                  Cmd := Quit;
-
                when others =>
                   null;  --  Cmd stays None, but Has_Command is True
             end case;
