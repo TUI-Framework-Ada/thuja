@@ -1,5 +1,5 @@
 /*******************************************************************************
- * crossplatform_system_stats.c - Cross-platform system statistics
+ * system_stats_crossplatform.c - Cross-platform system statistics
  * Supports both Linux and Windows
  ******************************************************************************/
 #include <stdio.h>
@@ -345,15 +345,15 @@ process_info_t* get_process_list(int *count) {
         return NULL;
     }
     
-    // Count processes
-    PROCESSENTRY32 pe32;
-    pe32.dwSize = sizeof(PROCESSENTRY32);
+    // Count processes - use PROCESSENTRY32A (ANSI version, no wide chars)
+    PROCESSENTRY32A pe32;
+    pe32.dwSize = sizeof(PROCESSENTRY32A);
     int proc_count = 0;
     
-    if (Process32First(snapshot, &pe32)) {
+    if (Process32FirstA(snapshot, &pe32)) {
         do {
             proc_count++;
-        } while (Process32Next(snapshot, &pe32));
+        } while (Process32NextA(snapshot, &pe32));
     }
     
     if (proc_count == 0) {
@@ -369,22 +369,40 @@ process_info_t* get_process_list(int *count) {
         return NULL;
     }
     
-    // Get process info
-    pe32.dwSize = sizeof(PROCESSENTRY32);
+    // Get process info - restart from beginning
+    pe32.dwSize = sizeof(PROCESSENTRY32A);
     int index = 0;
     
-    if (Process32First(snapshot, &pe32)) {
+    if (Process32FirstA(snapshot, &pe32)) {
         do {
-            procs[index].pid = pe32.th32ProcessID;
-            WideCharToMultiByte(CP_UTF8, 0, pe32.szExeFile, -1, 
-                                procs[index].name, sizeof(procs[index].name), NULL, NULL);
-            strcpy(procs[index].user, "user");  // Simplified
-            procs[index].state = 1;  // Sleeping (default)
-            procs[index].cpu_percent = 0.0f;  // Would need sampling
+            procs[index].pid = (int)pe32.th32ProcessID;
+            
+            // szExeFile is already ANSI (char*), just copy directly
+            strncpy(procs[index].name, pe32.szExeFile, sizeof(procs[index].name) - 1);
+            procs[index].name[sizeof(procs[index].name) - 1] = '\0';
+            
+            strcpy(procs[index].user, "user");
+            procs[index].state = 1;      // Sleeping (default)
+            procs[index].cpu_percent = 0.0f;
             procs[index].mem_percent = 0.0f;
-            procs[index].mem_kb = pe32.th32MemoryUsage / 1024;
+            
+            // Get memory using OpenProcess + GetProcessMemoryInfo
+            // th32MemoryUsage does NOT exist in PROCESSENTRY32
+            procs[index].mem_kb = 0;
+            {
+                HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+                                           FALSE, pe32.th32ProcessID);
+                if (hProc != NULL) {
+                    PROCESS_MEMORY_COUNTERS pmc;
+                    if (GetProcessMemoryInfo(hProc, &pmc, sizeof(pmc))) {
+                        procs[index].mem_kb = (unsigned long)(pmc.WorkingSetSize / 1024);
+                    }
+                    CloseHandle(hProc);
+                }
+            }
+            
             index++;
-        } while (Process32Next(snapshot, &pe32) && index < proc_count);
+        } while (Process32NextA(snapshot, &pe32) && index < proc_count);
     }
     
     CloseHandle(snapshot);

@@ -449,74 +449,105 @@ procedure HTop_Demo is
          return;  -- No input available
       end if;
       
-      case Event.Cmd is
-         when Quit =>
-            Running := False;
+      -- Check for quit commands
+      if Event.Cmd = Quit then
+         Running := False;
+         return;
+      end if;
+      
+      -- Also check raw character for quit
+      if Event.Char_Value = 'q' or Event.Char_Value = 'Q' then
+         Running := False;
+         return;
+      end if;
+      
+      -- Check for scroll keys
+      case Event.Char_Value is
+         when 'j' | 'J' =>  -- Scroll down
+            Scroll_Offset := Scroll_Offset + 1;
+            
+         when 'k' | 'K' =>  -- Scroll up
+            if Scroll_Offset > 0 then
+               Scroll_Offset := Scroll_Offset - 1;
+            end if;
             
          when others =>
-            -- Check for manual scroll keys
-            case Event.Char_Value is
-               when 'j' | 'J' =>  -- Scroll down
-                  Scroll_Offset := Scroll_Offset + 1;
-                  
-               when 'k' | 'K' =>  -- Scroll up
-                  if Scroll_Offset > 0 then
-                     Scroll_Offset := Scroll_Offset - 1;
-                  end if;
-                  
-               when others =>
-                  null;
-            end case;
+            null;
       end case;
    end Check_Keyboard;
    
    --------------------------------------------------------
    -- Main Loop
+   --
+   -- Root cause of broken input: main loop spent ~1 full second
+   -- blocked on "delay until Next_Update", so keypresses only
+   -- registered once per second and felt completely ignored.
+   --
+   -- Fix: Display_Task redraws every 1s in the background.
+   -- Main task polls Input_Buffer every 50ms -> instant response.
    --------------------------------------------------------
-   
-   Next_Update : Time := Clock;
-   
+
+   --  Declared here (inside procedure, before begin) so it can
+   --  see Running and the draw procedures.
+   task Display_Task is
+      entry Stop;
+   end Display_Task;
+
+   task body Display_Task is
+      Next_Draw : Time := Clock;
+   begin
+      loop
+         select
+            accept Stop;
+            exit;
+         else
+            if not Running then
+               exit;
+            end if;
+            Draw_Header;
+            Draw_Process_List;
+            Ada.Text_IO.Flush;
+            Next_Draw := Next_Draw + Update_Interval;
+            delay until Next_Draw;
+         end select;
+      end loop;
+   end Display_Task;
+
 begin
    --  Initialize terminal
    Clear_Screen;
    Enable_VT_Processing;
    Set_Cursor_Visible(False);
-   
-   --  Start input reader task
+
+   --  Start Input_Reader task (calls Get_Immediate in background)
    Input_Handling.Input_Reader.Start;
-   
-   --  Initialize CPU stats (first call returns 0)
+
+   --  Warm up CPU stats (first call always returns 0)
    declare
       Dummy : constant Float := SS.Get_CPU_Usage_Average;
    begin
       null;
    end;
-   
-   --  Main loop - runs forever until 'q' pressed
+
+   --  Poll keyboard every 50ms - feels instant to the user
    while Running loop
-      --  Draw everything
-      Draw_Header;
-      Draw_Process_List;
-      Ada.Text_IO.Flush;
-      
-      --  Check for keyboard input (arrow keys, q, etc)
       Check_Keyboard;
-      
-      --  Wait for next update
-      Next_Update := Next_Update + Update_Interval;
-      delay until Next_Update;
+      delay 0.05;
    end loop;
-   
-   --  Cleanup
+
+   --  Shut down display task cleanly
+   Display_Task.Stop;
+   Input_Handling.Input_Reader.Stop;
    Set_Cursor_Visible(True);
    Reset_Styling;
    Clear_Screen;
-   
+
 exception
    when others =>
+      Input_Handling.Input_Reader.Stop;
       Set_Cursor_Visible(True);
       Reset_Styling;
       Clear_Screen;
       raise;
-      
+
 end HTop_Demo;
