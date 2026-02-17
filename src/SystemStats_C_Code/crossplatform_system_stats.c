@@ -239,14 +239,19 @@ void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb,
         return;
     }
     
-    *total_mb = mem.total_kb / 1024;
-    *free_mb = mem.free_kb / 1024;
-    *avail_mb = mem.available_kb / 1024;
-    *buff_mb = mem.buffers_kb / 1024;
-    *cached_mb = mem.cached_kb / 1024;
-    *swap_total_mb = mem.swap_total_kb / 1024;
-    *swap_used_mb = (mem.swap_total_kb - mem.swap_free_kb) / 1024;
-    *used_mb = *total_mb - *avail_mb;
+    *total_mb    = (int)(mem.total_kb     / 1024);
+    *free_mb     = (int)(mem.free_kb      / 1024);
+    *avail_mb    = (int)(mem.available_kb / 1024);
+    *buff_mb     = (int)(mem.buffers_kb   / 1024);
+    *cached_mb   = (int)(mem.cached_kb    / 1024);
+    *swap_total_mb = (int)(mem.swap_total_kb / 1024);
+    *swap_used_mb  = (int)((mem.swap_total_kb - mem.swap_free_kb) / 1024);
+
+    /* used = total - free - buffers - cache  (matches htop's definition)
+       avail_mb alone over-reports because Linux reclaims buffers/cache freely */
+    unsigned long used_kb = mem.total_kb - mem.free_kb
+                            - mem.buffers_kb - mem.cached_kb;
+    *used_mb = (int)(used_kb / 1024);
 }
 
 #endif
@@ -272,6 +277,32 @@ float get_disk_usage(const char *path) {
     
     if (total == 0) return 0.0f;
     return (float)(total - avail) / (float)total;
+#endif
+}
+
+/* Returns total and used disk space in GB for a given path */
+void get_disk_space_gb(const char *path, float *total_gb, float *used_gb) {
+#if IS_WINDOWS
+    ULARGE_INTEGER free_bytes, total_bytes;
+    if (GetDiskFreeSpaceExA(path, &free_bytes, &total_bytes, NULL)) {
+        *total_gb = (float)total_bytes.QuadPart / (1024.0f * 1024.0f * 1024.0f);
+        float free_gb = (float)free_bytes.QuadPart / (1024.0f * 1024.0f * 1024.0f);
+        *used_gb = *total_gb - free_gb;
+    } else {
+        *total_gb = 0.0f;
+        *used_gb  = 0.0f;
+    }
+#else
+    struct statvfs stat;
+    if (statvfs(path, &stat) != 0) {
+        *total_gb = 0.0f;
+        *used_gb  = 0.0f;
+        return;
+    }
+    unsigned long long total_bytes = (unsigned long long)stat.f_blocks * stat.f_frsize;
+    unsigned long long avail_bytes = (unsigned long long)stat.f_bavail * stat.f_frsize;
+    *total_gb = (float)total_bytes / (1024.0f * 1024.0f * 1024.0f);
+    *used_gb  = (float)(total_bytes - avail_bytes) / (1024.0f * 1024.0f * 1024.0f);
 #endif
 }
 

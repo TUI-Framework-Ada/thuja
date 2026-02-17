@@ -57,6 +57,13 @@ package body System_Stats is
    procedure C_Get_Disk_IO (Read_MB : access C.C_float; Write_MB : access C.C_float);
    pragma Import (C, C_Get_Disk_IO, "get_disk_io");
 
+   procedure C_Get_Disk_Space_GB (
+      Path     : C.Strings.chars_ptr;
+      Total_GB : access C.C_float;
+      Used_GB  : access C.C_float
+   );
+   pragma Import (C, C_Get_Disk_Space_GB, "get_disk_space_gb");
+
    procedure C_Get_Network_IO (RX_MB : access C.C_float; TX_MB : access C.C_float);
    pragma Import (C, C_Get_Network_IO, "get_network_io");
 
@@ -146,6 +153,20 @@ package body System_Stats is
       C.Strings.Free(C_Path);
       return Float(Result);
    end Get_Disk_Usage;
+
+   procedure Get_Disk_Space_GB (
+      Path     : String;
+      Total_GB : out Float;
+      Used_GB  : out Float
+   ) is
+      C_Path : C.Strings.chars_ptr := C.Strings.New_String (Path);
+      T, U   : aliased C.C_float;
+   begin
+      C_Get_Disk_Space_GB (C_Path, T'Access, U'Access);
+      C.Strings.Free (C_Path);
+      Total_GB := Float (T);
+      Used_GB  := Float (U);
+   end Get_Disk_Space_GB;
 
    procedure Get_Disk_IO (Read_MB : out Float; Write_MB : out Float) is
       R, W : aliased C.C_float;
