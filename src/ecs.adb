@@ -1286,7 +1286,7 @@ package body ECS is
          begin
 
             if Calendar_C.Display_Mode = Month_Page
-              and Text_Width >= 3*Week_Length-1 and Text_Height >= 8 then
+              and Text_Width >= 3*Week_Length-1 and Text_Height >= 9 then
                --  Month_Page mode selected and enough size for it
 
                --  Make Date_Weekday for the first of the month

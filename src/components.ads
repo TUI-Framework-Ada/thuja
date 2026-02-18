@@ -155,7 +155,7 @@ package Components is
 
    --  Controls how a calendar component displays its preview
    type Calendar_Display_Mode is (
-      --  Include all days of the month in a formatted preview, requires at least 20h x 8v pixels
+      --  Include all days of the month in a formatted preview, requires at least 20h x 9v pixels
       Month_Page,
       --  Minimal formatting of "YYYY/MM/DD, Weekday"
       Date_String

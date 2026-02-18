@@ -259,8 +259,8 @@ procedure Comprehensive_Demo is
 
    Comp_Sidebar_Calendar : constant Components.Calendar_Component_T := (
       Display_Mode => Components.Month_Page,
-      Year => 2026,
-      Month => 2,
+      Year => 2025,
+      Month => 12,
       Day => 11
    );
 
