@@ -1269,6 +1269,8 @@ package body ECS is
       Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
    end Move_Widget_By;
 
+   --  TODO: Replace repeated unbounded string concatenation with
+   --    index-based replacement in a preallocated fixed-length string
    procedure CalendarDisplaySystem (Entity_List_PO : in out Entity_Components_PO) is
       function Trim (S : String) return String is (
          S (S'First + 1 .. S'Last)
