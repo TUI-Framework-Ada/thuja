@@ -37,6 +37,7 @@
 with Ada.Text_IO;
 with Ada.Wide_Wide_Text_IO;
 with Components;
+with Console;
 with ECS;
 with Graphics;
 with Ada.Strings;
@@ -371,13 +372,14 @@ procedure Comprehensive_Demo is
 begin
 
    -- VT_PROCESSING with new Set_Cursor_Visible
-   -- NOTE: Hide_Cursor/Show_Cursor cannot be mixed with Set_Cursor_Visible otherwise
-   -- it may over all just be ignored and show cursor regardless of command
-   -- If running windows demo utilize Set_Cursor_Visible otherwise utilize
-   -- Hide_Cursor/Show_Cursor on Linux? Confirm this with Linux users.
-   Graphics.Enable_VT_Processing;
-   Graphics.Set_Cursor_Visible (False);
-   -- Graphics.Hide_Cursor;
+   -- NOTE: Enable_VT_Processing and Set_Cursor_Visible now use OS-specific
+   -- .adb files, defined under /os, in the package Console.
+   -- If running on Windows, alire will pull from /os/windows,
+   -- otherwise it will use /os/others.
+   -- On non-Windows platforms, Enable_VT_Processing does nothing, and
+   -- the Set_Cursor_Visible subprogram will just use Graphics.Hide/Show_Cursor
+   Console.Enable_VT_Processing;
+   Console.Set_Cursor_Visible (False);
    Graphics.Save_Cursor_Position;
    Graphics.Clear_Screen;
    Ada.Wide_Wide_Text_IO.Flush;
@@ -563,7 +565,7 @@ begin
    Ada.Text_IO.Put_Line ("Thank you for using Thuja!");
 
    -- VT_PROCESSING with new Set_Cursor_Visible
-   Graphics.Set_Cursor_Visible (True);
+   Console.Set_Cursor_Visible (True);
    --Graphics.Show_Cursor;
    Graphics.Restore_Cursor_Position;
    Ada.Wide_Wide_Text_IO.Flush;
