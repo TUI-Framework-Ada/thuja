@@ -53,7 +53,8 @@ procedure Comprehensive_Demo is
    Loop_Count : constant Positive := 300;  -- 10 seconds at 30 FPS
 
    --  ECS Entity storage
-   Entities_PO : ECS.Entity_Components_PO;
+   Entities_PO  : ECS.Entity_Components_PO;
+   Entities_Ptr : ECS.Entity_Components_Ptr;
 
    --------------------------------------------------------
    -- ENTITY DEFINITIONS
@@ -388,6 +389,9 @@ begin
    -- REGISTER ALL COMPONENTS
    --------------------------------------------------------
 
+   --  Claim entity list during setup
+   Entities_PO.Claim_Writing (Entities_Ptr);
+
    --  RenderInfo
    ECS.Add_Component (C_RenderInfo.all, IDs.To_CID ("RenderInfo"), Comp_RenderInfo);
 
@@ -425,6 +429,9 @@ begin
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("WidgetComponent"), Comp_MovingDot_Widget);
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("BackgroundColorComponent"), Comp_MovingDot_BG);
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("PositionMode"), Comp_MovingDot_PositionMode);
+
+   --  Release entity list after setup
+   Entities_PO.Release_Writing;
 
    --------------------------------------------------------
    -- MAIN LOOP
