@@ -856,6 +856,13 @@ package body ECS is
    -- SYSTEM: BUFFER DRAW (TERMINAL OUTPUT)
    --===========================================================================
 
+   --  TODO: Move code of local functions (Trim, etc) into Graphics and make
+   --    them use constant, fixed-length strings
+   --  TODO: Undo stateful optimization, replace with separated checking,
+   --    string conversion, and printing (the hot loop issue)
+   --  TODO: Compare the current framebuffer against the other one & remove
+   --    mentions to backbuffer (backbuffer is unneeded and should eventually
+   --    be removed)
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
 
       package GFX renames Graphics;
