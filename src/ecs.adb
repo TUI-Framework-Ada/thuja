@@ -583,16 +583,65 @@ package body ECS is
 
             for Text_Index in Positive'First .. SU.Length(Text) loop
                Char := SU.Element (Text, Text_Index);
-               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
-               Px.Char := Char;
-               Px.Char_Color := Text_C.Text_Color;
+               if Char = Character'Val (16#09#) then --  \t
+                  --  Find next nearest index moduloing by 4 to 1
+                  declare
+                     Dist_To_Next_Tab : constant Natural := 4 - (Natural (Pos_W) - 1) mod 4;
+                     Tab_End_Index : constant Positive := Positive (Pos_W) + Dist_To_Next_Tab;
+                     End_On_New_Line : constant Boolean := Tab_End_Index > Positive (TUI_Width'Last)
+                       or else TUI_Width (Tab_End_Index) > Widget_C.Size_Width;
+                     Post_Loop_Index : constant TUI_Width := TUI_Width'Min ((if End_On_New_Line
+                       then TUI_Width'Last
+                       else TUI_Width (Tab_End_Index)), Widget_C.Size_Width);
+                     Loop_Last_Index : constant TUI_Width := (
+                       if End_On_New_Line
+                         then Post_Loop_Index
+                         else (if Post_Loop_Index /= TUI_Width'First
+                           then Post_Loop_Index - 1
+                           else Post_Loop_Index));
+                  begin
+                     for Space_Index in Pos_W .. Loop_Last_Index loop
+                        Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H);
+                        Px.Char := ' ';
+                        Px.Char_Color := Text_C.Text_Color;
 
-               Px.Is_Bold           := Text_C.Is_Bold;
-               Px.Is_Italic         := Text_C.Is_Italic;
-               Px.Is_Underline      := Text_C.Is_Underline;
-               Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+                        Px.Is_Underline     := Text_C.Is_Underline;
+                        Px.Is_Strikethrough := Text_C.Is_Strikethrough;
 
-               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H, Px);
+                     end loop;
+
+                     Pos_W := Loop_Last_Index;
+                  end;
+               elsif Char = Character'Val (16#0A#) then --  \n
+                  declare
+                     Loop_Last_Index : constant TUI_Width := TUI_Width'Min (TUI_Width'Last, Widget_C.Size_Width);
+                  begin
+                     for Space_Index in Pos_W .. Loop_Last_Index loop
+                        Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H);
+                        Px.Char := ' ';
+                        Px.Char_Color := Text_C.Text_Color;
+
+                        Px.Is_Underline     := Text_C.Is_Underline;
+                        Px.Is_Strikethrough := Text_C.Is_Strikethrough;
+
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H, Px);
+                     end loop;
+
+                     Pos_W := Loop_Last_Index;
+                  end;
+               else
+                  Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+                  Px.Char := Char;
+                  Px.Char_Color := Text_C.Text_Color;
+
+                  Px.Is_Bold           := Text_C.Is_Bold;
+                  Px.Is_Italic         := Text_C.Is_Italic;
+                  Px.Is_Underline      := Text_C.Is_Underline;
+                  Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+
+                  Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               end if;
 
                if Pos_W = TUI_Width'Last or Pos_W >= Widget_C.Size_Width then
                   Pos_W := Text_C.Offset_X;
