@@ -595,7 +595,7 @@ package body ECS is
                Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
 
                if Pos_W = TUI_Width'Last or Pos_W >= Widget_C.Size_Width then
-                  Pos_W := 1;
+                  Pos_W := Text_C.Offset_X;
                   Pos_H := Pos_H + 1;
                else
                   Pos_W := Pos_W + 1;
