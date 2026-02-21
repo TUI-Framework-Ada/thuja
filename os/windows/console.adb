@@ -1,4 +1,5 @@
 with Interfaces.C; use Interfaces.C;
+with System;
 
 package body Console is
 
