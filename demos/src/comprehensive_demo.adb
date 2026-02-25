@@ -259,13 +259,6 @@ procedure Comprehensive_Demo is
       Is_Strikethrough => False
    );
 
-   Comp_Sidebar_Calendar : constant Components.Calendar_Component_T := (
-      Display_Mode => Components.Month_Page,
-      Year => 2025,
-      Month => 12,
-      Day => 11
-   );
-
    Comp_Sidebar_PositionMode : constant Components.Position_Mode_Component_T := (
       Mode => Components.Flex
    );
@@ -416,7 +409,6 @@ begin
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("WidgetComponent"), Comp_Sidebar_Widget);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Sidebar_BG);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("TextComponent"), Comp_Sidebar_Text);
-   ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("Calendar"), Comp_Sidebar_Calendar);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("PositionMode"), Comp_Sidebar_PositionMode);
 
    --  Content
