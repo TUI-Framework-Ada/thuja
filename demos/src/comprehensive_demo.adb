@@ -367,7 +367,7 @@ procedure Comprehensive_Demo is
    );
 
    Comp_MovingDot_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Black
+      Background_Color => Graphics.Yellow
    );
 
    Comp_MovingDot_PositionMode : constant Components.Position_Mode_Component_T := (
