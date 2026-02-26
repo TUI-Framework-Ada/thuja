@@ -34,6 +34,7 @@
 --  • Multi-threaded rendering at 30 FPS
 ------------------------------------------------------------------------------
 
+with Ada.Calendar;
 with Ada.Strings.Fixed;
 with Ada.Text_IO;
 with Ada.Wide_Wide_Text_IO;
@@ -312,9 +313,9 @@ procedure Comprehensive_Demo is
 
    Comp_Calendar_Calendar : constant Components.Calendar_Component_T := (
       Display_Mode => Components.Month_Page,
-      Year => 2026,
-      Month => 2,
-      Day => 25
+      Year => Ada.Calendar.Year (Ada.Calendar.Clock),
+      Month => Ada.Calendar.Month (Ada.Calendar.Clock),
+      Day => Ada.Calendar.Day (Ada.Calendar.Clock)
    );
 
    Comp_Calendar_PositionMode : constant Components.Position_Mode_Component_T := (
