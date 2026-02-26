@@ -8,6 +8,7 @@ with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
+with Graphics;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Text_IO;
 with Ada.Tags; use Ada.Tags;
@@ -16,7 +17,6 @@ with Selection;
 package body ECS is
 
    package SU renames Ada.Strings.Unbounded;
-   use type SU.Unbounded_String;
 
    --===========================================================================
    -- HASH FUNCTIONS
@@ -1284,7 +1284,6 @@ package body ECS is
       --  Search for widgets with text and calendar components
       Search_Component_Tags : constant Component_Tag_Vector.Vector :=
         Widget_Component_T'Tag &
-        Text_Component_T'Tag &
         Calendar_Component_T'Tag;
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
@@ -1318,20 +1317,18 @@ package body ECS is
             --  Obtain views to the components
             Widget_C : Widget_Component_T renames Widget_Component_T (
               Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
-            Text_C : Text_Component_T renames Text_Component_T (
-              Get_Component_Ptr (Component_List, Text_Component_T'Tag).all);
             Calendar_C : Calendar_Component_T renames Calendar_Component_T (
               Get_Component_Ptr (Component_List, Calendar_Component_T'Tag).all);
 
-            Text_Width : constant Integer := Integer (Widget_C.Size_Width - Text_C.Offset_X) + 1;
-            Text_Height : constant Integer := Integer (Widget_C.Size_Height - Text_C.Offset_Y) + 1;
+            Text_Width : constant Integer := Integer (Widget_C.Size_Width);
+            Text_Height : constant Integer := Integer (Widget_C.Size_Height);
             Week_Length : constant Positive := 7;
             --Date_Weekday : Natural := Natural (
             --  (Ada.Calendar.Time_Of (Calendar_C.Year,
             --                         Calendar_C.Month,
             --                         Calendar_C.Day
             --                        ) - Rata_Die_Date) / 86400) mod Week_Length + Rata_Die_Weekday;
-            Date_Weekday : Natural := Natural (Ada.Calendar.Arithmetic."-"
+            Date_Weekday : constant Natural := Natural (Ada.Calendar.Arithmetic."-"
               (Ada.Calendar.Time_Of (Calendar_C.Year,
                Calendar_C.Month,
                Calendar_C.Day), Rata_Die_Date)) mod Week_Length + Rata_Die_Weekday;
@@ -1360,22 +1357,12 @@ package body ECS is
                   --  Rows 4-9, month days
                   Text_Days : String (1 .. Text_Width * 6) := Ada.Strings.Fixed."*" ((Text_Width * 6), " ");
                   Text_Days_I : Positive := 1;
+                  Selected_Day_I : Positive;
                begin
-                  --  Make Date_Weekday for the first of the month
-                  --Date_Weekday := (Date_Weekday - Calendar_C.Day + 1) mod Week_Length;
-
                   --  Row 3, weekday abbreviations
                   Space_After_Entry := (Text_Width-2*Week_Length) / (Week_Length-1);
                   Trailing_Space := Text_Width - 2*Week_Length - Space_After_Entry*(Week_Length-1);
                   for Weekday of Weekdays loop
-                     --Weekday := SU.To_Unbounded_String (Weekdays (Weekday_I));
-                     ----Weekday := Weekday (Weekday'First .. Weekday'First + 1);
-                     --Weekday := SU.To_Unbounded_String (
-                     --  SU.Slice (Weekday,
-                     --  SU.To_String (Weekday)'First,
-                     --  SU.To_String (Weekday)'First + 1)
-                     --);
-                     --Text_C.Text := Text_C.Text & Weekday;
                      Text_Weekdays (Text_Weekdays_I .. Text_Weekdays_I + 1) :=
                        Weekday (Weekday'First .. Weekday'First + 1);
                      Text_Weekdays_I := Text_Weekdays_I + 2 + Space_After_Entry;
@@ -1393,48 +1380,107 @@ package body ECS is
                      Day_Count : constant Ada.Calendar.Day_Number := Ada.Calendar.Day (Month_End);
                   begin
                      --  Row 4, padding to align month days to weekdays
-                     --for Padding_Index in 1 .. First_Weekday loop
-                     --   Text_C.Text := Text_C.Text & Weekday_Pad ("  ", Weekday_Pos, Space_After_Entry, Trailing_Space);
-                     --end loop;
                      Weekday_Pos := First_Weekday;
                      Text_Days_I := First_Weekday * (2 + Space_After_Entry) + 1;
 
                      --  Rows 4-9, month days
-                     for Month_Day in 1 .. Natural (Day_Count) loop
-                        --Text_C.Text := Text_C.Text & Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos, Space_After_Entry, Trailing_Space);
+                     for Month_Day in 1 .. Positive (Day_Count) loop
                         Text_Days (Text_Days_I .. Text_Days_I + 1) := Pad (Trim (Month_Day'Image), ' ');
+
+                        --  Record text index of selected day
+                        if Month_Day = Calendar_C.Day then
+                           Selected_Day_I := Text_Days_I;
+                        end if;
+
                         Weekday_Pos := Weekday_Pos + 1;
                         Text_Days_I := Text_Days_I + 2;
+
                         if Weekday_Pos mod 7 = 0 then
-                           --return S & (Ada.Strings.Unbounded."*" (TS, " "));
                            Text_Days_I := Text_Days_I + Trailing_Space;
                         else
-                           --return S & (Ada.Strings.Unbounded."*" (SAE, " "));
                            Text_Days_I := Text_Days_I + Space_After_Entry;
                         end if;
                      end loop;
                   end;
+
+                  --  Render text to pixels
                   declare
                      Combined_Text : constant String :=
                        Text_Year & Text_Year_Pad & Text_Month &
                        Text_Spacer &
                        Text_Weekdays &
                        Text_Days;
+                     Buffer_X : TUI_Width := TUI_Width'First;
+                     Buffer_Y : TUI_Height := TUI_Height'First;
+                     Current_Pixel : Pixel_t;
                   begin
-                     Text_C.Text := SU.To_Unbounded_String (Combined_Text);
+                     for Combined_Text_Index in Combined_Text'First .. Combined_Text'Last loop
+                        --  Update pixel
+                        Current_Pixel := Get_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y);
+                        Current_Pixel.Char := Combined_Text (Combined_Text_Index);
+                        Current_Pixel.Char_Color := Graphics.White;
+                        Current_Pixel.Background_Color := Graphics.Black;
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y, Current_Pixel);
+
+                        --  Update buffer position
+                        if (Buffer_X = TUI_Width'Last
+                            or Buffer_X = TUI_Width (Text_Width)) then
+                           Buffer_X := TUI_Width'First;
+                           Buffer_Y := Buffer_Y + 1;
+                        else
+                           Buffer_X := Buffer_X + 1;
+                        end if;
+                     end loop;
+                  end;
+
+                  --  Show highlight on selected day
+                  declare
+                     Selection_X : constant TUI_Width := TUI_Width ((Natural (Selected_Day_I) - 1) mod Text_Width + 1);
+                     --  Magic 3 = # of rows preceeding the first row of days
+                     Selection_Y : constant TUI_Height := TUI_Height ((Natural (Selected_Day_I) - 1) / Text_Width + 1 + 3);
+                     Current_Pixel : Pixel_t;
+                     Swap_Color : Color_t;
+                  begin
+                     --  Invert FG and BG of selected day's pixels
+                     for X in Selection_X .. Selection_X + 1 loop
+                        Current_Pixel := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, Selection_Y);
+                        Current_Pixel.Char_Color := Graphics.Black;
+                        Current_Pixel.Background_Color := Graphics.White;
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, X, Selection_Y, Current_Pixel);
+                     end loop;
                   end;
                end;
             else
                --  Not enough size or Date_String mode selected
 
-               --  Initial string section
-               Text_C.Text := SU.To_Unbounded_String (
-                 Pad (Trim (Calendar_C.Year'Image) & "/") &
-                 Pad (Trim (Calendar_C.Month'Image) & "/") &
-                 Pad (Trim (Calendar_C.Day'Image) & ", "));
+               declare
+                  Combined_Text : constant String :=
+                    Pad (Trim (Calendar_C.Year'Image) & "/") &
+                    Pad (Trim (Calendar_C.Month'Image) & "/") &
+                    Pad (Trim (Calendar_C.Day'Image) & ", ") &
+                    Weekdays (Date_Weekday);
+                  Buffer_X : TUI_Width := TUI_Width'First;
+                  Buffer_Y : TUI_Height := TUI_Height'First;
+                  Current_Pixel : Pixel_t;
+               begin
+                  for Combined_Text_Index in Combined_Text'First .. Combined_Text'Last loop
+                     --  Update pixel
+                     Current_Pixel := Get_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y);
+                     Current_Pixel.Char := Combined_Text (Combined_Text_Index);
+                     Set_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y, Current_Pixel);
 
-               --  Weekday
-               Text_C.Text := Text_C.Text & Weekdays (Date_Weekday);
+                     --  Update buffer position
+                     if (Buffer_X = TUI_Width'Last
+                        or Buffer_X = TUI_Width (Text_Width)) then
+                        exit when Buffer_Y = TUI_Height'Last
+                          or Buffer_Y = TUI_Height (Text_Height);
+                        Buffer_X := TUI_Width'First;
+                        Buffer_Y := Buffer_Y + 1;
+                     else
+                        Buffer_X := Buffer_X + 1;
+                     end if;
+                  end loop;
+               end;
             end if;
          end;
       end loop;
