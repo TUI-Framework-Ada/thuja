@@ -5,7 +5,6 @@
 --  Displays CPU, Memory, Disk usage with real-time updates using Widgets
 -------------------------------------------------------------------------------
 
-with Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
@@ -37,7 +36,7 @@ procedure Task_Manager_Demo is
    Info_Label_Entity : Entity_Id;
 
    Update_Interval : constant Time_Span := Milliseconds(1000);
-   Running : Boolean := True;
+   Running : constant Boolean := True;
 
    --------------------------------------------------------
    -- Initialize ECS and Create Widgets
@@ -407,9 +406,9 @@ procedure Task_Manager_Demo is
       Total_Mem, Used_Mem, Avail_Mem : Float;
       
       function Format_Uptime (Seconds : Natural) return String is
-         Days : Natural := Seconds / 86400;
-         Hours : Natural := (Seconds mod 86400) / 3600;
-         Minutes : Natural := (Seconds mod 3600) / 60;
+         Days : constant Natural := Seconds / 86400;
+         Hours : constant Natural := (Seconds mod 86400) / 3600;
+         Minutes : constant Natural := (Seconds mod 3600) / 60;
       begin
          if Days > 0 then
             return Natural'Image(Days) & "d " & Natural'Image(Hours) & "h";

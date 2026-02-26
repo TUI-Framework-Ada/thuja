@@ -615,6 +615,8 @@ procedure Keyboard_Widget is
 
 begin
    --  Initialize
+   Graphics.Enable_VT_Processing;
+   Graphics.Set_Cursor_Visible (False);
    Graphics.Clear_Screen;
    Command_Sequence_Handling.Initialize;
 
@@ -682,6 +684,7 @@ begin
 
    --  Cleanup
    Input_Reader.Stop;
+   Graphics.Set_Cursor_Visible (True);
    Graphics.Clear_Screen;
    Graphics.Reset_Styling;
 
