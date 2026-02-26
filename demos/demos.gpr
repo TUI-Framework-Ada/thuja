@@ -9,7 +9,16 @@ project Demos is
    -- Build a single demo main to avoid gprbuild selecting multiple mains
    -- which can cause "not a source of project" errors on some systems.
    -- Point to the source file explicitly to avoid any Source_Dirs resolution issues
-   for Main use ("comprehensive_demo", "resize_and_movement_demo", "keyboard_widget", "tab_demo", "command_palette", "demos", "presentation_2_demo", "task_manager_demo", "htop_demo");
+   for Main use (
+      --"comprehensive_demo", 
+      --"resize_and_movement_demo", 
+      -- "keyboard_widget", 
+      -- "tab_demo", 
+      -- "command_palette", 
+      -- "demos", 
+      -- "presentation_2_demo", 
+      -- "task_manager_demo", 
+      "htop_demo");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches &
@@ -18,6 +27,15 @@ project Demos is
          "-gnatwJ");  --  Suppress obsolescent () array syntax (toolchain lacks [] support)
    end Compiler;
 
+   package Linker is
+      case Demos_Config.Alire_Host_OS is
+         when "windows" =>
+            for Default_Switches ("Ada") use ("-lpsapi");
+         when others =>
+            null;
+      end case;
+   end Linker;
+
    package Binder is
       for Switches ("Ada") use ("-Es"); --  Symbolic traceback
    end Binder;
@@ -25,10 +43,5 @@ project Demos is
    package Install is
       for Artifacts (".") use ("share");
    end Install;
-
-   -- Added linker so that way Windows can find system libraries
-   package Linker is
-      for Default_Switches ("Ada") use ("-lpsapi");
-   end Linker;
 
 end Demos;
