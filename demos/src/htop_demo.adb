@@ -5,13 +5,14 @@
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Strings.Unbounded;
 with Graphics; use Graphics;
+with Console; use Console;
 with Components; use Components;
 with ECS; use ECS;
 with IDs; use IDs;
 with System_Stats;
 with Input_Handling;
 
-procedure ETop_Demo is
+procedure HTop_Demo is
 
    package SU renames Ada.Strings.Unbounded;
    package SS renames System_Stats;
@@ -730,4 +731,4 @@ exception
       Reset_Styling;
       raise;
    
-end ETop_Demo;
+end HTop_Demo;
