@@ -555,6 +555,8 @@ procedure Command_Palette is
    Buf_Str      : SU.Unbounded_String;
 
 begin
+   Graphics.Enable_VT_Processing;
+   Graphics.Set_Cursor_Visible (False);
    Graphics.Clear_Screen;
 
    --  Create all entities
@@ -677,6 +679,7 @@ begin
 
    --  Cleanup
    Input_Reader.Stop;
+   Graphics.Set_Cursor_Visible (True);
    Graphics.Clear_Screen;
    Graphics.Reset_Styling;
 
