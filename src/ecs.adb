@@ -2,8 +2,10 @@
 -- ECS.ADB - Entity Component System Implementation
 --==============================================================================
 
-with Ada.Calendar; use type Ada.Calendar.Time;
+with Ada.Calendar;
+with Ada.Calendar.Arithmetic;
 with Ada.Containers.Indefinite_Vectors;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
@@ -1278,15 +1280,6 @@ package body ECS is
       function Pad (S : String; C : Character := '0') return String is (
          (if S'Length = 1 then "" & C else "") & S
       );
-      function Weekday_Pad (S : String; N : in out Natural; SAE : Positive; TS : Natural) return SU.Unbounded_String is
-      begin
-         N := N + 1;
-         if N mod 7 = 0 then
-            return S & (Ada.Strings.Unbounded."*" (TS, " "));
-         else
-            return S & (Ada.Strings.Unbounded."*" (SAE, " "));
-         end if;
-      end Weekday_Pad;
       Entity_List : Entity_Components_Ptr;
       --  Search for widgets with text and calendar components
       Search_Component_Tags : constant Component_Tag_Vector.Vector :=
@@ -1333,12 +1326,15 @@ package body ECS is
             Text_Width : constant Integer := Integer (Widget_C.Size_Width - Text_C.Offset_X) + 1;
             Text_Height : constant Integer := Integer (Widget_C.Size_Height - Text_C.Offset_Y) + 1;
             Week_Length : constant Positive := 7;
-            Date_Weekday : Natural := Natural (
+            --Date_Weekday : Natural := Natural (
+            --  (Ada.Calendar.Time_Of (Calendar_C.Year,
+            --                         Calendar_C.Month,
+            --                         Calendar_C.Day
+            --                        ) - Rata_Die_Date) / 86400) mod Week_Length + Rata_Die_Weekday;
+            Date_Weekday : Natural := Natural (Ada.Calendar.Arithmetic."-"
               (Ada.Calendar.Time_Of (Calendar_C.Year,
-                                     Calendar_C.Month,
-                                     Calendar_C.Day
-                                    ) - Rata_Die_Date) / 86400) mod Week_Length + Rata_Die_Weekday;
-            Weekday : SU.Unbounded_String;
+               Calendar_C.Month,
+               Calendar_C.Day), Rata_Die_Date)) mod Week_Length + Rata_Die_Weekday;
             Space_After_Entry : Positive;
             Trailing_Space : Natural;
          begin
@@ -1347,58 +1343,86 @@ package body ECS is
               and Text_Width >= 3*Week_Length-1 and Text_Height >= 9 then
                --  Month_Page mode selected and enough size for it
 
-               --  Make Date_Weekday for the first of the month
-               Date_Weekday := (Date_Weekday - Calendar_C.Day + 1) mod Week_Length;
-
-               --  Year, row 1, left aligned
-               Text_C.Text := SU.To_Unbounded_String (Trim (Calendar_C.Year'Image));
-               --  Padding. 7 = length of year + length of month abbreviation
-               Text_C.Text := Text_C.Text & ((Text_Width - 7) * " ");
-               --  Month, row 1, right aligned
-               Text_C.Text := Text_C.Text & Months (Natural (Calendar_C.Month) - 1);
-
-               --  Row 2, spacer
-               Text_C.Text := Text_C.Text & (Text_Width * "-");
-
-               --  Row 3, weekday abbreviations
-               Space_After_Entry := (Text_Width-2*Week_Length) / (Week_Length-1);
-               Trailing_Space := Text_Width - 2*Week_Length - Space_After_Entry*(Week_Length-1);
-               for Weekday_I in Weekdays.First_Index .. Weekdays.Last_Index loop
-                  Weekday := SU.To_Unbounded_String (Weekdays (Weekday_I));
-                  --Weekday := Weekday (Weekday'First .. Weekday'First + 1);
-                  Weekday := SU.To_Unbounded_String (
-                     SU.Slice (Weekday,
-                        SU.To_String (Weekday)'First,
-                        SU.To_String (Weekday)'First + 1)
-                  );
-                  Text_C.Text := Text_C.Text & Weekday;
-                  if Weekday_I /= Weekdays.Last_Index then
-                     Text_C.Text := Text_C.Text & (Space_After_Entry * " ");
-                  else
-                     Text_C.Text := Text_C.Text & (Trailing_Space * " ");
-                  end if;
-               end loop;
-
-               --  Month-day section
                declare
-                  Weekday_Pos : Natural := 0;
-                  Month_End : constant Ada.Calendar.Time :=
-                    (if Calendar_C.Month = 12 then
-                      Ada.Calendar.Time_Of (Calendar_C.Year + 1, 1, 1)
-                     else
-                      Ada.Calendar.Time_Of (Calendar_C.Year, Calendar_C.Month + 1, 1)
-                    ) - Duration (1 * 24 * 60 * 60);
-                  Day_Count : constant Ada.Calendar.Day_Number := Ada.Calendar.Day (Month_End);
+                  First_Weekday : constant Natural := (Date_Weekday - Calendar_C.Day + 1) mod Week_Length;
+
+                  --  Year, row 1, left aligned
+                  Text_Year : constant String := Trim (Calendar_C.Year'Image);
+                  --  Padding. 7 = length of year + length of month abbreviation
+                  Text_Year_Pad : constant String := Ada.Strings.Fixed."*" ((Text_Width - 7), " ");
+                  --  Month, row 1, right aligned
+                  Text_Month : constant String := Months (Natural (Calendar_C.Month) - 1);
+                  --  Row 2, spacer
+                  Text_Spacer : constant String := Ada.Strings.Fixed."*" (Text_Width, "-");
+                  --  Row 3, weekday abbreviations
+                  Text_Weekdays : String (1 .. Text_Width) := Ada.Strings.Fixed."*" ((Text_Width), " ");
+                  Text_Weekdays_I : Positive := 1;
+                  --  Rows 4-9, month days
+                  Text_Days : String (1 .. Text_Width * 6) := Ada.Strings.Fixed."*" ((Text_Width * 6), " ");
+                  Text_Days_I : Positive := 1;
                begin
-                  --  Row 4, padding to align month days to weekdays
-                  for Padding_Index in 1 .. Date_Weekday loop
-                     Text_C.Text := Text_C.Text & Weekday_Pad ("  ", Weekday_Pos, Space_After_Entry, Trailing_Space);
+                  --  Make Date_Weekday for the first of the month
+                  --Date_Weekday := (Date_Weekday - Calendar_C.Day + 1) mod Week_Length;
+
+                  --  Row 3, weekday abbreviations
+                  Space_After_Entry := (Text_Width-2*Week_Length) / (Week_Length-1);
+                  Trailing_Space := Text_Width - 2*Week_Length - Space_After_Entry*(Week_Length-1);
+                  for Weekday of Weekdays loop
+                     --Weekday := SU.To_Unbounded_String (Weekdays (Weekday_I));
+                     ----Weekday := Weekday (Weekday'First .. Weekday'First + 1);
+                     --Weekday := SU.To_Unbounded_String (
+                     --  SU.Slice (Weekday,
+                     --  SU.To_String (Weekday)'First,
+                     --  SU.To_String (Weekday)'First + 1)
+                     --);
+                     --Text_C.Text := Text_C.Text & Weekday;
+                     Text_Weekdays (Text_Weekdays_I .. Text_Weekdays_I + 1) :=
+                       Weekday (Weekday'First .. Weekday'First + 1);
+                     Text_Weekdays_I := Text_Weekdays_I + 2 + Space_After_Entry;
                   end loop;
 
-                  --  Rows 4-8, month days
-                  for Month_Day in 1 .. Natural (Day_Count) loop
-                     Text_C.Text := Text_C.Text & Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos, Space_After_Entry, Trailing_Space);
-                  end loop;
+                  --  Month-day section
+                  declare
+                     Weekday_Pos : Natural := 0;
+                     Month_End : constant Ada.Calendar.Time := Ada.Calendar.Arithmetic."-" (
+                       (if Calendar_C.Month = 12 then
+                           Ada.Calendar.Time_Of (Calendar_C.Year + 1, 1, 1)
+                        else
+                           Ada.Calendar.Time_Of (Calendar_C.Year, Calendar_C.Month + 1, 1)
+                       ), Ada.Calendar.Arithmetic.Day_Count (1));
+                     Day_Count : constant Ada.Calendar.Day_Number := Ada.Calendar.Day (Month_End);
+                  begin
+                     --  Row 4, padding to align month days to weekdays
+                     --for Padding_Index in 1 .. First_Weekday loop
+                     --   Text_C.Text := Text_C.Text & Weekday_Pad ("  ", Weekday_Pos, Space_After_Entry, Trailing_Space);
+                     --end loop;
+                     Weekday_Pos := First_Weekday;
+                     Text_Days_I := First_Weekday * (2 + Space_After_Entry) + 1;
+
+                     --  Rows 4-9, month days
+                     for Month_Day in 1 .. Natural (Day_Count) loop
+                        --Text_C.Text := Text_C.Text & Weekday_Pad (Pad (Trim (Month_Day'Image), ' '), Weekday_Pos, Space_After_Entry, Trailing_Space);
+                        Text_Days (Text_Days_I .. Text_Days_I + 1) := Pad (Trim (Month_Day'Image), ' ');
+                        Weekday_Pos := Weekday_Pos + 1;
+                        Text_Days_I := Text_Days_I + 2;
+                        if Weekday_Pos mod 7 = 0 then
+                           --return S & (Ada.Strings.Unbounded."*" (TS, " "));
+                           Text_Days_I := Text_Days_I + Trailing_Space;
+                        else
+                           --return S & (Ada.Strings.Unbounded."*" (SAE, " "));
+                           Text_Days_I := Text_Days_I + Space_After_Entry;
+                        end if;
+                     end loop;
+                  end;
+                  declare
+                     Combined_Text : constant String :=
+                       Text_Year & Text_Year_Pad & Text_Month &
+                       Text_Spacer &
+                       Text_Weekdays &
+                       Text_Days;
+                  begin
+                     Text_C.Text := SU.To_Unbounded_String (Combined_Text);
+                  end;
                end;
             else
                --  Not enough size or Date_String mode selected
