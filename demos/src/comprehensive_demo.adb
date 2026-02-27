@@ -34,9 +34,12 @@
 --  • Multi-threaded rendering at 30 FPS
 ------------------------------------------------------------------------------
 
+with Ada.Calendar;
+with Ada.Strings.Fixed;
 with Ada.Text_IO;
 with Ada.Wide_Wide_Text_IO;
 with Components;
+with Console;
 with ECS;
 with Graphics;
 with Ada.Strings;
@@ -52,7 +55,8 @@ procedure Comprehensive_Demo is
    Loop_Count : constant Positive := 300;  -- 10 seconds at 30 FPS
 
    --  ECS Entity storage
-   Entities_PO : ECS.Entity_Components_PO;
+   Entities_PO  : ECS.Entity_Components_PO;
+   Entities_Ptr : ECS.Entity_Components_Ptr;
 
    --------------------------------------------------------
    -- ENTITY DEFINITIONS
@@ -62,6 +66,7 @@ procedure Comprehensive_Demo is
    E_Header       : constant IDs.Entity_Id := IDs.To_EID ("Header");
    E_ProgressBar  : constant IDs.Entity_Id := IDs.To_EID ("ProgressBar");
    E_Sidebar      : constant IDs.Entity_Id := IDs.To_EID ("Sidebar");
+   E_Calendar     : constant IDs.Entity_Id := IDs.To_EID ("Calendar");
    E_Content      : constant IDs.Entity_Id := IDs.To_EID ("Content");
    E_MovingDot    : constant IDs.Entity_Id := IDs.To_EID ("MovingDot");
    --------------------------------------------------------
@@ -72,6 +77,7 @@ procedure Comprehensive_Demo is
    C_Header       : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Header);
    C_ProgressBar  : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_ProgressBar);
    C_Sidebar      : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Sidebar);
+   C_Calendar     : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Calendar);
    C_Content      : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Content);
    C_MovingDot    : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_MovingDot);
 
@@ -230,12 +236,39 @@ procedure Comprehensive_Demo is
    );
 
    --  Sidebar Widget: Green, 20 columns wide
+
+   --  Sidebar Flexbox Layout: Horizontal stacking (Row, single child)
+   Comp_Sidebar_Flex : constant Components.Flex_Layout_Component_T := (
+      Flex_Container => (
+         Width      => 40,
+         Height     => 10,
+         Direction  => Flexbox.Row,
+         Justify    => Flexbox.Flex_Start,
+         Align      => Flexbox.Flex_Start,
+         Item_Count => 1,  --  Calendar
+         Items      => new Flexbox.Flex_Item_Array'(
+            --  Calendar child
+            1 => (
+               Related_Entity => E_Calendar,
+               Flex_Basis     => 10,
+               Flex_Grow      => 1.0,
+               Flex_Shrink    => 1.0,
+               Computed_Size  => 10,
+               Cross_Size     => 40,
+               Position_X     => 0,
+               Position_Y     => 0
+            )
+         )
+      ),
+      Is_Dirty => True
+   );
+
    Comp_Sidebar_Widget : constant Components.Widget_Component_T := (
       Position_X    => 1,
       Position_Y    => 5,
       Size_Width    => 20,
       Size_Height   => 10,
-      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Children      => IDs.Entity_ID_Vector.To_Vector (E_Calendar, 1),
       Render_Buffer => (Width => 20, Height => 10, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
@@ -247,7 +280,7 @@ procedure Comprehensive_Demo is
    );
 
    Comp_Sidebar_Text : constant Components.Text_Component_T := (
-      Text          => Ada.Strings.Unbounded.To_Unbounded_String ("SIDEBAR"),
+      Text          => Ada.Strings.Unbounded.To_Unbounded_String (Ada.Strings.Fixed."*" (70, "") & "SIDEBAR"),
       Text_Color    => Graphics.Black,
       Offset_X      => 1,
       Offset_Y      => 2,
@@ -258,6 +291,34 @@ procedure Comprehensive_Demo is
    );
 
    Comp_Sidebar_PositionMode : constant Components.Position_Mode_Component_T := (
+      Mode => Components.Flex
+   );
+
+   --  Calendar Widget: Black, 20 columns wide
+   Comp_Calendar_Widget : constant Components.Widget_Component_T := (
+      Position_X    => 1,
+      Position_Y    => 5,
+      Size_Width    => 20,
+      Size_Height   => 10,
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 20, Height => 10, Data => new Pixel_Array),
+      Has_Focus     => False,
+      Is_Visible    => True,
+      Is_Enabled    => True
+   );
+
+   Comp_Calendar_BG : constant Components.Background_Color_Component_T := (
+      Background_Color => Graphics.Black
+   );
+
+   Comp_Calendar_Calendar : constant Components.Calendar_Component_T := (
+      Display_Mode => Components.Month_Page,
+      Year => Ada.Calendar.Year (Ada.Calendar.Clock),
+      Month => Ada.Calendar.Month (Ada.Calendar.Clock),
+      Day => Ada.Calendar.Day (Ada.Calendar.Clock)
+   );
+
+   Comp_Calendar_PositionMode : constant Components.Position_Mode_Component_T := (
       Mode => Components.Flex
    );
 
@@ -307,7 +368,7 @@ procedure Comprehensive_Demo is
    );
 
    Comp_MovingDot_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Black
+      Background_Color => Graphics.Yellow
    );
 
    Comp_MovingDot_PositionMode : constant Components.Position_Mode_Component_T := (
@@ -364,13 +425,14 @@ procedure Comprehensive_Demo is
 begin
 
    -- VT_PROCESSING with new Set_Cursor_Visible
-   -- NOTE: Hide_Cursor/Show_Cursor cannot be mixed with Set_Cursor_Visible otherwise
-   -- it may over all just be ignored and show cursor regardless of command
-   -- If running windows demo utilize Set_Cursor_Visible otherwise utilize
-   -- Hide_Cursor/Show_Cursor on Linux? Confirm this with Linux users.
-   Graphics.Enable_VT_Processing;
-   Graphics.Set_Cursor_Visible (False);
-   -- Graphics.Hide_Cursor;
+   -- NOTE: Enable_VT_Processing and Set_Cursor_Visible now use OS-specific
+   -- .adb files, defined under /os, in the package Console.
+   -- If running on Windows, alire will pull from /os/windows,
+   -- otherwise it will use /os/others.
+   -- On non-Windows platforms, Enable_VT_Processing does nothing, and
+   -- the Set_Cursor_Visible subprogram will just use Graphics.Hide/Show_Cursor
+   Console.Enable_VT_Processing;
+   Console.Set_Cursor_Visible (False);
    Graphics.Save_Cursor_Position;
    Graphics.Clear_Screen;
    Ada.Wide_Wide_Text_IO.Flush;
@@ -378,6 +440,9 @@ begin
    --------------------------------------------------------
    -- REGISTER ALL COMPONENTS
    --------------------------------------------------------
+
+   --  Claim entity list during setup
+   Entities_PO.Claim_Writing (Entities_Ptr);
 
    --  RenderInfo
    ECS.Add_Component (C_RenderInfo.all, IDs.To_CID ("RenderInfo"), Comp_RenderInfo);
@@ -404,6 +469,13 @@ begin
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Sidebar_BG);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("TextComponent"), Comp_Sidebar_Text);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("PositionMode"), Comp_Sidebar_PositionMode);
+   ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("FlexLayoutComponent"), Comp_Sidebar_Flex);
+
+   --  Calendar
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("WidgetComponent"), Comp_Calendar_Widget);
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Calendar_BG);
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("TextComponent"), Comp_Calendar_Calendar);
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("PositionMode"), Comp_Calendar_PositionMode);
 
    --  Content
    ECS.Add_Component (C_Content.all, IDs.To_CID ("WidgetComponent"), Comp_Content_Widget);
@@ -415,6 +487,9 @@ begin
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("WidgetComponent"), Comp_MovingDot_Widget);
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("BackgroundColorComponent"), Comp_MovingDot_BG);
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("PositionMode"), Comp_MovingDot_PositionMode);
+
+   --  Release entity list after setup
+   Entities_PO.Release_Writing;
 
    --------------------------------------------------------
    -- MAIN LOOP
@@ -429,7 +504,9 @@ begin
          --  UPDATE PROGRESS BAR (Animate from 0% to 100%)
          Progress := Float (Loop_Index) / Float (Loop_Count);
          Comp_ProgressBar.Value := Progress;
+         Entities_PO.Claim_Writing (Entities_Ptr);
          ECS.Add_Component (C_ProgressBar.all, IDs.To_CID ("ProgressBarComponent"), Comp_ProgressBar);
+         Entities_PO.Release_Writing;
 
          --  MOVE THE DOT (keep it constrained inside the SIDEBAR)
          --  Compute next position then clamp/bounce against the live Sidebar widget bounds
@@ -527,6 +604,7 @@ begin
 
          --  SYSTEM 3-7: Rendering pipeline
          ECS.WidgetBackgroundSystem (Entities_PO);
+         ECS.CalendarDisplaySystem (Entities_PO); --  New, renders a calendar / date
          ECS.TextRenderSystem (Entities_PO);
          ECS.ProgressBarRenderSystem (Entities_PO);  -- NEW FEATURE!
          ECS.BufferCopySystem (Entities_PO);
@@ -554,7 +632,7 @@ begin
    Ada.Text_IO.Put_Line ("Thank you for using Thuja!");
 
    -- VT_PROCESSING with new Set_Cursor_Visible
-   Graphics.Set_Cursor_Visible (True);
+   Console.Set_Cursor_Visible (True);
    --Graphics.Show_Cursor;
    Graphics.Restore_Cursor_Position;
    Ada.Wide_Wide_Text_IO.Flush;
