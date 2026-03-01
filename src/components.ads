@@ -169,4 +169,28 @@ package Components is
       Day   : Ada.Calendar.Day_Number;
    end record;
 
+   ---------------------------------------------------------------------------
+   --  Text Editor Component
+   ---------------------------------------------------------------------------
+   --  Stores the internal state of a line-based text editor.
+   --  Mode: Navigation (Vi-like movement) or Insertion (Typing)
+   
+   type Editor_Mode is (Navigation, Insertion);
+
+   -- Explicitly tell Ada to use the Ada.Strings.Unbounded package
+   use all type SU.Unbounded_String;
+   
+   -- Vector utilized here for lines so the editor can grow dynamically
+   package Line_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => SU.Unbounded_String);
+
+   type Text_Editor_Component_T is new Component_T with record
+      Lines         : Line_Vectors.Vector; -- Stores the actual text content
+      Cursor_X      : Positive := 1;       -- Current column (1-indexed)
+      Cursor_Y      : Positive := 1;       -- Current line (1-indexed)
+      Mode          : Editor_Mode := Navigation;
+      Scroll_Offset : Natural := 0;        -- For vertical scrolling if text exceeds height
+      Show_Numbers  : Boolean := True;     -- Toggle for the line numbering gutter
+   end record;
+
 end Components;
