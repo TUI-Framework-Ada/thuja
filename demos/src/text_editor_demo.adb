@@ -368,7 +368,13 @@ begin
 
                   when others =>
                      --  Printable character or backspace
-                     if Event.Char_Value = Character'Val (127) then
+                     --  ASCII (127) is known for Delete &
+                     --  ASCII (8) is known for BS (Backspace)
+                     --  Terminals use either, WindowsPowerShell
+                     --  seems to use ASCII (8).
+                     if Event.Char_Value = Character'Val (127)
+                        or else Event.Char_Value = Character'Val (8)
+                     then
                         --  Backspace: remove last character if any
                         if Length (Editor_Text) > 0 then
                            Delete (Editor_Text,
