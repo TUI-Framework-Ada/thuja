@@ -1,3 +1,7 @@
+--  ================================================================================
+--  Update documentation here with current instructions & list of features still
+--  in-progress.
+--  ================================================================================
 with Ada.Wide_Wide_Text_IO;
 with Ada.Containers.Vectors;
 with Components;
@@ -14,7 +18,7 @@ with Input_Handling;
 
 procedure Text_Editor_Demo is
 
-   Loop_Count : constant Positive := 6000; -- ~3 minutes at 30 FPS
+   Loop_Count : constant Positive := 6000; -- ~3 minutes at 30 FPS in case can't exit
 
    --  ECS Entity storage
    Entities_PO  : ECS.Entity_Components_PO;
@@ -441,6 +445,11 @@ begin
                      end;
 
                   when others =>
+                     --  ASCII VAL to backspace (delete) text.
+                     --  ASCII (127) & (8) are both used here because 
+                     --  It seems that Windows only sees (8) so (127)
+                     --  could be removed but that will be for testing
+                     --  later with Linux.
                      if Event.Char_Value = Character'Val (127)
                        or else Event.Char_Value = Character'Val (8)
                      then
