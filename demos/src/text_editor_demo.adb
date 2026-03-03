@@ -1,4 +1,3 @@
-with Ada.Text_IO;
 with Ada.Wide_Wide_Text_IO;
 with Ada.Containers.Vectors;
 with Components;
@@ -92,16 +91,16 @@ procedure Text_Editor_Demo is
    end Clamp_Col;
 
    --------------------------------------------------------
-   -- HELPER: Render_Buffer
+   -- HELPER: Build_Editor_Text
    -- Builds the full display string that goes into the
    -- TextComponent. Each screen line is:
    --   <gutter> <text content up to Text_Width chars>
    -- Active lines get a number, empty lines get "~".
-   -- The cursor is rendered as a "█" block character.
+   -- The cursor is rendered as a "|" character.
    -- Text that is longer than Text_Width wraps onto the
-   -- next screen line, which shares the same gutter number.
+   -- next screen line, which creates a new gutter number.
    --------------------------------------------------------
-   function Render_Buffer return Unbounded_String is
+   function Build_Editor_Text return Unbounded_String is
 
       Result      : Unbounded_String := Null_Unbounded_String;
       Editor_Rows : constant Natural := 22;
@@ -164,7 +163,7 @@ procedure Text_Editor_Demo is
       end loop;
 
       return Result;
-   end Render_Buffer;
+   end Build_Editor_Text;
 
    --------------------------------------------------------
    -- HELPER: Status_Text
@@ -303,7 +302,7 @@ procedure Text_Editor_Demo is
    );
 
    Comp_Editor_Text : Components.Text_Component_T := (
-      Text             => Render_Buffer,
+      Text             => Build_Editor_Text,
       Text_Color       => Graphics.White,
       Offset_X         => 1,
       Offset_Y         => 1,
@@ -449,7 +448,7 @@ begin
                         if Current_Col > 0 then
                            --  Delete character before cursor on same line
                            declare
-                              S : String := To_String (Lines (Current_Line));
+                              S : constant String := To_String (Lines (Current_Line));
                            begin
                               Lines.Replace_Element
                                 (Current_Line,
@@ -577,7 +576,7 @@ begin
       --------------------------------------------------------
       -- REBUILD TEXT COMPONENTS
       --------------------------------------------------------
-      Comp_Editor_Text.Text    := Render_Buffer;
+      Comp_Editor_Text.Text    := Build_Editor_Text;
       Comp_StatusBar_Text.Text := Status_Text;
 
       Entities_PO.Claim_Writing (Entities_Ptr);
