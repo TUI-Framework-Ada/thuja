@@ -10,10 +10,27 @@ package Input_Handling is
    --  Command types that can be generated from input
    type Command_t is (Tab, Quit, Enter, None);
 
-   --  Input event containing both the raw character and parsed command
+   --  Modifier keys that can accompany a character.
+   --  None   : no modifier held (ordinary keypress)
+   --  Ctrl   : Ctrl key was held; Char_Value is the letter ('a'..'z')
+   --           and the raw byte was in the range 1..26.
+   --  Alt and Shift are reserved for future expansion — they require
+   --  escape-sequence parsing and are not handled in the current input layer.
+   type Modifier_t is (None, Ctrl);
+
+   --  Input event containing the raw character, optional modifier, and parsed command.
+   --  For a Ctrl+letter event:
+   --    Char_Value = the letter ('a'..'z')
+   --    Modifier   = Ctrl
+   --    Cmd        = None  (Ctrl chars do not map to the Command_t enum)
+   --  For ordinary characters:
+   --    Char_Value = the character as received
+   --    Modifier   = None
+   --    Cmd        = Tab / Quit / Enter / None as appropriate
    type Input_Event_t is record
       Char_Value : Character_t := ' ';
-      Cmd        : Command_t := None;
+      Modifier   : Modifier_t  := None;
+      Cmd        : Command_t   := None;
    end record;
 
    --  Instantiate vector for input events
@@ -59,12 +76,16 @@ private
    --  State machine states for parsing input sequences
    type Parse_State_t is (Normal, Escape_Received);
 
-   --  Parse a character and current state to determine command
-   --  Returns the new state and any generated command
+   --  Parse a single raw byte from stdin.
+   --  Updates the state machine, and outputs:
+   --    Cmd         : high-level command (Tab, Quit, Enter) or None
+   --    Modifier    : Ctrl if a Ctrl+letter was detected, otherwise None
+   --    Has_Command : True when an event should be enqueued
    procedure Parse_Input (
-      C           : in Character_t;
-      State       : in Out Parse_State_t;
+      C           : in  Character_t;
+      State       : in out Parse_State_t;
       Cmd         : out Command_t;
+      Modifier    : out Modifier_t;
       Has_Command : out Boolean_t
    );
 
