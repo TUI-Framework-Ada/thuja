@@ -453,7 +453,6 @@ begin
                      if Event.Char_Value = Character'Val (127)
                        or else Event.Char_Value = Character'Val (8)
                      then
-                        --  Backspace
                         if Current_Col > 0 then
                            --  Delete character before cursor on same line
                            declare
@@ -468,6 +467,50 @@ begin
                               Current_Col := Current_Col - 1;
                               Sticky_Col := Current_Col;
                            end;
+
+                           --  Reflow: current line is now shorter than Text_Width,
+                           --  pull characters back from the start of the next line
+                           if Current_Line < Natural (Lines.Length) - 1 then
+                              declare
+                                 Current_Len : constant Natural :=
+                                   Length (Lines (Current_Line));
+                                 Space       : constant Natural :=
+                                   Text_Width - Current_Len;
+                                 Next_Str    : constant String :=
+                                   To_String (Lines (Current_Line + 1));
+                              begin
+                                 if Space > 0 and then Next_Str'Length > 0 then
+                                    declare
+                                       Pull_Count : constant Natural :=
+                                         Natural'Min (Space, Next_Str'Length);
+                                       Pull       : constant String :=
+                                         Next_Str
+                                           (Next_Str'First
+                                            ..
+                                              Next_Str'First + Pull_Count - 1);
+                                       Remaining  : constant String :=
+                                         Next_Str
+                                           (Next_Str'First
+                                            + Pull_Count
+                                            .. Next_Str'Last);
+                                    begin
+                                       Lines.Replace_Element
+                                         (Current_Line,
+                                          To_Unbounded_String
+                                            (To_String (Lines (Current_Line))
+                                             & Pull));
+                                       if Remaining'Length = 0 then
+                                          Lines.Delete (Current_Line + 1);
+                                       else
+                                          Lines.Replace_Element
+                                            (Current_Line + 1,
+                                             To_Unbounded_String (Remaining));
+                                       end if;
+                                    end;
+                                 end if;
+                              end;
+                           end if;
+
                         elsif Current_Line > 0 then
                            --  At column 0: merge with line above
                            declare
@@ -482,6 +525,44 @@ begin
                               Current_Line := Current_Line - 1;
                               Current_Col := Above_Len;
                               Sticky_Col := Current_Col;
+                           end;
+
+                           --  Reflow after merge: split overflow back out if
+                           --  the merged line exceeds Text_Width
+                           declare
+                              Merged_Str : constant String :=
+                                To_String (Lines (Current_Line));
+                           begin
+                              if Merged_Str'Length > Text_Width then
+                                 declare
+                                    Keep     : constant String :=
+                                      Merged_Str
+                                        (Merged_Str'First
+                                         .. Merged_Str'First + Text_Width - 1);
+                                    Overflow : constant String :=
+                                      Merged_Str
+                                        (Merged_Str'First
+                                         + Text_Width
+                                         .. Merged_Str'Last);
+                                 begin
+                                    Lines.Replace_Element
+                                      (Current_Line,
+                                       To_Unbounded_String (Keep));
+                                    if Current_Line
+                                      = Natural (Lines.Length) - 1
+                                    then
+                                       Lines.Append
+                                         (To_Unbounded_String (Overflow));
+                                    else
+                                       Lines.Replace_Element
+                                         (Current_Line + 1,
+                                          To_Unbounded_String
+                                            (Overflow
+                                             & To_String
+                                                 (Lines (Current_Line + 1))));
+                                    end if;
+                                 end;
+                              end if;
                            end;
                         end if;
 
