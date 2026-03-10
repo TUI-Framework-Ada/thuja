@@ -457,7 +457,8 @@ begin
                         if Current_Col > 0 then
                            --  Delete character before cursor on same line
                            declare
-                              S : constant String := To_String (Lines (Current_Line));
+                              S : constant String :=
+                                To_String (Lines (Current_Line));
                            begin
                               Lines.Replace_Element
                                 (Current_Line,
@@ -499,17 +500,53 @@ begin
                            Current_Col := Current_Col + 1;
                            Sticky_Col := Current_Col;
 
-                           --  Typewriter wrap: when the line hits Text_Width,
-                           --  automatically advance to the next line
-                           if Current_Col >= Text_Width then
-                              --  If no next line exists yet, create one
-                              if Current_Line = Natural (Lines.Length) - 1 then
-                                 Lines.Append (Null_Unbounded_String);
+                           --  Check if the line has grown beyond Text_Width.
+                           --  This handles both end-of-line typing and mid-line insertion.
+                           declare
+                              Updated : constant String :=
+                                To_String (Lines (Current_Line));
+                           begin
+                              if Updated'Length > Text_Width then
+                                 declare
+                                    Keep     : constant String :=
+                                      Updated
+                                        (Updated'First
+                                         .. Updated'First + Text_Width - 1);
+                                    Overflow : constant String :=
+                                      Updated
+                                        (Updated'First
+                                         + Text_Width
+                                         .. Updated'Last);
+                                 begin
+                                    Lines.Replace_Element
+                                      (Current_Line,
+                                       To_Unbounded_String (Keep));
+
+                                    --  Push overflow onto next line, creating one if needed
+                                    if Current_Line
+                                      = Natural (Lines.Length) - 1
+                                    then
+                                       Lines.Append
+                                         (To_Unbounded_String (Overflow));
+                                    else
+                                       --  Prepend overflow to the start of the next line
+                                       Lines.Replace_Element
+                                         (Current_Line + 1,
+                                          To_Unbounded_String
+                                            (Overflow
+                                             & To_String
+                                                 (Lines (Current_Line + 1))));
+                                    end if;
+
+                                    --  If cursor crossed into overflow, move it to next line
+                                    if Current_Col >= Text_Width then
+                                       Current_Line := Current_Line + 1;
+                                       Current_Col := Current_Col - Text_Width;
+                                       Sticky_Col := Current_Col;
+                                    end if;
+                                 end;
                               end if;
-                              Current_Line := Current_Line + 1;
-                              Current_Col := 0;
-                              Sticky_Col := 0;
-                           end if;
+                           end;
                         end;
                      end if;
                end case;
