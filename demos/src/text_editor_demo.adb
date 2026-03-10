@@ -8,8 +8,7 @@ with Components;
 with Console;
 with ECS;
 with Graphics;
-with Ada.Strings.Unbounded;
-use Ada.Strings.Unbounded;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 use Graphics;
 with IDs;
 use type IDs.Entity_ID_Vector.Vector;
@@ -18,7 +17,8 @@ with Input_Handling;
 
 procedure Text_Editor_Demo is
 
-   Loop_Count : constant Positive := 6000; -- ~3 minutes at 30 FPS in case can't exit
+   Loop_Count : constant Positive :=
+     6000; -- ~3 minutes at 30 FPS in case can't exit
 
    --  ECS Entity storage
    Entities_PO  : ECS.Entity_Components_PO;
@@ -27,26 +27,32 @@ procedure Text_Editor_Demo is
    --------------------------------------------------------
    -- ENTITY DEFINITIONS
    --------------------------------------------------------
-   E_RenderInfo  : constant IDs.Entity_Id := IDs.To_EID ("RenderInfo");
-   E_Root        : constant IDs.Entity_Id := IDs.To_EID ("Root");
-   E_TitleBar    : constant IDs.Entity_Id := IDs.To_EID ("TitleBar");
-   E_Editor      : constant IDs.Entity_Id := IDs.To_EID ("Editor");
-   E_StatusBar   : constant IDs.Entity_Id := IDs.To_EID ("StatusBar");
+   E_RenderInfo : constant IDs.Entity_Id := IDs.To_EID ("RenderInfo");
+   E_Root       : constant IDs.Entity_Id := IDs.To_EID ("Root");
+   E_TitleBar   : constant IDs.Entity_Id := IDs.To_EID ("TitleBar");
+   E_Editor     : constant IDs.Entity_Id := IDs.To_EID ("Editor");
+   E_StatusBar  : constant IDs.Entity_Id := IDs.To_EID ("StatusBar");
 
-   C_RenderInfo  : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_RenderInfo);
-   C_Root        : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Root);
-   C_TitleBar    : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_TitleBar);
-   C_Editor      : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Editor);
-   C_StatusBar   : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_StatusBar);
+   C_RenderInfo : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_RenderInfo);
+   C_Root       : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_Root);
+   C_TitleBar   : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_TitleBar);
+   C_Editor     : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_Editor);
+   C_StatusBar  : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_StatusBar);
 
    --------------------------------------------------------
    -- LINE BUFFER
    -- One Unbounded_String per line. The editor always has
    -- at least one line so the cursor always has a home.
    --------------------------------------------------------
-   package Line_Vectors is new Ada.Containers.Vectors
-      (Index_Type   => Natural,
-       Element_Type => Unbounded_String);
+   package Line_Vectors is new
+     Ada.Containers.Vectors
+       (Index_Type   => Natural,
+        Element_Type => Unbounded_String);
 
    Lines : Line_Vectors.Vector;
 
@@ -84,8 +90,7 @@ procedure Text_Editor_Demo is
    -- actual line length while preserving Sticky_Col.
    --------------------------------------------------------
    procedure Clamp_Col is
-      Line_Len : constant Natural :=
-         Length (Lines (Current_Line));
+      Line_Len : constant Natural := Length (Lines (Current_Line));
    begin
       if Line_Len = 0 then
          Current_Col := 0;
@@ -93,6 +98,111 @@ procedure Text_Editor_Demo is
          Current_Col := Line_Len;
       end if;
    end Clamp_Col;
+
+   --------------------------------------------------------
+   -- HELPER: Reflow_From
+   -- Starting at the given line, checks if it exceeds
+   -- Text_Width and if so splits the overflow onto the
+   -- next line. Continues cascading downward until no
+   -- line exceeds Text_Width. This ensures that inserting
+   -- characters or tabs mid-buffer correctly renumbers
+   -- all affected lines below the insertion point.
+   --------------------------------------------------------
+   procedure Reflow_From (Start_Line : Natural) is
+      L : Natural := Start_Line;
+   begin
+      loop
+         --  Stop if we have moved past the end of the buffer
+         exit when L >= Natural (Lines.Length);
+
+         declare
+            Current_Str : constant String := To_String (Lines (L));
+         begin
+            --  Stop cascading once a line fits within Text_Width
+            exit when Current_Str'Length <= Text_Width;
+
+            declare
+               Keep     : constant String :=
+                 Current_Str
+                   (Current_Str'First .. Current_Str'First + Text_Width - 1);
+               Overflow : constant String :=
+                 Current_Str
+                   (Current_Str'First + Text_Width .. Current_Str'Last);
+            begin
+               Lines.Replace_Element (L, To_Unbounded_String (Keep));
+
+               if L = Natural (Lines.Length) - 1 then
+                  --  No next line exists, create one and stop
+                  --  since the overflow fits on the new empty line
+                  Lines.Append (To_Unbounded_String (Overflow));
+                  exit;
+               else
+                  --  Prepend overflow to the start of the next line
+                  --  and continue cascading down
+                  Lines.Replace_Element
+                    (L + 1,
+                     To_Unbounded_String
+                       (Overflow & To_String (Lines (L + 1))));
+               end if;
+            end;
+         end;
+
+         L := L + 1;
+      end loop;
+   end Reflow_From;
+
+   --------------------------------------------------------
+   -- HELPER: Reflow_Up_From
+   -- Starting at the given line, checks if it is shorter
+   -- than Text_Width and if so pulls characters from the
+   -- start of the next line up to fill the gap. Continues
+   -- cascading downward through subsequent lines until no
+   -- line can absorb more content from the line below it.
+   -- If a line below becomes empty after being pulled from
+   -- it is deleted entirely.
+   --------------------------------------------------------
+   procedure Reflow_Up_From (Start_Line : Natural) is
+      L : Natural := Start_Line;
+   begin
+      loop
+         --  Stop if there is no next line to pull from
+         exit when L >= Natural (Lines.Length) - 1;
+
+         declare
+            Current_Len : constant Natural := Length (Lines (L));
+            Space       : constant Natural := Text_Width - Current_Len;
+            Next_Str    : constant String := To_String (Lines (L + 1));
+         begin
+            --  Stop if current line is already full or next line is empty
+            exit when Space = 0 or else Next_Str'Length = 0;
+
+            declare
+               Pull_Count : constant Natural :=
+                 Natural'Min (Space, Next_Str'Length);
+               Pull       : constant String :=
+                 Next_Str (Next_Str'First .. Next_Str'First + Pull_Count - 1);
+               Remaining  : constant String :=
+                 Next_Str (Next_Str'First + Pull_Count .. Next_Str'Last);
+            begin
+               --  Append pulled characters onto end of current line
+               Lines.Replace_Element
+                 (L, To_Unbounded_String (To_String (Lines (L)) & Pull));
+
+               if Remaining'Length = 0 then
+                  --  Next line is now empty so delete it and stop
+                  --  since there is nothing left to cascade into
+                  Lines.Delete (L + 1);
+                  exit;
+               else
+                  Lines.Replace_Element
+                    (L + 1, To_Unbounded_String (Remaining));
+               end if;
+            end;
+         end;
+
+         L := L + 1;
+      end loop;
+   end Reflow_Up_From;
 
    --------------------------------------------------------
    -- HELPER: Build_Editor_Text
@@ -176,11 +286,14 @@ procedure Text_Editor_Demo is
    begin
       case Mode is
          when Navigation =>
-            return To_Unbounded_String
-               ("NAVIGATION   w/a/s/d to move  |  i to insert  |  ESC to quit");
-         when Insert =>
-            return To_Unbounded_String
-               ("INSERT   type to edit  |  ESC to return to Navigation");
+            return
+              To_Unbounded_String
+                ("NAVIGATION   w/a/s/d to move  |  i to insert  |  ESC to quit");
+
+         when Insert     =>
+            return
+              To_Unbounded_String
+                ("INSERT   type to edit  |  ESC to return to Navigation");
       end case;
    end Status_Text;
 
@@ -188,78 +301,77 @@ procedure Text_Editor_Demo is
    -- COMPONENT DEFINITIONS
    --------------------------------------------------------
 
-   Comp_RenderInfo : constant Components.Render_Info_Component_T := (
-      Terminal_Width       => 80,
+   Comp_RenderInfo : constant Components.Render_Info_Component_T :=
+     (Terminal_Width       => 80,
       Terminal_Height      => 24,
       Prev_Terminal_Width  => 80,
       Prev_Terminal_Height => 24,
-      Framebuffer_1        => (Width => 80, Height => 24, Data => new Pixel_Array),
-      Framebuffer_2        => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_1        =>
+        (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_2        =>
+        (Width => 80, Height => 24, Data => new Pixel_Array),
       Drawing_FB           => new Graphics.Protected_DB,
-      Backbuffer           => (Width => 80, Height => 24, Data => new Pixel_Array)
-   );
+      Backbuffer           =>
+        (Width => 80, Height => 24, Data => new Pixel_Array));
 
-   Comp_Root_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_Root_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 24,
-      Children      => IDs.Entity_ID_Vector.To_Vector (E_TitleBar, 1)
-                       & E_Editor & E_StatusBar,
+      Children      =>
+        IDs.Entity_ID_Vector.To_Vector (E_TitleBar, 1)
+        & E_Editor
+        & E_StatusBar,
       Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
-   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (null record);
+   Comp_Root_Marker : constant Components.Root_Widget_Component_T :=
+     (null record);
 
-   Comp_Root_Flex : constant Components.Flex_Layout_Component_T := (
-      Flex_Container => (
-         Width      => 80,
+   Comp_Root_Flex : constant Components.Flex_Layout_Component_T :=
+     (Flex_Container =>
+        (Width      => 80,
          Height     => 24,
          Direction  => Flexbox.Column,
          Justify    => Flexbox.Flex_Start,
          Align      => Flexbox.Stretch,
          Item_Count => 3,
-         Items      => new Flexbox.Flex_Item_Array'(
-            1 => (
-               Related_Entity => E_TitleBar,
-               Flex_Basis     => 1,
-               Flex_Grow      => 0.0,
-               Flex_Shrink    => 0.0,
-               Computed_Size  => 1,
-               Cross_Size     => 80,
-               Position_X     => 0,
-               Position_Y     => 0
-            ),
-            2 => (
-               Related_Entity => E_Editor,
-               Flex_Basis     => 0,
-               Flex_Grow      => 1.0,
-               Flex_Shrink    => 0.0,
-               Computed_Size  => 22,
-               Cross_Size     => 80,
-               Position_X     => 0,
-               Position_Y     => 0
-            ),
-            3 => (
-               Related_Entity => E_StatusBar,
-               Flex_Basis     => 1,
-               Flex_Grow      => 0.0,
-               Flex_Shrink    => 0.0,
-               Computed_Size  => 1,
-               Cross_Size     => 80,
-               Position_X     => 0,
-               Position_Y     => 0
-            )
-         )
-      ),
-      Is_Dirty => True
-   );
+         Items      =>
+           new Flexbox.Flex_Item_Array'
+             (1 =>
+                (Related_Entity => E_TitleBar,
+                 Flex_Basis     => 1,
+                 Flex_Grow      => 0.0,
+                 Flex_Shrink    => 0.0,
+                 Computed_Size  => 1,
+                 Cross_Size     => 80,
+                 Position_X     => 0,
+                 Position_Y     => 0),
+              2 =>
+                (Related_Entity => E_Editor,
+                 Flex_Basis     => 0,
+                 Flex_Grow      => 1.0,
+                 Flex_Shrink    => 0.0,
+                 Computed_Size  => 22,
+                 Cross_Size     => 80,
+                 Position_X     => 0,
+                 Position_Y     => 0),
+              3 =>
+                (Related_Entity => E_StatusBar,
+                 Flex_Basis     => 1,
+                 Flex_Grow      => 0.0,
+                 Flex_Shrink    => 0.0,
+                 Computed_Size  => 1,
+                 Cross_Size     => 80,
+                 Position_X     => 0,
+                 Position_Y     => 0))),
+      Is_Dirty       => True);
 
-   Comp_TitleBar_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_TitleBar_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 1,
@@ -267,30 +379,27 @@ procedure Text_Editor_Demo is
       Render_Buffer => (Width => 80, Height => 1, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
-   Comp_TitleBar_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Blue
-   );
+   Comp_TitleBar_BG : constant Components.Background_Color_Component_T :=
+     (Background_Color => Graphics.Blue);
 
-   Comp_TitleBar_Text : constant Components.Text_Component_T := (
-      Text             => To_Unbounded_String ("  Thuja Text Editor"),
+   Comp_TitleBar_Text : constant Components.Text_Component_T :=
+     (Text             => To_Unbounded_String ("  Thuja Text Editor"),
       Text_Color       => Graphics.White,
       Offset_X         => 1,
       Offset_Y         => 1,
       Is_Bold          => True,
       Is_Italic        => False,
       Is_Underline     => False,
-      Is_Strikethrough => False
-   );
+      Is_Strikethrough => False);
 
-   Comp_TitleBar_PositionMode : constant Components.Position_Mode_Component_T := (
-      Mode => Components.Flex
-   );
+   Comp_TitleBar_PositionMode :
+     constant Components.Position_Mode_Component_T :=
+       (Mode => Components.Flex);
 
-   Comp_Editor_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_Editor_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 2,
       Size_Width    => 80,
       Size_Height   => 22,
@@ -298,30 +407,26 @@ procedure Text_Editor_Demo is
       Render_Buffer => (Width => 80, Height => 22, Data => new Pixel_Array),
       Has_Focus     => True,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
-   Comp_Editor_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Gray
-   );
+   Comp_Editor_BG : constant Components.Background_Color_Component_T :=
+     (Background_Color => Graphics.Gray);
 
-   Comp_Editor_Text : Components.Text_Component_T := (
-      Text             => Build_Editor_Text,
+   Comp_Editor_Text : Components.Text_Component_T :=
+     (Text             => Build_Editor_Text,
       Text_Color       => Graphics.White,
       Offset_X         => 1,
       Offset_Y         => 1,
       Is_Bold          => False,
       Is_Italic        => False,
       Is_Underline     => False,
-      Is_Strikethrough => False
-   );
+      Is_Strikethrough => False);
 
-   Comp_Editor_PositionMode : constant Components.Position_Mode_Component_T := (
-      Mode => Components.Flex
-   );
+   Comp_Editor_PositionMode : constant Components.Position_Mode_Component_T :=
+     (Mode => Components.Flex);
 
-   Comp_StatusBar_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_StatusBar_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 23,
       Size_Width    => 80,
       Size_Height   => 1,
@@ -329,27 +434,24 @@ procedure Text_Editor_Demo is
       Render_Buffer => (Width => 80, Height => 1, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
-   Comp_StatusBar_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Blue
-   );
+   Comp_StatusBar_BG : constant Components.Background_Color_Component_T :=
+     (Background_Color => Graphics.Blue);
 
-   Comp_StatusBar_Text : Components.Text_Component_T := (
-      Text             => Status_Text,
+   Comp_StatusBar_Text : Components.Text_Component_T :=
+     (Text             => Status_Text,
       Text_Color       => Graphics.White,
       Offset_X         => 1,
       Offset_Y         => 1,
       Is_Bold          => False,
       Is_Italic        => False,
       Is_Underline     => False,
-      Is_Strikethrough => False
-   );
+      Is_Strikethrough => False);
 
-   Comp_StatusBar_PositionMode : constant Components.Position_Mode_Component_T := (
-      Mode => Components.Flex
-   );
+   Comp_StatusBar_PositionMode :
+     constant Components.Position_Mode_Component_T :=
+       (Mode => Components.Flex);
 
 begin
    --  Seed the line buffer with one empty line so the cursor
@@ -367,26 +469,47 @@ begin
    --------------------------------------------------------
    Entities_PO.Claim_Writing (Entities_Ptr);
 
-   ECS.Add_Component (C_RenderInfo.all, IDs.To_CID ("RenderInfo"),               Comp_RenderInfo);
+   ECS.Add_Component
+     (C_RenderInfo.all, IDs.To_CID ("RenderInfo"), Comp_RenderInfo);
 
-   ECS.Add_Component (C_Root.all,       IDs.To_CID ("WidgetComponent"),           Comp_Root_Widget);
-   ECS.Add_Component (C_Root.all,       IDs.To_CID ("RootWidget"),                Comp_Root_Marker);
-   ECS.Add_Component (C_Root.all,       IDs.To_CID ("FlexLayoutComponent"),       Comp_Root_Flex);
+   ECS.Add_Component
+     (C_Root.all, IDs.To_CID ("WidgetComponent"), Comp_Root_Widget);
+   ECS.Add_Component (C_Root.all, IDs.To_CID ("RootWidget"), Comp_Root_Marker);
+   ECS.Add_Component
+     (C_Root.all, IDs.To_CID ("FlexLayoutComponent"), Comp_Root_Flex);
 
-   ECS.Add_Component (C_TitleBar.all,   IDs.To_CID ("WidgetComponent"),           Comp_TitleBar_Widget);
-   ECS.Add_Component (C_TitleBar.all,   IDs.To_CID ("BackgroundColorComponent"),  Comp_TitleBar_BG);
-   ECS.Add_Component (C_TitleBar.all,   IDs.To_CID ("TextComponent"),             Comp_TitleBar_Text);
-   ECS.Add_Component (C_TitleBar.all,   IDs.To_CID ("PositionMode"),              Comp_TitleBar_PositionMode);
+   ECS.Add_Component
+     (C_TitleBar.all, IDs.To_CID ("WidgetComponent"), Comp_TitleBar_Widget);
+   ECS.Add_Component
+     (C_TitleBar.all,
+      IDs.To_CID ("BackgroundColorComponent"),
+      Comp_TitleBar_BG);
+   ECS.Add_Component
+     (C_TitleBar.all, IDs.To_CID ("TextComponent"), Comp_TitleBar_Text);
+   ECS.Add_Component
+     (C_TitleBar.all, IDs.To_CID ("PositionMode"), Comp_TitleBar_PositionMode);
 
-   ECS.Add_Component (C_Editor.all,     IDs.To_CID ("WidgetComponent"),           Comp_Editor_Widget);
-   ECS.Add_Component (C_Editor.all,     IDs.To_CID ("BackgroundColorComponent"),  Comp_Editor_BG);
-   ECS.Add_Component (C_Editor.all,     IDs.To_CID ("TextComponent"),             Comp_Editor_Text);
-   ECS.Add_Component (C_Editor.all,     IDs.To_CID ("PositionMode"),              Comp_Editor_PositionMode);
+   ECS.Add_Component
+     (C_Editor.all, IDs.To_CID ("WidgetComponent"), Comp_Editor_Widget);
+   ECS.Add_Component
+     (C_Editor.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Editor_BG);
+   ECS.Add_Component
+     (C_Editor.all, IDs.To_CID ("TextComponent"), Comp_Editor_Text);
+   ECS.Add_Component
+     (C_Editor.all, IDs.To_CID ("PositionMode"), Comp_Editor_PositionMode);
 
-   ECS.Add_Component (C_StatusBar.all,  IDs.To_CID ("WidgetComponent"),           Comp_StatusBar_Widget);
-   ECS.Add_Component (C_StatusBar.all,  IDs.To_CID ("BackgroundColorComponent"),  Comp_StatusBar_BG);
-   ECS.Add_Component (C_StatusBar.all,  IDs.To_CID ("TextComponent"),             Comp_StatusBar_Text);
-   ECS.Add_Component (C_StatusBar.all,  IDs.To_CID ("PositionMode"),              Comp_StatusBar_PositionMode);
+   ECS.Add_Component
+     (C_StatusBar.all, IDs.To_CID ("WidgetComponent"), Comp_StatusBar_Widget);
+   ECS.Add_Component
+     (C_StatusBar.all,
+      IDs.To_CID ("BackgroundColorComponent"),
+      Comp_StatusBar_BG);
+   ECS.Add_Component
+     (C_StatusBar.all, IDs.To_CID ("TextComponent"), Comp_StatusBar_Text);
+   ECS.Add_Component
+     (C_StatusBar.all,
+      IDs.To_CID ("PositionMode"),
+      Comp_StatusBar_PositionMode);
 
    Entities_PO.Release_Writing;
 
@@ -464,54 +587,32 @@ begin
                               Current_Col := Current_Col + 1;
                               Sticky_Col := Current_Col;
 
-                              --  Reflow each space insertion just like regular typing
-                              declare
-                                 Updated : constant String :=
-                                   To_String (Lines (Current_Line));
-                              begin
-                                 if Updated'Length > Text_Width then
-                                    declare
-                                       Keep     : constant String :=
-                                         Updated
-                                           (Updated'First
-                                            .. Updated'First + Text_Width - 1);
-                                       Overflow : constant String :=
-                                         Updated
-                                           (Updated'First
-                                            + Text_Width
-                                            .. Updated'Last);
-                                    begin
-                                       Lines.Replace_Element
-                                         (Current_Line,
-                                          To_Unbounded_String (Keep));
-                                       if Current_Line
-                                         = Natural (Lines.Length) - 1
-                                       then
-                                          Lines.Append
-                                            (To_Unbounded_String (Overflow));
-                                       else
-                                          Lines.Replace_Element
-                                            (Current_Line + 1,
-                                             To_Unbounded_String
-                                               (Overflow
-                                                & To_String
-                                                    (Lines
-                                                       (Current_Line + 1))));
-                                       end if;
-                                       if Current_Col >= Text_Width then
-                                          Current_Line := Current_Line + 1;
-                                          Current_Col :=
-                                            Current_Col - Text_Width;
-                                          Sticky_Col := Current_Col;
-                                       end if;
-                                    end;
-                                 end if;
-                              end;
+                              --  Cascade reflow downward from current line
+                              Reflow_From (Current_Line);
+
+                              if Current_Col >= Text_Width then
+                                 declare
+                                    Next_Line : constant Natural :=
+                                      Current_Line + 1;
+                                 begin
+                                    --  Only advance if the next line actually exists
+                                    if Next_Line < Natural (Lines.Length) then
+                                       Current_Line := Next_Line;
+                                       Current_Col := Current_Col - Text_Width;
+                                       Sticky_Col := Current_Col;
+                                    else
+                                       --  Clamp to end of current line as a safe fallback
+                                       Current_Col :=
+                                         Length (Lines (Current_Line));
+                                       Sticky_Col := Current_Col;
+                                    end if;
+                                 end;
+                              end if;
                            end;
                         end loop;
                      end;
 
-                  when others    =>
+                  when others               =>
                      --  ASCII VAL to backspace (delete) text.
                      --  ASCII (127) & (8) are both used here because
                      --  It seems that Windows only sees (8) so (127)
@@ -535,48 +636,8 @@ begin
                               Sticky_Col := Current_Col;
                            end;
 
-                           --  Reflow: current line is now shorter than Text_Width,
-                           --  pull characters back from the start of the next line
-                           if Current_Line < Natural (Lines.Length) - 1 then
-                              declare
-                                 Current_Len : constant Natural :=
-                                   Length (Lines (Current_Line));
-                                 Space       : constant Natural :=
-                                   Text_Width - Current_Len;
-                                 Next_Str    : constant String :=
-                                   To_String (Lines (Current_Line + 1));
-                              begin
-                                 if Space > 0 and then Next_Str'Length > 0 then
-                                    declare
-                                       Pull_Count : constant Natural :=
-                                         Natural'Min (Space, Next_Str'Length);
-                                       Pull       : constant String :=
-                                         Next_Str
-                                           (Next_Str'First
-                                            ..
-                                              Next_Str'First + Pull_Count - 1);
-                                       Remaining  : constant String :=
-                                         Next_Str
-                                           (Next_Str'First
-                                            + Pull_Count
-                                            .. Next_Str'Last);
-                                    begin
-                                       Lines.Replace_Element
-                                         (Current_Line,
-                                          To_Unbounded_String
-                                            (To_String (Lines (Current_Line))
-                                             & Pull));
-                                       if Remaining'Length = 0 then
-                                          Lines.Delete (Current_Line + 1);
-                                       else
-                                          Lines.Replace_Element
-                                            (Current_Line + 1,
-                                             To_Unbounded_String (Remaining));
-                                       end if;
-                                    end;
-                                 end if;
-                              end;
-                           end if;
+                           --  Cascade reflow upward from current line
+                           Reflow_Up_From (Current_Line);
 
                         elsif Current_Line > 0 then
                            --  At column 0: merge with line above
@@ -594,43 +655,10 @@ begin
                               Sticky_Col := Current_Col;
                            end;
 
-                           --  Reflow after merge: split overflow back out if
-                           --  the merged line exceeds Text_Width
-                           declare
-                              Merged_Str : constant String :=
-                                To_String (Lines (Current_Line));
-                           begin
-                              if Merged_Str'Length > Text_Width then
-                                 declare
-                                    Keep     : constant String :=
-                                      Merged_Str
-                                        (Merged_Str'First
-                                         .. Merged_Str'First + Text_Width - 1);
-                                    Overflow : constant String :=
-                                      Merged_Str
-                                        (Merged_Str'First
-                                         + Text_Width
-                                         .. Merged_Str'Last);
-                                 begin
-                                    Lines.Replace_Element
-                                      (Current_Line,
-                                       To_Unbounded_String (Keep));
-                                    if Current_Line
-                                      = Natural (Lines.Length) - 1
-                                    then
-                                       Lines.Append
-                                         (To_Unbounded_String (Overflow));
-                                    else
-                                       Lines.Replace_Element
-                                         (Current_Line + 1,
-                                          To_Unbounded_String
-                                            (Overflow
-                                             & To_String
-                                                 (Lines (Current_Line + 1))));
-                                    end if;
-                                 end;
-                              end if;
-                           end;
+                           --  After merge, reflow in both directions:
+                           --  split any overflow downward then pull content back up
+                           Reflow_From (Current_Line);
+                           Reflow_Up_From (Current_Line);
                         end if;
 
                      elsif Event.Char_Value >= ' ' then
@@ -648,53 +676,27 @@ begin
                            Current_Col := Current_Col + 1;
                            Sticky_Col := Current_Col;
 
-                           --  Check if the line has grown beyond Text_Width.
-                           --  This handles both end-of-line typing and mid-line insertion.
-                           declare
-                              Updated : constant String :=
-                                To_String (Lines (Current_Line));
-                           begin
-                              if Updated'Length > Text_Width then
-                                 declare
-                                    Keep     : constant String :=
-                                      Updated
-                                        (Updated'First
-                                         .. Updated'First + Text_Width - 1);
-                                    Overflow : constant String :=
-                                      Updated
-                                        (Updated'First
-                                         + Text_Width
-                                         .. Updated'Last);
-                                 begin
-                                    Lines.Replace_Element
-                                      (Current_Line,
-                                       To_Unbounded_String (Keep));
+                           --  Cascade reflow downward from current line
+                           Reflow_From (Current_Line);
 
-                                    --  Push overflow onto next line, creating one if needed
-                                    if Current_Line
-                                      = Natural (Lines.Length) - 1
-                                    then
-                                       Lines.Append
-                                         (To_Unbounded_String (Overflow));
-                                    else
-                                       --  Prepend overflow to the start of the next line
-                                       Lines.Replace_Element
-                                         (Current_Line + 1,
-                                          To_Unbounded_String
-                                            (Overflow
-                                             & To_String
-                                                 (Lines (Current_Line + 1))));
-                                    end if;
-
-                                    --  If cursor crossed into overflow, move it to next line
-                                    if Current_Col >= Text_Width then
-                                       Current_Line := Current_Line + 1;
-                                       Current_Col := Current_Col - Text_Width;
-                                       Sticky_Col := Current_Col;
-                                    end if;
-                                 end;
-                              end if;
-                           end;
+                           if Current_Col >= Text_Width then
+                              declare
+                                 Next_Line : constant Natural :=
+                                   Current_Line + 1;
+                              begin
+                                 --  Only advance if the next line actually exists
+                                 if Next_Line < Natural (Lines.Length) then
+                                    Current_Line := Next_Line;
+                                    Current_Col := Current_Col - Text_Width;
+                                    Sticky_Col := Current_Col;
+                                 else
+                                    --  Clamp to end of current line as a safe fallback
+                                    Current_Col :=
+                                      Length (Lines (Current_Line));
+                                    Sticky_Col := Current_Col;
+                                 end if;
+                              end;
+                           end if;
                         end;
                      end if;
                end case;
@@ -706,59 +708,60 @@ begin
                   when Input_Handling.Quit =>
                      Should_Quit := True;
 
-                  when others =>
+                  when others              =>
                      case Event.Char_Value is
 
-                        when 'i' =>
+                        when 'i'    =>
                            Mode := Insert;
 
-                        when 'w' =>
+                        when 'w'    =>
                            --  Move up
                            if Current_Line > 0 then
                               Current_Line := Current_Line - 1;
-                              Current_Col  := Natural'Min
-                                 (Sticky_Col,
-                                  Length (Lines (Current_Line)));
+                              Current_Col :=
+                                Natural'Min
+                                  (Sticky_Col, Length (Lines (Current_Line)));
                            end if;
 
-                        when 's' =>
+                        when 's'    =>
                            --  Move down
                            if Current_Line < Natural (Lines.Length) - 1 then
                               Current_Line := Current_Line + 1;
-                              Current_Col  := Natural'Min
-                                 (Sticky_Col,
-                                  Length (Lines (Current_Line)));
+                              Current_Col :=
+                                Natural'Min
+                                  (Sticky_Col, Length (Lines (Current_Line)));
                            end if;
 
-                        when 'a' =>
+                        when 'a'    =>
                            --  Move left, wrap to end of previous line
                            if Current_Col > 0 then
                               Current_Col := Current_Col - 1;
-                              Sticky_Col  := Current_Col;
+                              Sticky_Col := Current_Col;
                            elsif Current_Line > 0 then
                               Current_Line := Current_Line - 1;
-                              Current_Col  := Length (Lines (Current_Line));
-                              Sticky_Col   := Current_Col;
+                              Current_Col := Length (Lines (Current_Line));
+                              Sticky_Col := Current_Col;
                            end if;
 
-                        when 'd' =>
+                        when 'd'    =>
                            --  Move right, wrap to start of next line
                            declare
                               Line_Len : constant Natural :=
-                                 Length (Lines (Current_Line));
+                                Length (Lines (Current_Line));
                            begin
                               if Current_Col < Line_Len then
                                  Current_Col := Current_Col + 1;
-                                 Sticky_Col  := Current_Col;
+                                 Sticky_Col := Current_Col;
                               elsif Current_Line < Natural (Lines.Length) - 1
                               then
                                  Current_Line := Current_Line + 1;
-                                 Current_Col  := 0;
-                                 Sticky_Col   := 0;
+                                 Current_Col := 0;
+                                 Sticky_Col := 0;
                               end if;
                            end;
 
-                        when others => null;
+                        when others =>
+                           null;
                      end case;
                end case;
             end if;
@@ -770,23 +773,25 @@ begin
       --------------------------------------------------------
       -- REBUILD TEXT COMPONENTS
       --------------------------------------------------------
-      Comp_Editor_Text.Text    := Build_Editor_Text;
+      Comp_Editor_Text.Text := Build_Editor_Text;
       Comp_StatusBar_Text.Text := Status_Text;
 
       Entities_PO.Claim_Writing (Entities_Ptr);
-      ECS.Add_Component (C_Editor.all,    IDs.To_CID ("TextComponent"), Comp_Editor_Text);
-      ECS.Add_Component (C_StatusBar.all, IDs.To_CID ("TextComponent"), Comp_StatusBar_Text);
+      ECS.Add_Component
+        (C_Editor.all, IDs.To_CID ("TextComponent"), Comp_Editor_Text);
+      ECS.Add_Component
+        (C_StatusBar.all, IDs.To_CID ("TextComponent"), Comp_StatusBar_Text);
       Entities_PO.Release_Writing;
 
       --------------------------------------------------------
       -- SYSTEMS
       --------------------------------------------------------
-      ECS.TerminalResizeSystem   (Entities_PO);
-      ECS.FlexLayoutSystem       (Entities_PO);
+      ECS.TerminalResizeSystem (Entities_PO);
+      ECS.FlexLayoutSystem (Entities_PO);
       ECS.WidgetBackgroundSystem (Entities_PO);
-      ECS.TextRenderSystem       (Entities_PO);
-      ECS.BufferCopySystem       (Entities_PO);
-      ECS.BufferDrawSystem       (Entities_PO);
+      ECS.TextRenderSystem (Entities_PO);
+      ECS.BufferCopySystem (Entities_PO);
+      ECS.BufferDrawSystem (Entities_PO);
       ECS.DoubleBufferFlagSystem (Entities_PO);
 
       delay Duration (0.033);
