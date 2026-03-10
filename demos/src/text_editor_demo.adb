@@ -636,9 +636,6 @@ begin
                               Sticky_Col := Current_Col;
                            end;
 
-                           --  Cascade reflow upward from current line
-                           Reflow_Up_From (Current_Line);
-
                         elsif Current_Line > 0 then
                            --  At column 0: merge with line above
                            declare
