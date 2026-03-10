@@ -416,7 +416,7 @@ begin
             elsif Mode = Insert then
                case Event.Cmd is
 
-                  when Input_Handling.Quit =>
+                  when Input_Handling.Quit  =>
                      --  ESC: back to Navigation, clamp cursor to line end
                      Mode := Navigation;
                      Clamp_Col;
@@ -425,28 +425,95 @@ begin
                      --  Split current line at cursor position
                      declare
                         Current_Text : constant String :=
-                           To_String (Lines (Current_Line));
-                        Before : constant String :=
-                           Current_Text
-                              (Current_Text'First ..
-                               Current_Text'First + Current_Col - 1);
-                        After  : constant String :=
-                           Current_Text
-                              (Current_Text'First + Current_Col ..
-                               Current_Text'Last);
+                          To_String (Lines (Current_Line));
+                        Before       : constant String :=
+                          Current_Text
+                            (Current_Text'First
+                             .. Current_Text'First + Current_Col - 1);
+                        After        : constant String :=
+                          Current_Text
+                            (Current_Text'First
+                             + Current_Col
+                             .. Current_Text'Last);
                      begin
                         Lines.Replace_Element
-                           (Current_Line, To_Unbounded_String (Before));
+                          (Current_Line, To_Unbounded_String (Before));
                         Lines.Insert
-                           (Current_Line + 1, To_Unbounded_String (After));
+                          (Current_Line + 1, To_Unbounded_String (After));
                         Current_Line := Current_Line + 1;
-                        Current_Col  := 0;
-                        Sticky_Col   := 0;
+                        Current_Col := 0;
+                        Sticky_Col := 0;
                      end;
 
-                  when others =>
+                  when Input_Handling.Tab   =>
+                     --  Insert 4 spaces at cursor position (soft tab)
+                     declare
+                        Tab_Size : constant Positive := 4;
+                     begin
+                        for T in 1 .. Tab_Size loop
+                           declare
+                              S : constant String :=
+                                To_String (Lines (Current_Line));
+                           begin
+                              Lines.Replace_Element
+                                (Current_Line,
+                                 To_Unbounded_String
+                                   (S (S'First .. S'First + Current_Col - 1)
+                                    & ' '
+                                    & S (S'First + Current_Col .. S'Last)));
+                              Current_Col := Current_Col + 1;
+                              Sticky_Col := Current_Col;
+
+                              --  Reflow each space insertion just like regular typing
+                              declare
+                                 Updated : constant String :=
+                                   To_String (Lines (Current_Line));
+                              begin
+                                 if Updated'Length > Text_Width then
+                                    declare
+                                       Keep     : constant String :=
+                                         Updated
+                                           (Updated'First
+                                            .. Updated'First + Text_Width - 1);
+                                       Overflow : constant String :=
+                                         Updated
+                                           (Updated'First
+                                            + Text_Width
+                                            .. Updated'Last);
+                                    begin
+                                       Lines.Replace_Element
+                                         (Current_Line,
+                                          To_Unbounded_String (Keep));
+                                       if Current_Line
+                                         = Natural (Lines.Length) - 1
+                                       then
+                                          Lines.Append
+                                            (To_Unbounded_String (Overflow));
+                                       else
+                                          Lines.Replace_Element
+                                            (Current_Line + 1,
+                                             To_Unbounded_String
+                                               (Overflow
+                                                & To_String
+                                                    (Lines
+                                                       (Current_Line + 1))));
+                                       end if;
+                                       if Current_Col >= Text_Width then
+                                          Current_Line := Current_Line + 1;
+                                          Current_Col :=
+                                            Current_Col - Text_Width;
+                                          Sticky_Col := Current_Col;
+                                       end if;
+                                    end;
+                                 end if;
+                              end;
+                           end;
+                        end loop;
+                     end;
+
+                  when others    =>
                      --  ASCII VAL to backspace (delete) text.
-                     --  ASCII (127) & (8) are both used here because 
+                     --  ASCII (127) & (8) are both used here because
                      --  It seems that Windows only sees (8) so (127)
                      --  could be removed but that will be for testing
                      --  later with Linux.
