@@ -194,6 +194,8 @@ procedure Tab_Demo is
    Tab_Pressed : Boolean_t := False;
 
 begin
+   Graphics.Enable_VT_Processing;
+   Graphics.Set_Cursor_Visible (False);
    Graphics.Clear_Screen;
 
    --  Create ECS entities
@@ -234,6 +236,7 @@ begin
 
    --  Cleanup
    Input_Reader.Stop;
+   Graphics.Set_Cursor_Visible (True);
    Graphics.Clear_Screen;
    Graphics.Reset_Styling;
 
