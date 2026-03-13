@@ -4,6 +4,7 @@
 
 with Ada.Calendar;
 with Ada.Calendar.Arithmetic;
+with Ada.Characters.Conversions;
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
@@ -12,6 +13,7 @@ with Graphics;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Text_IO;
 with Ada.Tags; use Ada.Tags;
+with Ada.Wide_Wide_Text_IO;
 with Selection;
 
 package body ECS is
@@ -914,6 +916,7 @@ package body ECS is
    --  TODO: Compare the current framebuffer against the other one & remove
    --    mentions to backbuffer (backbuffer is unneeded and should eventually
    --    be removed)
+
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
 
       package GFX renames Graphics;
@@ -935,9 +938,18 @@ package body ECS is
         (GFX.CSI & (if P.Is_Underline then "4m" else "24m"));
       function Strikethrough (P : Pixel_t) return String is
         (GFX.CSI & (if P.Is_Strikethrough then "9m" else "29m"));
+      function Format (P : Pixel_t) return String is
+         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (GFX.CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       Reset : constant String := GFX.CSI & "0m";
+      function Convert (P : Pixel_t; Row : TUI_Height; Col : TUI_Width) return Wide_Wide_String is
+         use Ada.Characters.Conversions;
+         Result : constant String := Move (Row, Col) & Format (P) & P.Char & Reset;
+      begin
+         return To_Wide_Wide_String (Result);
+      end Convert;
+
       Entity_List : Entity_Components_Ptr;
       Search_Components : constant Component_Tag_Vector.Vector :=
         Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
@@ -966,84 +978,26 @@ package body ECS is
             -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
             Drawing :=
               (if Drawing_From_FB_1
-               then RI.Framebuffer_1'Unchecked_Access
-               else RI.Framebuffer_2'Unchecked_Access);
+               then RI.Framebuffer_1'Access
+               else RI.Framebuffer_2'Access);
 
             --  Begin comparing FB to BB and drawing
-            --  Batched output with differential cursor/format tracking
-            declare
-               Frame_Output : SU.Unbounded_String;
-               --  Cursor position tracking (skip Move for consecutive pixels)
-               Last_X : TUI_Width := TUI_Width'First;
-               Last_Y : TUI_Height := TUI_Height'First;
-               First_Pixel : Boolean := True;
-               --  Format state tracking (skip unchanged ANSI codes)
-               Cur_FG     : Color_t := (0, 0, 0);
-               Cur_BG     : Color_t := (0, 0, 0);
-               Cur_Bold   : Boolean := False;
-               Cur_Italic : Boolean := False;
-               Cur_ULine  : Boolean := False;
-               Cur_Strike : Boolean := False;
-               Fmt_Set    : Boolean := False;
-            begin
-               for Y in TUI_Height'First .. RI.Terminal_Height loop
-                  for X in TUI_Width'First .. RI.Terminal_Width loop
-                     if Get_Buffer_Pixel (Drawing.all, X, Y)
-                       /= Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-                     then
-                        FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
+            for Y in TUI_Height'First .. RI.Terminal_Height loop
+               for X in TUI_Width'First .. RI.Terminal_Width loop
+                  if Get_Buffer_Pixel (Drawing.all, X, Y)
+                    /= Get_Buffer_Pixel (RI.Backbuffer, X, Y)
+                  then
+                     --  Fetch buffer pixels
+                     FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
-                        --  Only move cursor when not at expected position
-                        if First_Pixel or else Y /= Last_Y
-                           or else Integer (X) /= Integer (Last_X) + 1
-                        then
-                           SU.Append (Frame_Output, Move (Y, X));
-                        end if;
+                     -- Draw to terminal
+                     Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
 
-                        --  Only emit format codes that differ from current state
-                        if not Fmt_Set or else FB_Pixel.Char_Color /= Cur_FG then
-                           SU.Append (Frame_Output, FG (FB_Pixel));
-                           Cur_FG := FB_Pixel.Char_Color;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Background_Color /= Cur_BG then
-                           SU.Append (Frame_Output, BG (FB_Pixel));
-                           Cur_BG := FB_Pixel.Background_Color;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Bold /= Cur_Bold then
-                           SU.Append (Frame_Output, Bold (FB_Pixel));
-                           Cur_Bold := FB_Pixel.Is_Bold;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Italic /= Cur_Italic then
-                           SU.Append (Frame_Output, Italic (FB_Pixel));
-                           Cur_Italic := FB_Pixel.Is_Italic;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Underline /= Cur_ULine then
-                           SU.Append (Frame_Output, Underline (FB_Pixel));
-                           Cur_ULine := FB_Pixel.Is_Underline;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Strikethrough /= Cur_Strike then
-                           SU.Append (Frame_Output, Strikethrough (FB_Pixel));
-                           Cur_Strike := FB_Pixel.Is_Strikethrough;
-                        end if;
-                        Fmt_Set := True;
-
-                        --  Emit character (no per-pixel Reset)
-                        SU.Append (Frame_Output, "" & FB_Pixel.Char);
-
-                        Last_X := X;
-                        Last_Y := Y;
-                        First_Pixel := False;
-
-                        Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
-                     end if;
-                  end loop;
+                     -- Update backbuffer
+                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                  end if;
                end loop;
-
-               if SU.Length (Frame_Output) > 0 then
-                  SU.Append (Frame_Output, Reset);
-                  Ada.Text_IO.Put (SU.To_String (Frame_Output));
-               end if;
-            end;
+            end loop;
 
             --  Release RenderInfo
             RI.Drawing_FB.all.Post;
