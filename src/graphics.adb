@@ -9,6 +9,36 @@ package body Graphics is
 
    use Ada.Characters.Conversions;
 
+   function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
+
+   function "+" (P : Pixel_t) return Wide_Wide_String is
+      RESET : constant String := CSI & "0m";
+      FG : constant String := CSI & "38;2;" &
+        Trim (P.Char_Color.Red'Image) & ";" &
+        Trim (P.Char_Color.Green'Image) & ";" &
+        Trim (P.Char_Color.Blue'Image) & "m";
+      BG : constant String := CSI & "48;2;" &
+        Trim (P.Background_Color.Red'Image) & ";" &
+        Trim (P.Background_Color.Green'Image) & ";" &
+        Trim (P.Background_Color.Blue'Image) & "m";
+      BOLD : constant String := CSI & "1m";
+      ITALIC : constant String := CSI & "3m";
+      UNDERLINE : constant String := CSI & "4m";
+      STRIKETHROUGH : constant String := CSI & "9m";
+
+      FORMAT : constant String :=
+        FG &
+        BG &
+        (if P.Is_Bold then BOLD else "") &
+        (if P.Is_Italic then ITALIC else "") &
+        (if P.Is_Underline then UNDERLINE else "") &
+        (if P.Is_Strikethrough then STRIKETHROUGH else "");
+   begin
+      return Ada.Characters.Conversions.To_Wide_Wide_String (
+         FORMAT & P.Char & RESET
+      );
+   end "+";
+
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is
       entry Wait (V : out Boolean)

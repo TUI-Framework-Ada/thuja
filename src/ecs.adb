@@ -909,8 +909,6 @@ package body ECS is
    -- SYSTEM: BUFFER DRAW (TERMINAL OUTPUT)
    --===========================================================================
 
-   --  TODO: Move code of local functions (Trim, etc) into Graphics and make
-   --    them use constant, fixed-length strings
    --  TODO: Undo stateful optimization, replace with separated checking,
    --    string conversion, and printing (the hot loop issue)
    --  TODO: Compare the current framebuffer against the other one & remove
@@ -921,33 +919,12 @@ package body ECS is
 
       package GFX renames Graphics;
 
-      function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
-      function FG (P : Pixel_t) return String is
-        (GFX.CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
-             & Trim (P.Char_Color.Green'Image) & ";"
-             & Trim (P.Char_Color.Blue'Image) & "m");
-      function BG (P : Pixel_t) return String is
-        (GFX.CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
-             & Trim (P.Background_Color.Green'Image) & ";"
-             & Trim (P.Background_Color.Blue'Image) & "m");
-      function Bold (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Bold then "1m" else "22m"));
-      function Italic (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Italic then "3m" else "23m"));
-      function Underline (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Underline then "4m" else "24m"));
-      function Strikethrough (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Strikethrough then "9m" else "29m"));
-      function Format (P : Pixel_t) return String is
-         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
-        (GFX.CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
-      Reset : constant String := GFX.CSI & "0m";
+        (GFX.CSI & GFX.Trim (Row'Image) & ";" & GFX.Trim (Col'Image) & "H");
       function Convert (P : Pixel_t; Row : TUI_Height; Col : TUI_Width) return Wide_Wide_String is
-         use Ada.Characters.Conversions;
-         Result : constant String := Move (Row, Col) & Format (P) & P.Char & Reset;
+         POS : constant String := Move (Row, Col);
       begin
-         return To_Wide_Wide_String (Result);
+         return Ada.Characters.Conversions.To_Wide_Wide_String (POS) & (+P);
       end Convert;
 
       Entity_List : Entity_Components_Ptr;

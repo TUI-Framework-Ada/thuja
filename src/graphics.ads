@@ -44,6 +44,8 @@ package Graphics is
    Chartreuse    : constant Color_t := (127, 255, 0);
    Forest_Green  : constant Color_t := (34,  139, 34);
 
+   function Trim (S : String) return String;
+
    type Pixel_t is record
       Char             : Character := ' ';
       Char_Color       : Color_t   := White;
@@ -53,6 +55,8 @@ package Graphics is
       Is_Underline     : Boolean   := False;
       Is_Strikethrough : Boolean   := False;
    end record;
+
+   function "+" (P : Pixel_t) return Wide_Wide_String;
 
    --  Maximum resolution for the display (Change later)
    type TUI_Width is new Integer range 1 .. 80;
