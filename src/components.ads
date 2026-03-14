@@ -28,6 +28,7 @@ package Components is
       Framebuffer_1   : aliased Buffer_T;
       Framebuffer_2   : aliased Buffer_T; --  Double-buffering
       Drawing_FB      : Protected_DB_Ptr; --  Which FB the render thread should use
+      First_Frame     : Boolean := True; --  Only true on first rendering frame, always draws full TUI
       Backbuffer      : Buffer_T;
       Terminal_Width  : TUI_Width;
       Terminal_Height : TUI_Height;

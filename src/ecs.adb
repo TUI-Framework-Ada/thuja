@@ -921,22 +921,23 @@ package body ECS is
 
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (GFX.CSI & GFX.Trim (Row'Image) & ";" & GFX.Trim (Col'Image) & "H");
-      function Convert (P : Pixel_t; Row : TUI_Height; Col : TUI_Width) return Wide_Wide_String is
-         POS : constant String := Move (Row, Col);
-      begin
-         return Ada.Characters.Conversions.To_Wide_Wide_String (POS) & (+P);
-      end Convert;
 
       Entity_List : Entity_Components_Ptr;
       Search_Components : constant Component_Tag_Vector.Vector :=
         Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       RI_Component_List : Components_Ptr;
-      FB_Pixel : Pixel_t;
       Drawing_From_FB_1 : Boolean;
 
       type Drawing_Ptr is access all Buffer_T;
       Drawing : Drawing_Ptr;
+      Rendering : Drawing_Ptr;
+
+      type PosPixel_t is record
+         X : TUI_Width;
+         Y : TUI_Height;
+         P : Pixel_t;
+      end record;
    begin
       Entity_List_PO.Claim_Reading (Entity_List);
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
@@ -950,31 +951,74 @@ package body ECS is
               Render_Info_Component_T
                 (Get_Component_Ptr
                    (RI_Component_List, Render_Info_Component_T'Tag).all);
+            type Flat_Buffer_t is range 1 .. Positive (TUI_Width'Last) * Positive(TUI_Height'Last);
+            All_Pixels : array (Flat_Buffer_t) of PosPixel_t;
+            Updated_Pixels : array (Flat_Buffer_t) of PosPixel_t;
+            All_Pixels_Length : Natural := 0;
+            Updated_Pixels_Length : Natural := 0;
          begin
             RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
             -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
-            Drawing :=
-              (if Drawing_From_FB_1
-               then RI.Framebuffer_1'Access
-               else RI.Framebuffer_2'Access);
+            if Drawing_From_FB_1 then
+               Drawing := RI.Framebuffer_1'Access;
+               Rendering := RI.Framebuffer_2'Access;
+            else
+               Drawing := RI.Framebuffer_2'Access;
+               Rendering := RI.Framebuffer_1'Access;
+            end if;
 
-            --  Begin comparing FB to BB and drawing
-            for Y in TUI_Height'First .. RI.Terminal_Height loop
-               for X in TUI_Width'First .. RI.Terminal_Width loop
-                  if Get_Buffer_Pixel (Drawing.all, X, Y)
-                    /= Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-                  then
-                     --  Fetch buffer pixels
-                     FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
+            --  Record pixels with their positions into array
+            declare
+               All_Pixels_Index : Flat_Buffer_t := 1;
+            begin
+               for Y in TUI_Height'First .. RI.Terminal_Height loop
+                  for X in TUI_Width'First .. RI.Terminal_Width loop
+                     All_Pixels (All_Pixels_Index) := (
+                       X => X,
+                       Y => Y,
+                       P => Graphics.Get_Buffer_Pixel (Drawing.all, X, Y)
+                     );
+                     All_Pixels_Length := All_Pixels_Length + 1;
+                     if All_Pixels_Index /= Flat_Buffer_t'Last then
+                        All_Pixels_Index := All_Pixels_Index + 1;
+                     end if;
+                  end loop;
+               end loop;
+            end;
 
-                     -- Draw to terminal
-                     Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
+            --  Filter out pixels that aren't different (unless this is the first frame)
+            declare
+               Cur : PosPixel_t;
+               Back : Pixel_t;
+               Updated_Pixels_Index : Flat_Buffer_t := 1;
+            begin
+               for All_Pixels_Index in 1 .. All_Pixels_Length loop
+                  Cur := All_Pixels (Flat_Buffer_t (All_Pixels_Index));
+                  Back := Graphics.Get_Buffer_Pixel (Rendering.all, Cur.X, Cur.Y);
 
-                     -- Update backbuffer
-                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                  if not (Cur.P = Back) or RI.First_Frame then
+                     Updated_Pixels (Updated_Pixels_Index) := Cur;
+                     Updated_Pixels_Length := Updated_Pixels_Length + 1;
+                     if Updated_Pixels_Index /= Flat_Buffer_t'Last then
+                        Updated_Pixels_Index := Updated_Pixels_Index + 1;
+                     end if;
                   end if;
                end loop;
-            end loop;
+            end;
+
+            --  Draw updated pixels
+            declare
+               Px : PosPixel_t;
+            begin
+               for Updated_Pixels_Index in 1 .. Updated_Pixels_Length loop
+                  Px := Updated_Pixels (Flat_Buffer_t (Updated_Pixels_Index));
+                  Ada.Text_IO.Put (Move (Px.Y, Px.X));
+                  Ada.Wide_Wide_Text_IO.Put (+(Px.P));
+               end loop;
+            end;
+
+            --  Update first-frame var (if needed)
+            RI.First_Frame := False;
 
             --  Release RenderInfo
             RI.Drawing_FB.all.Post;

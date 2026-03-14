@@ -695,8 +695,8 @@ procedure HTop_Demo is
          TextRenderSystem(Entity_System);
          ProgressBarRenderSystem(Entity_System);
          BufferCopySystem(Entity_System);
-         BufferDrawSystem(Entity_System);
          DoubleBufferFlagSystem(Entity_System);
+         BufferDrawSystem(Entity_System);
          Next_Update := Next_Update + Update_Interval;
          delay until Next_Update;
       end loop;

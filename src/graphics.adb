@@ -39,6 +39,21 @@ package body Graphics is
       );
    end "+";
 
+   function "=" (A, B : Pixel_t) return Boolean is
+   begin
+      return
+        A.Char = B.Char and then (
+          (if A.Char = ' '
+           then A.Char_Color = B.Char_Color and
+             A.Is_Bold = B.Is_Bold and
+             A.Is_Italic = B.Is_Italic
+           else True) and
+          A.Background_Color = B.Background_Color and
+          A.Is_Underline = B.Is_Underline and
+          A.Is_Strikethrough = B.Is_Strikethrough
+        );
+   end "=";
+
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is
       entry Wait (V : out Boolean)

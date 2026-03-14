@@ -57,6 +57,7 @@ package Graphics is
    end record;
 
    function "+" (P : Pixel_t) return Wide_Wide_String;
+   function "=" (A, B : Pixel_t) return Boolean;
 
    --  Maximum resolution for the display (Change later)
    type TUI_Width is new Integer range 1 .. 80;
