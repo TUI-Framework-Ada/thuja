@@ -1,6 +1,3 @@
-with Ada.Strings.Unbounded;
-use Ada.Strings.Unbounded;
-
 package body Text_Editor is
 
    ----------------------------------------------------------------------------
