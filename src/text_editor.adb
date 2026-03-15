@@ -179,8 +179,6 @@ package body Text_Editor is
             Sticky_Col  := Current_Col;
          end;
 
-         Reflow_Up_From (Current_Line);
-
       elsif Current_Line > 0 then
          declare
             Above_Len : constant Natural :=
@@ -196,7 +194,6 @@ package body Text_Editor is
          end;
 
          Reflow_From (Current_Line);
-         Reflow_Up_From (Current_Line);
       end if;
    end Handle_Backspace;
 
