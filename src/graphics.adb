@@ -1,5 +1,7 @@
 --  Package Body for Graphics
+with Interfaces.C; use Interfaces.C;
 with System;
+with System.Storage_Elements;
 with Ada.Wide_Wide_Text_IO;
 with Ada.Characters.Conversions;
 
