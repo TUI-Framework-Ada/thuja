@@ -10,15 +10,14 @@ project Demos is
    -- which can cause "not a source of project" errors on some systems.
    -- Point to the source file explicitly to avoid any Source_Dirs resolution issues
    for Main use (
-      --"comprehensive_demo", 
-      --"resize_and_movement_demo", 
-      -- "keyboard_widget", 
-      -- "tab_demo", 
-      -- "command_palette", 
-      -- "demos", 
-      -- "presentation_2_demo", 
-      -- "task_manager_demo", 
-      "htop_demo");
+   -- "comprehensive_demo", 
+   -- "resize_and_movement_demo", 
+   -- "keyboard_widget", 
+   -- "tab_demo", 
+   -- "command_palette", 
+   -- "demos", 
+   -- "presentation_2_demo",
+   "text_editor_demo");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches &
