@@ -1,3 +1,4 @@
+-- with Flexbox;
 with Input_Handling; use Input_Handling;
 with Graphics;       use Graphics;
 with ECS;            use ECS;
@@ -6,6 +7,12 @@ with Components;     use Components;
 with Ada.Strings.Unbounded;
 with Ada.Containers.Vectors;
 with System_Stats;
+
+-- TODO:
+-- Add more content to the HTop tab (disk IO, network IO, process list)
+-- Correct HTOP CALLS.
+-- 
+
 
 procedure Tab_Demo is
 
@@ -23,15 +30,7 @@ procedure Tab_Demo is
    Term_Height : constant TUI_Height := 50;
    Content_Top : constant TUI_Height := 4;
 
-   type Demo_ID is (Demo_Boxes, Demo_HTop, Demo_Editor);
-   Active_Demo : Demo_ID := Demo_Boxes;
-
    World : Entity_Components_PO;
-
-   Chrome_EIDs : Entity_ID_Vector.Vector;
-   Boxes_EIDs  : Entity_ID_Vector.Vector;
-   HTop_EIDs   : Entity_ID_Vector.Vector;
-   Editor_EIDs : Entity_ID_Vector.Vector;
 
    ---------------------------------------------------------------------------
    --  Box demo
@@ -84,9 +83,9 @@ procedure Tab_Demo is
    Current_Col  : Natural := 0;
    Sticky_Col   : Natural := 0;
 
-   Gutter_Width : constant Positive := 4;
+   Gutter_Width  : constant Positive := 4;
    Ed_Text_Width : constant Positive := 80 - Gutter_Width - 2;
-   Editor_Rows  : constant Positive := 46;   --  50 rows - 4 chrome rows
+   Editor_Rows   : constant Positive := 46;
 
    type Editor_Mode_T is (Navigation, Insert);
    Ed_Mode : Editor_Mode_T := Navigation;
@@ -116,293 +115,115 @@ procedure Tab_Demo is
       return Result;
    end Pad;
 
-   procedure Write_To_Buffer
-     (Buf  : in out Buffer_T;
-      Col  : in     TUI_Width;
-      Row  : in     TUI_Height;
-      Text : in     String_t;
-      FG   : in     Color_t;
-      BG   : in     Color_t;
-      Bold : in     Boolean_t := False)
-   is
-      X : TUI_Width := Col;
-   begin
-      for I in Text'Range loop
-         exit when X > Buf.Width;
-         Set_Buffer_Pixel (Buf, X, Row,
-            (Char             => Text (I),
-             Char_Color       => FG,
-             Background_Color => BG,
-             Is_Bold          => Bold,
-             Is_Italic        => False,
-             Is_Underline     => False,
-             Is_Strikethrough => False));
-         X := X + 1;
-      end loop;
-   end Write_To_Buffer;
-
-   procedure Fill_Row
-     (Buf : in out Buffer_T;
-      Row : in     TUI_Height;
-      BG  : in     Color_t)
-   is
-   begin
-      for X in TUI_Width'First .. Buf.Width loop
-         Set_Buffer_Pixel (Buf, X, Row,
-            (Char             => ' ',
-             Char_Color       => BG,
-             Background_Color => BG,
-             Is_Bold          => False,
-             Is_Italic        => False,
-             Is_Underline     => False,
-             Is_Strikethrough => False));
-      end loop;
-   end Fill_Row;
-
    ---------------------------------------------------------------------------
-   --  Poison the backbuffer so BufferDrawSystem does a full repaint
-   ---------------------------------------------------------------------------
-   procedure Reset_Backbuffer is
-      EL : Entity_Components_Ptr;
-      CP : Components_Ptr;
-      RI : Render_Info_Component_T;
-   begin
-      World.Claim_Writing (EL);
-      CP := Get_Entity_Components (EL.all, To_EID ("render_info"));
-      if CP /= null then
-         RI := Render_Info_Component_T (
-            Get_Component (CP.all, To_CID ("RenderInfo")));
-         for RX in TUI_Width'First .. Term_Width loop
-            for RY in TUI_Height'First .. Term_Height loop
-               Set_Buffer_Pixel (RI.Backbuffer, RX, RY,
-                  (Char             => Character_t'Val (1),
-                   Char_Color       => White,
-                   Background_Color => White,
-                   Is_Bold          => True,
-                   Is_Italic        => False,
-                   Is_Underline     => False,
-                   Is_Strikethrough => False));
-            end loop;
-         end loop;
-         Add_Component (CP.all, To_CID ("RenderInfo"), RI);
-      end if;
-      World.Release_Writing;
-   end Reset_Backbuffer;
-
-   ---------------------------------------------------------------------------
-   --  Swap root's children: chrome + whichever demo is active
-   ---------------------------------------------------------------------------
-   procedure Set_Active_Tab is
-      EL : Entity_Components_Ptr;
-      RC : Components_Ptr;
-      RW : Widget_Component_T;
-   begin
-      World.Claim_Writing (EL);
-      RC := Get_Entity_Components (EL.all, To_EID ("root"));
-      RW := Widget_Component_T (
-         Get_Component (RC.all, To_CID ("WidgetComponent")));
-
-      RW.Children.Clear;
-
-      for EID of Chrome_EIDs loop
-         RW.Children.Append (EID);
-      end loop;
-
-      case Active_Demo is
-         when Demo_Boxes  =>
-            for EID of Boxes_EIDs  loop RW.Children.Append (EID); end loop;
-         when Demo_HTop   =>
-            for EID of HTop_EIDs   loop RW.Children.Append (EID); end loop;
-         when Demo_Editor =>
-            for EID of Editor_EIDs loop RW.Children.Append (EID); end loop;
-      end case;
-
-      Add_Component (RC.all, To_CID ("WidgetComponent"), RW);
-      World.Release_Writing;
-   end Set_Active_Tab;
-
-   ---------------------------------------------------------------------------
-   --  Create world root + render info
-   ---------------------------------------------------------------------------
-   procedure Create_World is
-      CP          : Components_Ptr;
-      RI          : Render_Info_Component_T;
-      RW          : Widget_Component_T;
-      Root_Marker : Root_Widget_Component_T;
-      Root_BG     : Background_Color_Component_T;
-   begin
-      CP := Add_Entity (World, To_EID ("render_info"));
-      RI.Terminal_Width       := Term_Width;
-      RI.Terminal_Height      := Term_Height;
-      RI.Prev_Terminal_Width  := Natural (Term_Width);
-      RI.Prev_Terminal_Height := Natural (Term_Height);
-      RI.Backbuffer           := Create_Buffer (Term_Width, Term_Height);
-      RI.Framebuffer_1        := Create_Buffer (Term_Width, Term_Height);
-      RI.Framebuffer_2        := Create_Buffer (Term_Width, Term_Height);
-      RI.Drawing_FB           := new Protected_DB;
-
-      for RX in TUI_Width'First .. Term_Width loop
-         for RY in TUI_Height'First .. Term_Height loop
-            Set_Buffer_Pixel (RI.Backbuffer, RX, RY,
-               (Char             => Character_t'Val (1),
-                Char_Color       => White,
-                Background_Color => White,
-                Is_Bold          => True,
-                Is_Italic        => False,
-                Is_Underline     => False,
-                Is_Strikethrough => False));
-         end loop;
-      end loop;
-
-      Add_Component (CP.all, To_CID ("RenderInfo"), RI);
-
-      CP := Add_Entity (World, To_EID ("root"));
-      RW.Position_X    := TUI_Width'First;
-      RW.Position_Y    := TUI_Height'First;
-      RW.Size_Width    := Term_Width;
-      RW.Size_Height   := Term_Height;
-      RW.Render_Buffer := Create_Buffer (Term_Width, Term_Height);
-      Add_Component (CP.all, To_CID ("WidgetComponent"),  RW);
-      Add_Component (CP.all, To_CID ("RootWidget"),       Root_Marker);
-      Root_BG.Background_Color := Black;
-      Add_Component (CP.all, To_CID ("BackgroundColorComponent"), Root_BG);
-   end Create_World;
-
-   ---------------------------------------------------------------------------
-   --  Create chrome entities and populate Chrome_EIDs
+   --  Create chrome entities
    ---------------------------------------------------------------------------
    procedure Create_Chrome is
       CP : Components_Ptr;
-      W  : Widget_Component_T;
-
-      procedure Make_Strip (Name : String_t; Row : TUI_Height) is
-      begin
-         CP := Add_Entity (World, To_EID (Name));
-         W.Position_X    := TUI_Width'First;
-         W.Position_Y    := Row;
-         W.Size_Width    := Term_Width;
-         W.Size_Height   := 1;
-         W.Render_Buffer := Create_Buffer (Term_Width, 1);
-         Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-         Chrome_EIDs.Append (To_EID (Name));
-      end Make_Strip;
    begin
-      Make_Strip ("chrome_help",   1);
-      Make_Strip ("chrome_tabbar", 2);
-      Make_Strip ("chrome_sep",    3);
+      CP := Make_Widget (World, "chrome_help",   TUI_Width'First, 1, Term_Width, 1);
+      CP := Make_Widget (World, "chrome_tabbar", TUI_Width'First, 2, Term_Width, 1);
+      CP := Make_Widget (World, "chrome_sep",    TUI_Width'First, 3, Term_Width, 1);
    end Create_Chrome;
 
    ---------------------------------------------------------------------------
    --  Update chrome buffers each frame
    ---------------------------------------------------------------------------
-   procedure Update_Chrome is
-      EL : Entity_Components_Ptr;
+procedure Update_Chrome is
+   EL          : Entity_Components_Ptr;
+   Current_Tab : constant Natural := Get_Active_Tab (World);
 
-      Help_BG         : constant Color_t :=
-         (Red => 30,  Green => 30,  Blue => 50);
-      Help_FG         : constant Color_t :=
-         (Red => 180, Green => 200, Blue => 220);
-      Tab_BG_Active   : constant Color_t :=
-         (Red => 70,  Green => 130, Blue => 180);
-      Tab_BG_Inactive : constant Color_t :=
-         (Red => 40,  Green => 40,  Blue => 60);
-      Sep_FG          : constant Color_t :=
-         (Red => 70,  Green => 130, Blue => 180);
+   Help_BG         : constant Color_t := (Red => 30,  Green => 30,  Blue => 50);
+   Help_FG         : constant Color_t := (Red => 180, Green => 200, Blue => 220);
+   Tab_BG_Active   : constant Color_t := (Red => 70,  Green => 130, Blue => 180);
+   Tab_BG_Inactive : constant Color_t := (Red => 40,  Green => 40,  Blue => 60);
+   Sep_FG          : constant Color_t := (Red => 70,  Green => 130, Blue => 180);
 
-      Demo_Labels : constant array (Demo_ID) of String_t (1 .. 14) := [
-         Demo_Boxes  => "  Tab Order   ",
-         Demo_HTop   => "    HTop      ",
-         Demo_Editor => "  Text Editor "
-      ];
+   Labels : constant array (0 .. 2) of String_t (1 .. 14) :=
+      ["  Tab Order   ", "    HTop      ", "  Text Editor "];
 
-      --  Help text is context-sensitive for the editor tab
-      function Help_Text return String_t is
-      begin
-         if Active_Demo = Demo_Editor and then Ed_Mode = Insert then
-            return "INSERT: type to edit  |  ESC: back to Navigation                    " &
-                   "        ";
-         else
-            return " [ Prev  ] Next  |  Tab: Focus  |  Esc: Quit                    " &
-                   "         ";
-         end if;
-      end Help_Text;
-
+   function Help_Text return String_t is
    begin
-      World.Claim_Writing (EL);
+      if Current_Tab = 2 and then Ed_Mode = Insert then
+         return "INSERT: type to edit  |  ESC: back to Navigation                    " &
+                "        ";
+      else
+         return " [ Prev  ] Next  |  Tab: Focus  |  Esc: Quit                    " &
+                "         ";
+      end if;
+   end Help_Text;
 
-      --  Help bar
-      declare
-         CP : constant Components_Ptr :=
-            Get_Entity_Components (EL.all, To_EID ("chrome_help"));
-         W  : Widget_Component_T :=
-            Widget_Component_T (Get_Component (CP.all, To_CID ("WidgetComponent")));
-      begin
-         Fill_Row (W.Render_Buffer, 1, Help_BG);
-         Write_To_Buffer (W.Render_Buffer, 1, 1,
-            Help_Text, Help_FG, Help_BG);
-         Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-      end;
+begin
+   World.Claim_Writing (EL);
 
-      --  Tab bar
-      declare
-         CP  : constant Components_Ptr :=
-            Get_Entity_Components (EL.all, To_EID ("chrome_tabbar"));
-         W   : Widget_Component_T :=
-            Widget_Component_T (Get_Component (CP.all, To_CID ("WidgetComponent")));
-         Col : TUI_Width := 2;
-      begin
-         Fill_Row (W.Render_Buffer, 1, Tab_BG_Inactive);
-         for D in Demo_ID loop
-            declare
-               Lbl    : constant String_t  := Demo_Labels (D);
-               Is_Act : constant Boolean_t := (D = Active_Demo);
-               BG     : constant Color_t   :=
-                  (if Is_Act then Tab_BG_Active else Tab_BG_Inactive);
-               FG     : constant Color_t   :=
-                  (if Is_Act then White
-                   else (Red => 140, Green => 150, Blue => 170));
-            begin
-               Write_To_Buffer (W.Render_Buffer, Col, 1,
-                  Lbl, FG, BG, Bold => Is_Act);
-               Col := Col + TUI_Width (Lbl'Length) + 1;
-            end;
-         end loop;
-         Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-      end;
+   declare
+      CP : constant Components_Ptr :=
+         Get_Entity_Components (EL.all, To_EID ("chrome_help"));
+      W  : Widget_Component_T :=
+         Widget_Component_T (Get_Component (CP.all, To_CID ("WidgetComponent")));
+   begin
+      Fill_Row (W.Render_Buffer, 1, Help_BG);
+      Write_To_Buffer (W.Render_Buffer, 1, 1, Help_Text, Help_FG, Help_BG);
+      Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+   end;
 
-      --  Separator
-      declare
-         CP : constant Components_Ptr :=
-            Get_Entity_Components (EL.all, To_EID ("chrome_sep"));
-         W  : Widget_Component_T :=
-            Widget_Component_T (Get_Component (CP.all, To_CID ("WidgetComponent")));
-      begin
-         for X in TUI_Width'First .. Term_Width loop
-            Set_Buffer_Pixel (W.Render_Buffer, X, 1,
-               (Char             => '-',
-                Char_Color       => Sep_FG,
-                Background_Color => Black,
-                Is_Bold          => False,
-                Is_Italic        => False,
-                Is_Underline     => False,
-                Is_Strikethrough => False));
-         end loop;
-         Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-      end;
+   declare
+      CP  : constant Components_Ptr :=
+         Get_Entity_Components (EL.all, To_EID ("chrome_tabbar"));
+      W   : Widget_Component_T :=
+         Widget_Component_T (Get_Component (CP.all, To_CID ("WidgetComponent")));
+      Col : TUI_Width := 2;
+   begin
+      Fill_Row (W.Render_Buffer, 1, Tab_BG_Inactive);
+      for D in 0 .. 2 loop
+         declare
+            Lbl    : constant String_t  := Labels (D);
+            Is_Act : constant Boolean_t := (D = Current_Tab);
+            BG     : constant Color_t   :=
+               (if Is_Act then Tab_BG_Active else Tab_BG_Inactive);
+            FG     : constant Color_t   :=
+               (if Is_Act then White
+                else (Red => 140, Green => 150, Blue => 170));
+         begin
+            Write_To_Buffer (W.Render_Buffer, Col, 1, Lbl, FG, BG, Bold => Is_Act);
+            Col := Col + TUI_Width (Lbl'Length) + 1;
+         end;
+      end loop;
+      Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+   end;
 
-      World.Release_Writing;
-   end Update_Chrome;
+   declare
+      CP : constant Components_Ptr :=
+         Get_Entity_Components (EL.all, To_EID ("chrome_sep"));
+      W  : Widget_Component_T :=
+         Widget_Component_T (Get_Component (CP.all, To_CID ("WidgetComponent")));
+   begin
+      for X in TUI_Width'First .. Term_Width loop
+         Set_Buffer_Pixel (W.Render_Buffer, X, 1,
+            (Char             => '-',
+             Char_Color       => Sep_FG,
+             Background_Color => Black,
+             Is_Bold          => False,
+             Is_Italic        => False,
+             Is_Underline     => False,
+             Is_Strikethrough => False));
+      end loop;
+      Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+   end;
 
+   World.Release_Writing;
+end Update_Chrome;
    ---------------------------------------------------------------------------
-   --  Create box entities, populate Boxes_EIDs
+   --  Create box entities
    ---------------------------------------------------------------------------
    procedure Create_Boxes is
       CP  : Components_Ptr;
-      W   : Widget_Component_T;
-      BG  : Background_Color_Component_T;
       Txt : Text_Component_T;
       Sel : Selectable_Component_T;
+      Tab : Tab_Page_Component_T;
    begin
+      Tab.Tab_Index := 0;
+
       for I in Boxes'Range loop
          declare
             Name : constant String_t :=
@@ -410,18 +231,16 @@ procedure Tab_Demo is
                          then String_t'(1 => Character_t'Val (48 + I))
                          else "10");
          begin
-            CP := Add_Entity (World, To_EID (Name));
+            CP := Make_Widget_With_BG (World, Name,
+                     Boxes (I).X, Boxes (I).Y, Box_W, Box_H, Box_Colors (I));
 
-            W.Position_X    := Boxes (I).X;
-            W.Position_Y    := Boxes (I).Y;
-            W.Size_Width    := Box_W;
-            W.Size_Height   := Box_H;
-            W.Has_Focus     := (Boxes (I).Order = 1);
-            W.Render_Buffer := Create_Buffer (Box_W, Box_H);
-            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-
-            BG.Background_Color := Box_Colors (I);
-            Add_Component (CP.all, To_CID ("BackgroundColorComponent"), BG);
+            declare
+               W : Widget_Component_T :=
+                  Widget_Component_T (Get_Component (CP.all, To_CID ("WidgetComponent")));
+            begin
+               W.Has_Focus := (Boxes (I).Order = 1);
+               Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+            end;
 
             Txt.Text       := SU.To_Unbounded_String (Boxes (I).Label);
             Txt.Text_Color := White;
@@ -433,110 +252,85 @@ procedure Tab_Demo is
             Sel.Tab_Order := Boxes (I).Order;
             Add_Component (CP.all, To_CID ("SelectableComponent"), Sel);
 
-            Boxes_EIDs.Append (To_EID (Name));
+            Add_Component (CP.all, To_CID ("TabPage"), Tab);
          end;
       end loop;
    end Create_Boxes;
 
    ---------------------------------------------------------------------------
-   --  Create HTop entities, populate HTop_EIDs
+   --  Create HTop entities
    ---------------------------------------------------------------------------
    procedure Create_HTop_Entities is
-      CP          : Components_Ptr;
-      W           : Widget_Component_T;
-      T           : Text_Component_T;
-      BG          : Background_Color_Component_T;
-      PB          : Progress_Bar_Component_T;
-      Num_Cores   : constant Natural := Natural'Min (SS.Get_CPU_Count, 8);
-      Row         : Natural := Natural (Content_Top);
+      CP        : Components_Ptr;
+      T         : Text_Component_T;
+      PB        : Progress_Bar_Component_T;
+      Tab       : Tab_Page_Component_T;
+      Num_Cores : constant Natural := Natural'Min (SS.Get_CPU_Count, 8);
+      Row       : Natural := Natural (Content_Top);
 
-      procedure Make
-        (Name : String_t; X : TUI_Width; Y : TUI_Height;
-         Wd   : TUI_Width; H : TUI_Height; Fill : Color_t)
-      is
+      procedure Add_Text (Text : String_t; Color : Color_t; Bold : Boolean_t) is
       begin
-         CP := Add_Entity (World, To_EID (Name));
-         W.Position_X    := X;
-         W.Position_Y    := Y;
-         W.Size_Width    := Wd;
-         W.Size_Height   := H;
-         W.Render_Buffer := Create_Buffer (Wd, H);
-         Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-         BG.Background_Color := Fill;
-         Add_Component (CP.all, To_CID ("BackgroundColorComponent"), BG);
-         HTop_EIDs.Append (To_EID (Name));
-      end Make;
-
-   begin
-      for C in 0 .. Num_Cores - 1 loop
-         Make ("cpulbl" & Img (C), 2, TUI_Height (Row), 10, 1,
-               (Red => 10, Green => 20, Blue => 10));
-         T.Text := SU.To_Unbounded_String ("CPU" & Img (C) & ":");
-         T.Text_Color := White; T.Offset_X := 1; T.Offset_Y := 1;
-         T.Is_Bold := False;
+         T.Text       := SU.To_Unbounded_String (Text);
+         T.Text_Color := Color;
+         T.Offset_X   := 1; T.Offset_Y := 1; T.Is_Bold := Bold;
          Add_Component (CP.all, To_CID ("TextComponent"), T);
+      end Add_Text;
+   begin
+      Tab.Tab_Index := 1;
 
-         Make ("cpubar" & Img (C), 13, TUI_Height (Row), 60, 1,
-               (Red => 10, Green => 20, Blue => 10));
+      for C in 0 .. Num_Cores - 1 loop
+         CP := Make_Widget_With_BG (World, "cpulabel" & Img (C), 2, TUI_Height (Row), 10, 1, (Red => 10, Green => 20, Blue => 10));
+         Add_Component (CP.all, To_CID ("TabPage"), Tab);
+         Add_Text ("CPU " & Img (C), White, True);
+
+         CP := Make_Widget_With_BG (World, "cpubar" & Img (C), 13, TUI_Height (Row), 60, 1, (Red => 10, Green => 20, Blue => 10));
+         Add_Component (CP.all, To_CID ("TabPage"), Tab);
          PB.Value := 0.0; PB.Filled_Char := '='; PB.Empty_Char := ' ';
          PB.Filled_Color := Green; PB.Empty_Color := Gray;
          PB.Show_Percentage := True;
          Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-
          Row := Row + 1;
       end loop;
 
       Row := Row + 1;
 
-      Make ("memlbl", 2, TUI_Height (Row), 76, 1,
-            (Red => 20, Green => 15, Blue => 5));
-      T.Text := SU.To_Unbounded_String ("Memory:");
-      T.Text_Color := White; T.Offset_X := 1; T.Offset_Y := 1;
-      T.Is_Bold := True;
-      Add_Component (CP.all, To_CID ("TextComponent"), T);
+      CP := Make_Widget_With_BG (World, "memlabel", 2, TUI_Height (Row), 76, 1, (Red => 20, Green => 15, Blue => 5));
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+      Add_Text ("Memory Usage:", White, True);
       Row := Row + 1;
 
-      Make ("rambar", 2, TUI_Height (Row), 60, 1,
-            (Red => 20, Green => 15, Blue => 5));
+      CP := Make_Widget_With_BG (World, "rambar", 2, TUI_Height (Row), 60, 1, (Red => 20, Green => 15, Blue => 5));
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
       PB.Value := 0.0; PB.Filled_Color := Yellow;
       Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
       Row := Row + 1;
 
-      Make ("swpbar", 2, TUI_Height (Row), 60, 1,
-            (Red => 20, Green => 15, Blue => 5));
-      PB.Value := 0.0; PB.Filled_Color := Hot_Pink;
+      CP := Make_Widget_With_BG (World, "swpbar", 2, TUI_Height (Row), 60, 1, (Red => 20, Green => 15, Blue => 5));
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+      PB.Value := 0.0; PB.Filled_Color := Red;
       Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
       Row := Row + 2;
 
-      Make ("disklbl", 2, TUI_Height (Row), 76, 1,
-            (Red => 5, Green => 15, Blue => 20));
-      T.Text := SU.To_Unbounded_String ("Disk (/):"); T.Text_Color := White;
-      T.Offset_X := 1; T.Offset_Y := 1; T.Is_Bold := True;
-      Add_Component (CP.all, To_CID ("TextComponent"), T);
+      CP := Make_Widget_With_BG (World, "disklabel", 2, TUI_Height (Row), 76, 1, (Red => 5, Green => 15, Blue => 20));
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+      Add_Text ("Disk Usage:", White, True);
       Row := Row + 1;
 
-      Make ("diskbar", 2, TUI_Height (Row), 60, 1,
-            (Red => 5, Green => 15, Blue => 20));
-      PB.Value := 0.0; PB.Filled_Color := Cyan;
+      CP := Make_Widget_With_BG (World, "diskbar", 2, TUI_Height (Row), 60, 1, (Red => 5, Green => 15, Blue => 20));
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+      PB.Value := 0.0; PB.Filled_Color := Green;
       Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
       Row := Row + 2;
 
-      Make ("procheader", 2, TUI_Height (Row), 76, 1,
-            (Red => 15, Green => 15, Blue => 30));
-      T.Text := SU.To_Unbounded_String (
-         Pad ("PID", 7) & Pad ("USER", 10) & Pad ("CPU%", 6) &
-         Pad ("MEM%", 6) & "S  COMMAND");
-      T.Text_Color := Violet; T.Offset_X := 1; T.Offset_Y := 1;
-      T.Is_Bold := True;
-      Add_Component (CP.all, To_CID ("TextComponent"), T);
+      CP := Make_Widget_With_BG (World, "proc_header", 2, TUI_Height (Row), 76, 1, (Red => 15, Green => 15, Blue => 30));
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+      Add_Text (Pad ("PID", 7) & Pad ("USER", 10) & Pad ("CPU%", 6) & Pad ("Mem%", 6) & "S Command", White, True);
       Row := Row + 1;
 
       for R in 0 .. 9 loop
-         Make ("procrow" & Img (R), 2, TUI_Height (Row), 76, 1, Black);
-         T.Text := SU.To_Unbounded_String ("");
-         T.Text_Color := White; T.Offset_X := 1; T.Offset_Y := 1;
-         T.Is_Bold := False;
-         Add_Component (CP.all, To_CID ("TextComponent"), T);
+         CP := Make_Widget_With_BG (World, "procList" & Img (R), 2, TUI_Height (Row), 76, 1, Blue);
+         Add_Component (CP.all, To_CID ("TabPage"), Tab);
+         Add_Text ("", White, False);
          Row := Row + 1;
       end loop;
 
@@ -594,7 +388,7 @@ procedure Tab_Demo is
             (if Swap_Tot_MB > 0
              then Float (Swap_Used_MB) / Float (Swap_Tot_MB) else 0.0);
       begin
-         CP := Get_Entity_Components (EL.all, To_EID ("memlbl"));
+         CP := Get_Entity_Components (EL.all, To_EID ("memlabel"));
          if CP /= null then
             T := Text_Component_T (
                Get_Component (CP.all, To_CID ("TextComponent")));
@@ -631,7 +425,7 @@ procedure Tab_Demo is
       declare
          Disk_Pct : constant Float := SS.Get_Disk_Usage (Disk_Path);
       begin
-         CP := Get_Entity_Components (EL.all, To_EID ("disklbl"));
+         CP := Get_Entity_Components (EL.all, To_EID ("disklabel"));
          if CP /= null then
             T := Text_Component_T (
                Get_Component (CP.all, To_CID ("TextComponent")));
@@ -655,7 +449,7 @@ procedure Tab_Demo is
 
       Procs := SS.Get_Process_List;
       for R in 0 .. 9 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procrow" & Img (R)));
+         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Img (R)));
          if CP /= null then
             T := Text_Component_T (
                Get_Component (CP.all, To_CID ("TextComponent")));
@@ -846,50 +640,31 @@ procedure Tab_Demo is
    end Ed_Status_Text;
 
    ---------------------------------------------------------------------------
-   --  Create editor entities, populate Editor_EIDs
+   --  Create editor entities
    ---------------------------------------------------------------------------
    procedure Create_Editor_Entities is
       CP      : Components_Ptr;
-      W       : Widget_Component_T;
-      BG      : Background_Color_Component_T;
       T       : Text_Component_T;
+      Tab     : Tab_Page_Component_T;
       Ed_H    : constant TUI_Height := TUI_Height (Editor_Rows);
       Ed_BG   : constant Color_t   := (Red => 25, Green => 25, Blue => 25);
       Stat_BG : constant Color_t   := Blue;
    begin
-      --  Main editing area (rows 4 .. 49)
-      CP := Add_Entity (World, To_EID ("ed_area"));
-      W.Position_X    := TUI_Width'First;
-      W.Position_Y    := Content_Top;
-      W.Size_Width    := Term_Width;
-      W.Size_Height   := Ed_H;
-      W.Has_Focus     := True;
-      W.Render_Buffer := Create_Buffer (Term_Width, Ed_H);
-      Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-      BG.Background_Color := Ed_BG;
-      Add_Component (CP.all, To_CID ("BackgroundColorComponent"), BG);
+      Tab.Tab_Index := 2;
+
+      CP := Make_Widget_With_BG (World, "ed_area", TUI_Width'First, Content_Top, Term_Width, Ed_H, Ed_BG);
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
       T.Text       := SU.To_Unbounded_String (Build_Editor_Text);
       T.Text_Color := White;
       T.Offset_X   := 1; T.Offset_Y := 1; T.Is_Bold := False;
       Add_Component (CP.all, To_CID ("TextComponent"), T);
-      Editor_EIDs.Append (To_EID ("ed_area"));
 
-      --  Status bar (row 50)
-      CP := Add_Entity (World, To_EID ("ed_status"));
-      W.Position_X    := TUI_Width'First;
-      W.Position_Y    := Term_Height;
-      W.Size_Width    := Term_Width;
-      W.Size_Height   := 1;
-      W.Has_Focus     := False;
-      W.Render_Buffer := Create_Buffer (Term_Width, 1);
-      Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-      BG.Background_Color := Stat_BG;
-      Add_Component (CP.all, To_CID ("BackgroundColorComponent"), BG);
+      CP := Make_Widget_With_BG (World, "ed_status", TUI_Width'First, Term_Height, Term_Width, 1, Stat_BG);
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
       T.Text       := SU.To_Unbounded_String (Ed_Status_Text);
       T.Text_Color := White;
       T.Offset_X   := 1; T.Offset_Y := 1; T.Is_Bold := False;
       Add_Component (CP.all, To_CID ("TextComponent"), T);
-      Editor_EIDs.Append (To_EID ("ed_status"));
    end Create_Editor_Entities;
 
    ---------------------------------------------------------------------------
@@ -946,15 +721,15 @@ begin
 
    Graphics.Clear_Screen;
 
-   Create_World;
+   Initialize_World (World, Term_Width, Term_Height, Tab_Count => 3);
    Create_Chrome;
    Create_Boxes;
    Create_HTop_Entities;
    Create_Editor_Entities;
 
-   Set_Active_Tab;
    Update_Chrome;
-   Reset_Backbuffer;
+   TabInitSystem (World);
+   ResetBackbufferSystem (World);
    Render;
 
    Input_Reader.Start;
@@ -967,35 +742,25 @@ begin
          exit when Event.Cmd = None
             and then Event.Char_Value = Character_t'Val (0);
 
-         --  [ and ] switch tabs — blocked while editor is in Insert mode
          if (Event.Char_Value = '[' or else Event.Char_Value = ']')
-            and then (Active_Demo /= Demo_Editor or else Ed_Mode = Navigation)
+            and then Ed_Mode = Navigation
          then
             if Event.Char_Value = '[' then
-               Active_Demo := (if Active_Demo = Demo_ID'First
-                               then Demo_ID'Last
-                               else Demo_ID'Pred (Active_Demo));
+               TabSwitchSystem (World, Prev);
             else
-               Active_Demo := (if Active_Demo = Demo_ID'Last
-                               then Demo_ID'First
-                               else Demo_ID'Succ (Active_Demo));
+               TabSwitchSystem (World, Next);
             end if;
-            Ed_Mode := Navigation;
-            Set_Active_Tab;
             Graphics.Clear_Screen;
-            Reset_Backbuffer;
+            ResetBackbufferSystem (World);
             Update_Chrome;
             Render;
 
-         elsif Active_Demo = Demo_Editor then
-            --  Editor input routing
+         elsif Get_Active_Tab (World) = 2 then
             if Ed_Mode = Insert then
                case Event.Cmd is
-
                   when Quit =>
                      Ed_Mode := Navigation;
                      Clamp_Col;
-
                   when Enter =>
                      declare
                         Cur : constant String_t :=
@@ -1013,7 +778,6 @@ begin
                         Current_Col  := 0;
                         Sticky_Col   := 0;
                      end;
-
                   when Tab =>
                      for Sp in 1 .. 4 loop
                         declare
@@ -1046,7 +810,6 @@ begin
                            end if;
                         end;
                      end loop;
-
                   when others =>
                      if Event.Char_Value = Character_t'Val (127)
                         or else Event.Char_Value = Character_t'Val (8)
@@ -1081,7 +844,6 @@ begin
                            Reflow_From (Current_Line);
                            Reflow_Up_From (Current_Line);
                         end if;
-
                      elsif Event.Char_Value >= ' ' then
                         declare
                            S : constant String_t :=
@@ -1114,9 +876,7 @@ begin
                         end;
                      end if;
                end case;
-
             else
-               --  Editor Navigation mode
                case Event.Cmd is
                   when Quit =>
                      Running := False;
@@ -1128,15 +888,13 @@ begin
                            if Current_Line > 0 then
                               Current_Line := Current_Line - 1;
                               Current_Col  := Natural'Min
-                                (Sticky_Col,
-                                 SU.Length (Lines (Current_Line)));
+                                (Sticky_Col, SU.Length (Lines (Current_Line)));
                            end if;
                         when 's' =>
                            if Current_Line < Natural (Lines.Length) - 1 then
                               Current_Line := Current_Line + 1;
                               Current_Col  := Natural'Min
-                                (Sticky_Col,
-                                 SU.Length (Lines (Current_Line)));
+                                (Sticky_Col, SU.Length (Lines (Current_Line)));
                            end if;
                         when 'a' =>
                            if Current_Col > 0 then
@@ -1168,7 +926,6 @@ begin
             end if;
 
          else
-            --  Boxes / HTop input (unchanged from original)
             if Event.Cmd = Quit
                or else Event.Char_Value = Character_t'Val (27)
             then
@@ -1180,17 +937,17 @@ begin
          end if;
       end loop;
 
-      if Tab_Pressed and then Active_Demo = Demo_Boxes then
+      if Tab_Pressed and then Get_Active_Tab (World) = 0 then
          SelectionSystem (World, Tab_Pressed => True);
          Render;
       end if;
 
-      if Active_Demo = Demo_HTop then
+      if Get_Active_Tab (World) = 1 then
          Update_HTop_Stats;
          Render;
       end if;
 
-      if Active_Demo = Demo_Editor then
+      if Get_Active_Tab (World) = 2 then
          Update_Editor_Display;
          Update_Chrome;
          Render;
