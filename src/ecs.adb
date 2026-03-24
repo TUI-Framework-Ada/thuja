@@ -870,7 +870,7 @@ package body ECS is
       Matched_Roots : Entity_ID_Vector.Vector;
       RI_Components : Components_Ptr;
       Root_Components : Components_Ptr;
-      Rendering_To_FB_2 : Boolean;
+      Framebuffer_Index : Framebuffer_Index_t;
    begin
 
       Entity_List_PO.Claim_Reading (Entity_List);
@@ -883,7 +883,7 @@ package body ECS is
             RenderInfo_C : Render_Info_Component_T renames Render_Info_Component_T (
               Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
          begin
-            RenderInfo_C.Drawing_FB.all.Read (Rendering_To_FB_2);
+            Framebuffer_Index := RenderInfo_C.Drawing_FB.all.Back;
 
             for R_Entity_ID of Matched_Roots loop
                Root_Components := Get_Entity_Components (Entity_List.all, R_Entity_ID);
@@ -892,11 +892,7 @@ package body ECS is
                     Get_Component_Ptr (Root_Components, Widget_Component_T'Tag).all);
                begin
 
-                  if Rendering_To_FB_2 then
-                     RecursiveBufferCopy (RenderInfo_C.Framebuffer_2, Root, Root);
-                  else
-                     RecursiveBufferCopy (RenderInfo_C.Framebuffer_1, Root, Root);
-                  end if;
+                  RecursiveBufferCopy (RenderInfo_C.Buffers (Framebuffer_Index), Root, Root);
                end;
             end loop;
          end;
@@ -927,11 +923,9 @@ package body ECS is
         Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       RI_Component_List : Components_Ptr;
-      Drawing_From_FB_1 : Boolean;
 
-      type Drawing_Ptr is access all Buffer_T;
-      Drawing : Drawing_Ptr;
-      Rendering : Drawing_Ptr;
+      Frontbuffer_Index : Framebuffer_Index_t;
+      Backbuffer_Index : Framebuffer_Index_t;
 
       type PosPixel_t is record
          X : TUI_Width;
@@ -957,15 +951,9 @@ package body ECS is
             All_Pixels_Length : Natural := 0;
             Updated_Pixels_Length : Natural := 0;
          begin
-            RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
-            -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
-            if Drawing_From_FB_1 then
-               Drawing := RI.Framebuffer_1'Access;
-               Rendering := RI.Framebuffer_2'Access;
-            else
-               Drawing := RI.Framebuffer_2'Access;
-               Rendering := RI.Framebuffer_1'Access;
-            end if;
+            RI.Drawing_FB.all.Start_Draw;
+            Frontbuffer_Index := RI.Drawing_FB.all.Front;
+            Backbuffer_Index := RI.Drawing_FB.all.Back;
 
             --  Record pixels with their positions into array
             declare
@@ -976,7 +964,7 @@ package body ECS is
                      All_Pixels (All_Pixels_Index) := (
                        X => X,
                        Y => Y,
-                       P => Graphics.Get_Buffer_Pixel (Drawing.all, X, Y)
+                       P => Graphics.Get_Buffer_Pixel (RI.Buffers (Frontbuffer_Index), X, Y)
                      );
                      All_Pixels_Length := All_Pixels_Length + 1;
                      if All_Pixels_Index /= Flat_Buffer_t'Last then
@@ -994,7 +982,7 @@ package body ECS is
             begin
                for All_Pixels_Index in 1 .. All_Pixels_Length loop
                   Cur := All_Pixels (Flat_Buffer_t (All_Pixels_Index));
-                  Back := Graphics.Get_Buffer_Pixel (Rendering.all, Cur.X, Cur.Y);
+                  Back := Graphics.Get_Buffer_Pixel (RI.Buffers (Backbuffer_Index), Cur.X, Cur.Y);
 
                   if not (Cur.P = Back) or RI.First_Frame then
                      Updated_Pixels (Updated_Pixels_Index) := Cur;
@@ -1021,7 +1009,7 @@ package body ECS is
             RI.First_Frame := False;
 
             --  Release RenderInfo
-            RI.Drawing_FB.all.Post;
+            RI.Drawing_FB.all.End_Draw;
          end;
       end loop;
 
@@ -1038,7 +1026,6 @@ package body ECS is
         Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
-      Drawing_From_FB_1 : Boolean;
    begin
 
       Entity_List_PO.Claim_Reading (Entity_List);
@@ -1051,9 +1038,7 @@ package body ECS is
             Render_Info : Render_Info_Component_T renames Render_Info_Component_T (
               Get_Component_Ptr (Component_List, Render_Info_Component_T'Tag).all);
          begin
-            Render_Info.Drawing_FB.all.Wait (Drawing_From_FB_1);
             Render_Info.Drawing_FB.all.Swap;
-            Render_Info.Drawing_FB.all.Post;
          end;
       end loop;
 
