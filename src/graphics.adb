@@ -56,30 +56,6 @@ package body Graphics is
 
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is
-      --entry Wait (V : out Boolean)
-      --   when not Changing is
-      --begin
-      --   Changing := True;
-      --   V := Draw_From_1;
-      --end Wait;
-
-      --entry Post
-      --   when Changing is
-      --begin
-      --   Changing := False;
-      --end Post;
-
-      --procedure Swap is
-      --begin
-      --   Draw_From_1 := not Draw_From_1;
-      --end Swap;
-
-      --entry Read (V : out Boolean)
-      --  when not Changing is
-      --begin
-      --   V := Draw_From_1;
-      --end Read;
-
       entry Swap
         when not Drawing is
       begin

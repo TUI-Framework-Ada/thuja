@@ -80,14 +80,11 @@ package Graphics is
    type Buffer_Array_t is array (Framebuffer_Index_t) of aliased Buffer_T;
    --  Protected object for double-buffering, for thread-safe access to Buffer_Ptr
    protected type Protected_DB is
-      --entry Wait (V : out Boolean); --  Lock flag from being edited and return flag
-      --entry Post; --  Release flag lock
       entry Swap; --  Swap flag
       procedure Start_Draw;
       procedure End_Draw;
       function Front return Framebuffer_Index_t;
       function Back return Framebuffer_Index_t;
-      --entry Read (V : out Boolean); --  Return flag without locking, only to be used in the same thread as DoubleBufferFlagSystem
    private
       Drawing : Boolean := False;
       Framebuffer_Index : Framebuffer_Index_t := 0;
