@@ -5,6 +5,9 @@ with ECS;            use ECS;
 with IDs;            use IDs;
 with Components;     use Components;
 with Ada.Strings.Unbounded;
+with Ada.Calendar;   use type Ada.Calendar.Time;
+with Ada.Text_IO;
+with Ada.Strings.Unbounded;
 with Ada.Containers.Vectors;
 with System_Stats;
 
@@ -28,7 +31,7 @@ procedure Tab_Demo is
 
    Term_Width  : constant TUI_Width  := 80;
    Term_Height : constant TUI_Height := 50;
-   Content_Top : constant TUI_Height := 4;
+   Content_Top : constant TUI_Height := 5;
 
    World : Entity_Components_PO;
 
@@ -116,14 +119,29 @@ procedure Tab_Demo is
    end Pad;
 
    ---------------------------------------------------------------------------
+   --  DEBUG
+   ---------------------------------------------------------------------------
+   Start_Time : Ada.Calendar.Time;
+   Drawing_Delta : aliased Duration := Duration (5);
+   Input_Delta : aliased Duration := Duration (0);
+   function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
+
+   ---------------------------------------------------------------------------
    --  Create chrome entities
    ---------------------------------------------------------------------------
    procedure Create_Chrome is
       CP : Components_Ptr;
+      C_dtime_text : Text_Component_T := (
+         Text => Ada.Strings.Unbounded.To_Unbounded_String (Positive (Term_Width)),
+         Text_Color => Gold,
+         others => <>
+      );
    begin
       CP := Make_Widget (World, "chrome_help",   TUI_Width'First, 1, Term_Width, 1);
       CP := Make_Widget (World, "chrome_tabbar", TUI_Width'First, 2, Term_Width, 1);
-      CP := Make_Widget (World, "chrome_sep",    TUI_Width'First, 3, Term_Width, 1);
+      CP := Make_Widget (World, "chrome_dtime",  TUI_Width'First, 3, Term_Width, 1);
+      Add_Component (CP.all, "text", C_dtime_text);
+      CP := Make_Widget (World, "chrome_sep",    TUI_Width'First, 4, Term_Width, 1);
    end Create_Chrome;
 
    ---------------------------------------------------------------------------
@@ -149,7 +167,7 @@ procedure Update_Chrome is
                 "        ";
       else
          return " [ Prev  ] Next  |  Tab: Focus  |  Esc: Quit                    " &
-                "         ";
+                "        ";
       end if;
    end Help_Text;
 
@@ -190,6 +208,16 @@ begin
          end;
       end loop;
       Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+   end;
+
+   declare
+      CP : constant Components_Ptr :=
+         Get_Entity_Components (EL.all, To_EID ("chrome_dtime"));
+      Text_C : Text_Component_T renames Text_Component_T (
+         Get_Component_Ptr (CP, Text_Component_T'Tag).all);
+   begin
+         Text_C.Text := Ada.Strings.Unbounded.To_Unbounded_String ("D" & Trim (Float (Float (1000.0) * Float (Drawing_Delta))'Image));
+         Text_C.Text := Text_C.Text & "_____________________";
    end;
 
    declare
@@ -700,13 +728,19 @@ end Update_Chrome;
    --  Render
    ---------------------------------------------------------------------------
    procedure Render is
+      MyException : exception;
    begin
+      --  DEBUG: start draw timing
+      Start_Time := Ada.Calendar.Clock;
+
       WidgetBackgroundSystem  (World);
       TextRenderSystem        (World);
       ProgressBarRenderSystem (World);
       BufferCopySystem        (World);
       DoubleBufferFlagSystem  (World);
       BufferDrawSystem        (World);
+      --  DEBUG: end draw timing
+      Drawing_Delta := Ada.Calendar.Clock - Start_Time;
    end Render;
 
    ---------------------------------------------------------------------------
@@ -737,6 +771,7 @@ begin
    while Running loop
       Tab_Pressed := False;
 
+      --start input timing
       loop
          Input_Buffer.Consume (Event);
          exit when Event.Cmd = None
@@ -952,6 +987,7 @@ begin
          Update_Chrome;
          Render;
       end if;
+      --end input timing
 
       delay 0.05;
    end loop;
