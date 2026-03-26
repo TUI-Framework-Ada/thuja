@@ -1521,8 +1521,8 @@ package body ECS is
       RI.Prev_Terminal_Width  := Natural (Width);
       RI.Prev_Terminal_Height := Natural (Height);
       RI.Backbuffer           := Create_Buffer (Width, Height);
-      RI.Framebuffer_1        := Create_Buffer (Width, Height);
-      RI.Framebuffer_2        := Create_Buffer (Width, Height);
+      RI.Buffers (0)        := Create_Buffer (Width, Height);
+      RI.Buffers (1)        := Create_Buffer (Width, Height);
       RI.Drawing_FB           := new Protected_DB;
       for RX in TUI_Width'First .. Width loop
          for RY in TUI_Height'First .. Height loop
