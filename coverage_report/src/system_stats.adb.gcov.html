@@ -1,0 +1,378 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - lcov.info - src/system_stats.adb</title>
+  <link rel="stylesheet" type="text/css" href="../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../index.html">top level</a> - <a href="index.html">src</a> - system_stats.adb<span style="font-size: 80%;"> (source / <a href="system_stats.adb.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">lcov.info</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryLo">8.3&nbsp;%</td>
+            <td class="headerCovTableEntry">108</td>
+            <td class="headerCovTableEntry">9</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-03-26 16:06:07</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryLo">12.5&nbsp;%</td>
+            <td class="headerCovTableEntry">16</td>
+            <td class="headerCovTableEntry">2</td>
+          </tr>
+                  <tr><td><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : with Interfaces.C;</span>
+<span id="L2"><span class="lineNum">       2</span>              : with Interfaces.C.Strings;</span>
+<span id="L3"><span class="lineNum">       3</span>              : with Ada.Unchecked_Deallocation;</span>
+<span id="L4"><span class="lineNum">       4</span>              : with Ada.Unchecked_Conversion;</span>
+<span id="L5"><span class="lineNum">       5</span>              : with System;</span>
+<span id="L6"><span class="lineNum">       6</span>              : with System.Storage_Elements;</span>
+<span id="L7"><span class="lineNum">       7</span>              : </span>
+<span id="L8"><span class="lineNum">       8</span>              : package body System_Stats is</span>
+<span id="L9"><span class="lineNum">       9</span>              : </span>
+<span id="L10"><span class="lineNum">      10</span>              :    package C renames Interfaces.C;</span>
+<span id="L11"><span class="lineNum">      11</span>              :    use type C.int;</span>
+<span id="L12"><span class="lineNum">      12</span>              :    use type C.long;</span>
+<span id="L13"><span class="lineNum">      13</span>              :    use type System.Storage_Elements.Integer_Address;</span>
+<span id="L14"><span class="lineNum">      14</span>              : </span>
+<span id="L15"><span class="lineNum">      15</span>              :    procedure Free is new Ada.Unchecked_Deallocation (</span>
+<span id="L16"><span class="lineNum">      16</span>              :       Object =&gt; Process_Array,</span>
+<span id="L17"><span class="lineNum">      17</span>              :       Name   =&gt; Process_Array_Ptr</span>
+<span id="L18"><span class="lineNum">      18</span>              :    );</span>
+<span id="L19"><span class="lineNum">      19</span>              : </span>
+<span id="L20"><span class="lineNum">      20</span>              :    function C_Get_Platform return C.int;</span>
+<span id="L21"><span class="lineNum">      21</span>              :    pragma Import (C, C_Get_Platform, &quot;get_platform&quot;);</span>
+<span id="L22"><span class="lineNum">      22</span>              : </span>
+<span id="L23"><span class="lineNum">      23</span> <span class="tlaUNC tlaBgUNC">           0 :    function Get_Platform return Platform_Type is</span></span>
+<span id="L24"><span class="lineNum">      24</span> <span class="tlaUNC">           0 :       Platform : constant C.int := C_Get_Platform;</span></span>
+<span id="L25"><span class="lineNum">      25</span>              :    begin</span>
+<span id="L26"><span class="lineNum">      26</span> <span class="tlaUNC">           0 :       case Platform is</span></span>
+<span id="L27"><span class="lineNum">      27</span>              :          when 0 =&gt; return Linux;</span>
+<span id="L28"><span class="lineNum">      28</span> <span class="tlaUNC">           0 :          when 1 =&gt; return Windows;</span></span>
+<span id="L29"><span class="lineNum">      29</span> <span class="tlaUNC">           0 :          when others =&gt; return Unknown;</span></span>
+<span id="L30"><span class="lineNum">      30</span>              :       end case;</span>
+<span id="L31"><span class="lineNum">      31</span>              :    end Get_Platform;</span>
+<span id="L32"><span class="lineNum">      32</span>              : </span>
+<span id="L33"><span class="lineNum">      33</span>              :    function C_Get_Num_Cores return C.int;</span>
+<span id="L34"><span class="lineNum">      34</span>              :    pragma Import (C, C_Get_Num_Cores, &quot;get_num_cpu_cores&quot;);</span>
+<span id="L35"><span class="lineNum">      35</span>              : </span>
+<span id="L36"><span class="lineNum">      36</span>              :    function C_Get_CPU_Usage (Usage : access C.C_float; Max_Cores : C.int) return C.int;</span>
+<span id="L37"><span class="lineNum">      37</span>              :    pragma Import (C, C_Get_CPU_Usage, &quot;get_cpu_usage&quot;);</span>
+<span id="L38"><span class="lineNum">      38</span>              : </span>
+<span id="L39"><span class="lineNum">      39</span>              :    function C_Get_Memory_Usage_Percent return C.C_float;</span>
+<span id="L40"><span class="lineNum">      40</span>              :    pragma Import (C, C_Get_Memory_Usage_Percent, &quot;get_memory_usage_percent&quot;);</span>
+<span id="L41"><span class="lineNum">      41</span>              : </span>
+<span id="L42"><span class="lineNum">      42</span>              :    procedure C_Get_Memory_Detailed (</span>
+<span id="L43"><span class="lineNum">      43</span>              :       Total_MB : access C.int;</span>
+<span id="L44"><span class="lineNum">      44</span>              :       Used_MB : access C.int;</span>
+<span id="L45"><span class="lineNum">      45</span>              :       Free_MB : access C.int;</span>
+<span id="L46"><span class="lineNum">      46</span>              :       Avail_MB : access C.int;</span>
+<span id="L47"><span class="lineNum">      47</span>              :       Buff_MB : access C.int;</span>
+<span id="L48"><span class="lineNum">      48</span>              :       Cached_MB : access C.int;</span>
+<span id="L49"><span class="lineNum">      49</span>              :       Swap_Total_MB : access C.int;</span>
+<span id="L50"><span class="lineNum">      50</span>              :       Swap_Used_MB : access C.int</span>
+<span id="L51"><span class="lineNum">      51</span>              :    );</span>
+<span id="L52"><span class="lineNum">      52</span>              :    pragma Import (C, C_Get_Memory_Detailed, &quot;get_memory_detailed&quot;);</span>
+<span id="L53"><span class="lineNum">      53</span>              : </span>
+<span id="L54"><span class="lineNum">      54</span>              :    function C_Get_Disk_Usage (Path : C.Strings.chars_ptr) return C.C_float;</span>
+<span id="L55"><span class="lineNum">      55</span>              :    pragma Import (C, C_Get_Disk_Usage, &quot;get_disk_usage&quot;);</span>
+<span id="L56"><span class="lineNum">      56</span>              : </span>
+<span id="L57"><span class="lineNum">      57</span>              :    procedure C_Get_Disk_IO (Read_MB : access C.C_float; Write_MB : access C.C_float);</span>
+<span id="L58"><span class="lineNum">      58</span>              :    pragma Import (C, C_Get_Disk_IO, &quot;get_disk_io&quot;);</span>
+<span id="L59"><span class="lineNum">      59</span>              : </span>
+<span id="L60"><span class="lineNum">      60</span>              :    procedure C_Get_Disk_Space_GB (</span>
+<span id="L61"><span class="lineNum">      61</span>              :       Path     : C.Strings.chars_ptr;</span>
+<span id="L62"><span class="lineNum">      62</span>              :       Total_GB : access C.C_float;</span>
+<span id="L63"><span class="lineNum">      63</span>              :       Used_GB  : access C.C_float</span>
+<span id="L64"><span class="lineNum">      64</span>              :    );</span>
+<span id="L65"><span class="lineNum">      65</span>              :    pragma Import (C, C_Get_Disk_Space_GB, &quot;get_disk_space_gb&quot;);</span>
+<span id="L66"><span class="lineNum">      66</span>              : </span>
+<span id="L67"><span class="lineNum">      67</span>              :    procedure C_Get_Network_IO (RX_MB : access C.C_float; TX_MB : access C.C_float);</span>
+<span id="L68"><span class="lineNum">      68</span>              :    pragma Import (C, C_Get_Network_IO, &quot;get_network_io&quot;);</span>
+<span id="L69"><span class="lineNum">      69</span>              : </span>
+<span id="L70"><span class="lineNum">      70</span>              :    function C_Get_Uptime return C.long;</span>
+<span id="L71"><span class="lineNum">      71</span>              :    pragma Import (C, C_Get_Uptime, &quot;get_uptime_seconds&quot;);</span>
+<span id="L72"><span class="lineNum">      72</span>              : </span>
+<span id="L73"><span class="lineNum">      73</span>              :    procedure C_Get_Load_Average (Buffer : C.Strings.chars_ptr; Buf_Size : C.int);</span>
+<span id="L74"><span class="lineNum">      74</span>              :    pragma Import (C, C_Get_Load_Average, &quot;get_load_average&quot;);</span>
+<span id="L75"><span class="lineNum">      75</span>              : </span>
+<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC tlaBgGNC">           1 :    function Get_CPU_Count return Natural is</span></span>
+<span id="L77"><span class="lineNum">      77</span>              :    begin</span>
+<span id="L78"><span class="lineNum">      78</span> <span class="tlaGNC">           1 :       return Natural(C_Get_Num_Cores);</span></span>
+<span id="L79"><span class="lineNum">      79</span>              :    end Get_CPU_Count;</span>
+<span id="L80"><span class="lineNum">      80</span>              : </span>
+<span id="L81"><span class="lineNum">      81</span> <span class="tlaUNC tlaBgUNC">           0 :    function Get_CPU_Usage (Core : Natural) return Float is</span></span>
+<span id="L82"><span class="lineNum">      82</span>              :       Max_Cores : constant := 128;</span>
+<span id="L83"><span class="lineNum">      83</span>              :       Usage_Array : array (1 .. Max_Cores) of aliased C.C_float;</span>
+<span id="L84"><span class="lineNum">      84</span>              :       Num_Cores : C.int;</span>
+<span id="L85"><span class="lineNum">      85</span>              :    begin</span>
+<span id="L86"><span class="lineNum">      86</span> <span class="tlaUNC">           0 :       Num_Cores := C_Get_CPU_Usage (Usage_Array(1)'Access, Max_Cores);</span></span>
+<span id="L87"><span class="lineNum">      87</span> <span class="tlaUNC">           0 :       if Core &gt;= Natural(Num_Cores) then</span></span>
+<span id="L88"><span class="lineNum">      88</span>              :          return 0.0;</span>
+<span id="L89"><span class="lineNum">      89</span>              :       end if;</span>
+<span id="L90"><span class="lineNum">      90</span> <span class="tlaUNC">           0 :       return Float(Usage_Array(Core + 1));</span></span>
+<span id="L91"><span class="lineNum">      91</span> <span class="tlaUNC">           0 :    end Get_CPU_Usage;</span></span>
+<span id="L92"><span class="lineNum">      92</span>              : </span>
+<span id="L93"><span class="lineNum">      93</span> <span class="tlaGNC tlaBgGNC">           1 :    function Get_CPU_Usage_Average return Float is</span></span>
+<span id="L94"><span class="lineNum">      94</span>              :       Max_Cores : constant := 128;</span>
+<span id="L95"><span class="lineNum">      95</span>              :       Usage_Array : array (1 .. Max_Cores) of aliased C.C_float;</span>
+<span id="L96"><span class="lineNum">      96</span>              :       Num_Cores : C.int;</span>
+<span id="L97"><span class="lineNum">      97</span>              :       Total : Float := 0.0;</span>
+<span id="L98"><span class="lineNum">      98</span>              :    begin</span>
+<span id="L99"><span class="lineNum">      99</span> <span class="tlaGNC">           1 :       Num_Cores := C_Get_CPU_Usage (Usage_Array(1)'Access, Max_Cores);</span></span>
+<span id="L100"><span class="lineNum">     100</span> <span class="tlaGNC">           1 :       if Num_Cores &lt;= 0 then</span></span>
+<span id="L101"><span class="lineNum">     101</span>              :          return 0.0;</span>
+<span id="L102"><span class="lineNum">     102</span>              :       end if;</span>
+<span id="L103"><span class="lineNum">     103</span> <span class="tlaGNC">          16 :       for I in 1 .. Natural(Num_Cores) loop</span></span>
+<span id="L104"><span class="lineNum">     104</span> <span class="tlaGNC">           8 :          Total := Total + Float(Usage_Array(I));</span></span>
+<span id="L105"><span class="lineNum">     105</span>              :       end loop;</span>
+<span id="L106"><span class="lineNum">     106</span> <span class="tlaGNC">           1 :       return Total / Float(Num_Cores);</span></span>
+<span id="L107"><span class="lineNum">     107</span> <span class="tlaGNC">           1 :    end Get_CPU_Usage_Average;</span></span>
+<span id="L108"><span class="lineNum">     108</span>              : </span>
+<span id="L109"><span class="lineNum">     109</span> <span class="tlaUNC tlaBgUNC">           0 :    function Get_Memory_Usage return Float is</span></span>
+<span id="L110"><span class="lineNum">     110</span>              :    begin</span>
+<span id="L111"><span class="lineNum">     111</span> <span class="tlaUNC">           0 :       return Float(C_Get_Memory_Usage_Percent);</span></span>
+<span id="L112"><span class="lineNum">     112</span>              :    end Get_Memory_Usage;</span>
+<span id="L113"><span class="lineNum">     113</span>              : </span>
+<span id="L114"><span class="lineNum">     114</span> <span class="tlaUNC">           0 :    procedure Get_Memory_GB (Total : out Float; Used : out Float; Available : out Float) is</span></span>
+<span id="L115"><span class="lineNum">     115</span>              :       T, U, F, A, B, Ca, ST, SU : aliased C.int;</span>
+<span id="L116"><span class="lineNum">     116</span>              :    begin</span>
+<span id="L117"><span class="lineNum">     117</span> <span class="tlaUNC">           0 :       C_Get_Memory_Detailed (T'Access, U'Access, F'Access, A'Access,</span></span>
+<span id="L118"><span class="lineNum">     118</span>              :                              B'Access, Ca'Access, ST'Access, SU'Access);</span>
+<span id="L119"><span class="lineNum">     119</span> <span class="tlaUNC">           0 :       Total := Float(T) / 1024.0;</span></span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaUNC">           0 :       Available := Float(A) / 1024.0;</span></span>
+<span id="L121"><span class="lineNum">     121</span> <span class="tlaUNC">           0 :       Used := Float(U) / 1024.0;</span></span>
+<span id="L122"><span class="lineNum">     122</span> <span class="tlaUNC">           0 :    end Get_Memory_GB;</span></span>
+<span id="L123"><span class="lineNum">     123</span>              : </span>
+<span id="L124"><span class="lineNum">     124</span> <span class="tlaUNC">           0 :    procedure Get_Memory_Detailed (</span></span>
+<span id="L125"><span class="lineNum">     125</span>              :       Total     : out Natural;</span>
+<span id="L126"><span class="lineNum">     126</span>              :       Used      : out Natural;</span>
+<span id="L127"><span class="lineNum">     127</span>              :       Free      : out Natural;</span>
+<span id="L128"><span class="lineNum">     128</span>              :       Available : out Natural;</span>
+<span id="L129"><span class="lineNum">     129</span>              :       Buffers   : out Natural;</span>
+<span id="L130"><span class="lineNum">     130</span>              :       Cached    : out Natural;</span>
+<span id="L131"><span class="lineNum">     131</span>              :       Swap_Total : out Natural;</span>
+<span id="L132"><span class="lineNum">     132</span>              :       Swap_Used  : out Natural</span>
+<span id="L133"><span class="lineNum">     133</span>              :    ) is</span>
+<span id="L134"><span class="lineNum">     134</span>              :       T, U, F, A, B, Ca, ST, SU : aliased C.int;</span>
+<span id="L135"><span class="lineNum">     135</span>              :    begin</span>
+<span id="L136"><span class="lineNum">     136</span> <span class="tlaUNC">           0 :       C_Get_Memory_Detailed (T'Access, U'Access, F'Access, A'Access,</span></span>
+<span id="L137"><span class="lineNum">     137</span>              :                              B'Access, Ca'Access, ST'Access, SU'Access);</span>
+<span id="L138"><span class="lineNum">     138</span> <span class="tlaUNC">           0 :       Total := Natural(T);</span></span>
+<span id="L139"><span class="lineNum">     139</span> <span class="tlaUNC">           0 :       Used := Natural(U);</span></span>
+<span id="L140"><span class="lineNum">     140</span> <span class="tlaUNC">           0 :       Free := Natural(F);</span></span>
+<span id="L141"><span class="lineNum">     141</span> <span class="tlaUNC">           0 :       Available := Natural(A);</span></span>
+<span id="L142"><span class="lineNum">     142</span> <span class="tlaUNC">           0 :       Buffers := Natural(B);</span></span>
+<span id="L143"><span class="lineNum">     143</span> <span class="tlaUNC">           0 :       Cached := Natural(Ca);</span></span>
+<span id="L144"><span class="lineNum">     144</span> <span class="tlaUNC">           0 :       Swap_Total := Natural(ST);</span></span>
+<span id="L145"><span class="lineNum">     145</span> <span class="tlaUNC">           0 :       Swap_Used := Natural(SU);</span></span>
+<span id="L146"><span class="lineNum">     146</span> <span class="tlaUNC">           0 :    end Get_Memory_Detailed;</span></span>
+<span id="L147"><span class="lineNum">     147</span>              : </span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaUNC">           0 :    function Get_Disk_Usage (Path : String) return Float is</span></span>
+<span id="L149"><span class="lineNum">     149</span> <span class="tlaUNC">           0 :       C_Path : C.Strings.chars_ptr := C.Strings.New_String(Path);</span></span>
+<span id="L150"><span class="lineNum">     150</span>              :       Result : C.C_float;</span>
+<span id="L151"><span class="lineNum">     151</span>              :    begin</span>
+<span id="L152"><span class="lineNum">     152</span> <span class="tlaUNC">           0 :       Result := C_Get_Disk_Usage(C_Path);</span></span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaUNC">           0 :       C.Strings.Free(C_Path);</span></span>
+<span id="L154"><span class="lineNum">     154</span> <span class="tlaUNC">           0 :       return Float(Result);</span></span>
+<span id="L155"><span class="lineNum">     155</span>              :    end Get_Disk_Usage;</span>
+<span id="L156"><span class="lineNum">     156</span>              : </span>
+<span id="L157"><span class="lineNum">     157</span> <span class="tlaUNC">           0 :    procedure Get_Disk_Space_GB (</span></span>
+<span id="L158"><span class="lineNum">     158</span>              :       Path     : String;</span>
+<span id="L159"><span class="lineNum">     159</span>              :       Total_GB : out Float;</span>
+<span id="L160"><span class="lineNum">     160</span>              :       Used_GB  : out Float</span>
+<span id="L161"><span class="lineNum">     161</span>              :    ) is</span>
+<span id="L162"><span class="lineNum">     162</span> <span class="tlaUNC">           0 :       C_Path : C.Strings.chars_ptr := C.Strings.New_String (Path);</span></span>
+<span id="L163"><span class="lineNum">     163</span>              :       T, U   : aliased C.C_float;</span>
+<span id="L164"><span class="lineNum">     164</span>              :    begin</span>
+<span id="L165"><span class="lineNum">     165</span> <span class="tlaUNC">           0 :       C_Get_Disk_Space_GB (C_Path, T'Access, U'Access);</span></span>
+<span id="L166"><span class="lineNum">     166</span> <span class="tlaUNC">           0 :       C.Strings.Free (C_Path);</span></span>
+<span id="L167"><span class="lineNum">     167</span> <span class="tlaUNC">           0 :       Total_GB := Float (T);</span></span>
+<span id="L168"><span class="lineNum">     168</span> <span class="tlaUNC">           0 :       Used_GB  := Float (U);</span></span>
+<span id="L169"><span class="lineNum">     169</span> <span class="tlaUNC">           0 :    end Get_Disk_Space_GB;</span></span>
+<span id="L170"><span class="lineNum">     170</span>              : </span>
+<span id="L171"><span class="lineNum">     171</span> <span class="tlaUNC">           0 :    procedure Get_Disk_IO (Read_MB : out Float; Write_MB : out Float) is</span></span>
+<span id="L172"><span class="lineNum">     172</span>              :       R, W : aliased C.C_float;</span>
+<span id="L173"><span class="lineNum">     173</span>              :    begin</span>
+<span id="L174"><span class="lineNum">     174</span> <span class="tlaUNC">           0 :       C_Get_Disk_IO (R'Access, W'Access);</span></span>
+<span id="L175"><span class="lineNum">     175</span> <span class="tlaUNC">           0 :       Read_MB := Float(R);</span></span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaUNC">           0 :       Write_MB := Float(W);</span></span>
+<span id="L177"><span class="lineNum">     177</span> <span class="tlaUNC">           0 :    end Get_Disk_IO;</span></span>
+<span id="L178"><span class="lineNum">     178</span>              : </span>
+<span id="L179"><span class="lineNum">     179</span> <span class="tlaUNC">           0 :    procedure Get_Network_IO (RX_MB : out Float; TX_MB : out Float) is</span></span>
+<span id="L180"><span class="lineNum">     180</span>              :       R, T : aliased C.C_float;</span>
+<span id="L181"><span class="lineNum">     181</span>              :    begin</span>
+<span id="L182"><span class="lineNum">     182</span> <span class="tlaUNC">           0 :       C_Get_Network_IO (R'Access, T'Access);</span></span>
+<span id="L183"><span class="lineNum">     183</span> <span class="tlaUNC">           0 :       RX_MB := Float(R);</span></span>
+<span id="L184"><span class="lineNum">     184</span> <span class="tlaUNC">           0 :       TX_MB := Float(T);</span></span>
+<span id="L185"><span class="lineNum">     185</span> <span class="tlaUNC">           0 :    end Get_Network_IO;</span></span>
+<span id="L186"><span class="lineNum">     186</span>              : </span>
+<span id="L187"><span class="lineNum">     187</span> <span class="tlaUNC">           0 :    function Get_Uptime return Natural is</span></span>
+<span id="L188"><span class="lineNum">     188</span> <span class="tlaUNC">           0 :       Uptime : C.long := C_Get_Uptime;</span></span>
+<span id="L189"><span class="lineNum">     189</span>              :    begin</span>
+<span id="L190"><span class="lineNum">     190</span> <span class="tlaUNC">           0 :       if Uptime &lt; 0 then</span></span>
+<span id="L191"><span class="lineNum">     191</span>              :          return 0;</span>
+<span id="L192"><span class="lineNum">     192</span>              :       else</span>
+<span id="L193"><span class="lineNum">     193</span> <span class="tlaUNC">           0 :          return Natural(Uptime);</span></span>
+<span id="L194"><span class="lineNum">     194</span>              :       end if;</span>
+<span id="L195"><span class="lineNum">     195</span>              :    end Get_Uptime;</span>
+<span id="L196"><span class="lineNum">     196</span>              : </span>
+<span id="L197"><span class="lineNum">     197</span> <span class="tlaUNC">           0 :    function Get_Load_Average return String is</span></span>
+<span id="L198"><span class="lineNum">     198</span>              :       Buffer_Size : constant := 64;</span>
+<span id="L199"><span class="lineNum">     199</span> <span class="tlaUNC">           0 :       Buffer_Arr : aliased C.char_array := C.To_C((1 .. Buffer_Size =&gt; ' '));</span></span>
+<span id="L200"><span class="lineNum">     200</span> <span class="tlaUNC">           0 :       Buffer : C.Strings.chars_ptr := C.Strings.To_Chars_Ptr(Buffer_Arr'Unchecked_Access);</span></span>
+<span id="L201"><span class="lineNum">     201</span>              :    begin</span>
+<span id="L202"><span class="lineNum">     202</span> <span class="tlaUNC">           0 :       C_Get_Load_Average (Buffer, C.int(Buffer_Size));</span></span>
+<span id="L203"><span class="lineNum">     203</span> <span class="tlaUNC">           0 :       return C.Strings.Value (Buffer);</span></span>
+<span id="L204"><span class="lineNum">     204</span>              :    exception</span>
+<span id="L205"><span class="lineNum">     205</span> <span class="tlaUNC">           0 :       when others =&gt;</span></span>
+<span id="L206"><span class="lineNum">     206</span> <span class="tlaUNC">           0 :          return &quot;N/A&quot;;</span></span>
+<span id="L207"><span class="lineNum">     207</span> <span class="tlaUNC">           0 :    end Get_Load_Average;</span></span>
+<span id="L208"><span class="lineNum">     208</span>              : </span>
+<span id="L209"><span class="lineNum">     209</span>              :    type Process_Info_C is record</span>
+<span id="L210"><span class="lineNum">     210</span>              :       PID         : C.int;</span>
+<span id="L211"><span class="lineNum">     211</span>              :       Name        : C.char_array (0 .. 255);</span>
+<span id="L212"><span class="lineNum">     212</span>              :       User        : C.char_array (0 .. 31);</span>
+<span id="L213"><span class="lineNum">     213</span>              :       State       : C.int;</span>
+<span id="L214"><span class="lineNum">     214</span>              :       CPU_Percent : C.C_float;</span>
+<span id="L215"><span class="lineNum">     215</span>              :       Mem_Percent : C.C_float;</span>
+<span id="L216"><span class="lineNum">     216</span>              :       Mem_KB      : C.unsigned_long;</span>
+<span id="L217"><span class="lineNum">     217</span>              :    end record;</span>
+<span id="L218"><span class="lineNum">     218</span>              :    pragma Convention (C, Process_Info_C);</span>
+<span id="L219"><span class="lineNum">     219</span>              : </span>
+<span id="L220"><span class="lineNum">     220</span>              :    type Process_Info_C_Ptr is access all Process_Info_C;</span>
+<span id="L221"><span class="lineNum">     221</span>              :    pragma Convention (C, Process_Info_C_Ptr);</span>
+<span id="L222"><span class="lineNum">     222</span>              : </span>
+<span id="L223"><span class="lineNum">     223</span>              :    function C_Get_Process_List (Count : access C.int) return Process_Info_C_Ptr;</span>
+<span id="L224"><span class="lineNum">     224</span>              :    pragma Import (C, C_Get_Process_List, &quot;get_process_list&quot;);</span>
+<span id="L225"><span class="lineNum">     225</span>              : </span>
+<span id="L226"><span class="lineNum">     226</span>              :    procedure C_Free_Process_List (List : Process_Info_C_Ptr);</span>
+<span id="L227"><span class="lineNum">     227</span>              :    pragma Import (C, C_Free_Process_List, &quot;free_process_list&quot;);</span>
+<span id="L228"><span class="lineNum">     228</span>              : </span>
+<span id="L229"><span class="lineNum">     229</span>              :    function C_Kill_Process (PID : C.int) return C.int;</span>
+<span id="L230"><span class="lineNum">     230</span>              :    pragma Import (C, C_Kill_Process, &quot;kill_process&quot;);</span>
+<span id="L231"><span class="lineNum">     231</span>              : </span>
+<span id="L232"><span class="lineNum">     232</span> <span class="tlaUNC">           0 :    function Get_Process_List return Process_Array_Ptr is</span></span>
+<span id="L233"><span class="lineNum">     233</span> <span class="tlaUNC">           0 :       Count : aliased C.int := 0;</span></span>
+<span id="L234"><span class="lineNum">     234</span>              :       C_List : Process_Info_C_Ptr;</span>
+<span id="L235"><span class="lineNum">     235</span>              :       Ada_List : Process_Array_Ptr;</span>
+<span id="L236"><span class="lineNum">     236</span>              :    begin</span>
+<span id="L237"><span class="lineNum">     237</span> <span class="tlaUNC">           0 :       C_List := C_Get_Process_List (Count'Access);</span></span>
+<span id="L238"><span class="lineNum">     238</span>              :       </span>
+<span id="L239"><span class="lineNum">     239</span> <span class="tlaUNC">           0 :       if C_List = null or Count &lt;= 0 then</span></span>
+<span id="L240"><span class="lineNum">     240</span> <span class="tlaUNC">           0 :          return null;</span></span>
+<span id="L241"><span class="lineNum">     241</span>              :       end if;</span>
+<span id="L242"><span class="lineNum">     242</span>              : </span>
+<span id="L243"><span class="lineNum">     243</span> <span class="tlaUNC">           0 :       Ada_List := new Process_Array (1 .. Natural(Count));</span></span>
+<span id="L244"><span class="lineNum">     244</span>              : </span>
+<span id="L245"><span class="lineNum">     245</span>              :       -- Access the C array using pointer arithmetic</span>
+<span id="L246"><span class="lineNum">     246</span> <span class="tlaUNC">           0 :       for I in 0 .. Natural(Count) - 1 loop</span></span>
+<span id="L247"><span class="lineNum">     247</span>              :          declare</span>
+<span id="L248"><span class="lineNum">     248</span>              :             use System.Storage_Elements;</span>
+<span id="L249"><span class="lineNum">     249</span>              :             -- Get pointer to the I-th element</span>
+<span id="L250"><span class="lineNum">     250</span>              :             type Proc_Ptr is access all Process_Info_C;</span>
+<span id="L251"><span class="lineNum">     251</span>              :             function To_Proc_Ptr is new Ada.Unchecked_Conversion (</span>
+<span id="L252"><span class="lineNum">     252</span>              :                Source =&gt; System.Address,</span>
+<span id="L253"><span class="lineNum">     253</span>              :                Target =&gt; Proc_Ptr</span>
+<span id="L254"><span class="lineNum">     254</span>              :             );</span>
+<span id="L255"><span class="lineNum">     255</span>              :             Elem_Size : constant Storage_Offset := Process_Info_C'Size / System.Storage_Unit;</span>
+<span id="L256"><span class="lineNum">     256</span> <span class="tlaUNC">           0 :             Offset : constant Storage_Offset := Storage_Offset(I) * Elem_Size;</span></span>
+<span id="L257"><span class="lineNum">     257</span> <span class="tlaUNC">           0 :             Base_Addr : constant Integer_Address := To_Integer(C_List.all'Address);</span></span>
+<span id="L258"><span class="lineNum">     258</span> <span class="tlaUNC">           0 :             Offset_As_Int : constant Integer_Address := Integer_Address(Offset);</span></span>
+<span id="L259"><span class="lineNum">     259</span> <span class="tlaUNC">           0 :             New_Addr : constant Integer_Address := Base_Addr + Offset_As_Int;</span></span>
+<span id="L260"><span class="lineNum">     260</span> <span class="tlaUNC">           0 :             C_Proc_Ptr : constant Proc_Ptr := To_Proc_Ptr(To_Address(New_Addr));</span></span>
+<span id="L261"><span class="lineNum">     261</span>              :          begin</span>
+<span id="L262"><span class="lineNum">     262</span> <span class="tlaUNC">           0 :             Ada_List(I + 1).PID := Natural(C_Proc_Ptr.PID);</span></span>
+<span id="L263"><span class="lineNum">     263</span> <span class="tlaUNC">           0 :             Ada_List(I + 1).Name := SU.To_Unbounded_String (</span></span>
+<span id="L264"><span class="lineNum">     264</span> <span class="tlaUNC">           0 :                C.To_Ada (C_Proc_Ptr.Name)</span></span>
+<span id="L265"><span class="lineNum">     265</span>              :             );</span>
+<span id="L266"><span class="lineNum">     266</span> <span class="tlaUNC">           0 :             Ada_List(I + 1).User := SU.To_Unbounded_String (</span></span>
+<span id="L267"><span class="lineNum">     267</span> <span class="tlaUNC">           0 :                C.To_Ada (C_Proc_Ptr.User)</span></span>
+<span id="L268"><span class="lineNum">     268</span>              :             );</span>
+<span id="L269"><span class="lineNum">     269</span>              :             </span>
+<span id="L270"><span class="lineNum">     270</span> <span class="tlaUNC">           0 :             case C_Proc_Ptr.State is</span></span>
+<span id="L271"><span class="lineNum">     271</span> <span class="tlaUNC">           0 :                when 0 =&gt; Ada_List(I + 1).State := Running;</span></span>
+<span id="L272"><span class="lineNum">     272</span> <span class="tlaUNC">           0 :                when 1 =&gt; Ada_List(I + 1).State := Sleeping;</span></span>
+<span id="L273"><span class="lineNum">     273</span> <span class="tlaUNC">           0 :                when 2 =&gt; Ada_List(I + 1).State := Stopped;</span></span>
+<span id="L274"><span class="lineNum">     274</span> <span class="tlaUNC">           0 :                when 3 =&gt; Ada_List(I + 1).State := Zombie;</span></span>
+<span id="L275"><span class="lineNum">     275</span> <span class="tlaUNC">           0 :                when others =&gt; Ada_List(I + 1).State := Unknown_State;</span></span>
+<span id="L276"><span class="lineNum">     276</span>              :             end case;</span>
+<span id="L277"><span class="lineNum">     277</span>              :             </span>
+<span id="L278"><span class="lineNum">     278</span> <span class="tlaUNC">           0 :             Ada_List(I + 1).CPU := Float(C_Proc_Ptr.CPU_Percent);</span></span>
+<span id="L279"><span class="lineNum">     279</span> <span class="tlaUNC">           0 :             Ada_List(I + 1).Memory := Float(C_Proc_Ptr.Mem_Percent);</span></span>
+<span id="L280"><span class="lineNum">     280</span> <span class="tlaUNC">           0 :             Ada_List(I + 1).Mem_KB := Natural(C_Proc_Ptr.Mem_KB);</span></span>
+<span id="L281"><span class="lineNum">     281</span>              :          end;</span>
+<span id="L282"><span class="lineNum">     282</span>              :       end loop;</span>
+<span id="L283"><span class="lineNum">     283</span>              : </span>
+<span id="L284"><span class="lineNum">     284</span> <span class="tlaUNC">           0 :       C_Free_Process_List (C_List);</span></span>
+<span id="L285"><span class="lineNum">     285</span> <span class="tlaUNC">           0 :       return Ada_List;</span></span>
+<span id="L286"><span class="lineNum">     286</span> <span class="tlaUNC">           0 :    end Get_Process_List;</span></span>
+<span id="L287"><span class="lineNum">     287</span>              : </span>
+<span id="L288"><span class="lineNum">     288</span> <span class="tlaUNC">           0 :    procedure Free_Process_List (List : in out Process_Array_Ptr) is</span></span>
+<span id="L289"><span class="lineNum">     289</span>              :    begin</span>
+<span id="L290"><span class="lineNum">     290</span> <span class="tlaUNC">           0 :       if List /= null then</span></span>
+<span id="L291"><span class="lineNum">     291</span> <span class="tlaUNC">           0 :          Free (List);</span></span>
+<span id="L292"><span class="lineNum">     292</span>              :       end if;</span>
+<span id="L293"><span class="lineNum">     293</span> <span class="tlaUNC">           0 :    end Free_Process_List;</span></span>
+<span id="L294"><span class="lineNum">     294</span>              : </span>
+<span id="L295"><span class="lineNum">     295</span> <span class="tlaUNC">           0 :    function Kill_Process (PID : Natural) return Boolean is</span></span>
+<span id="L296"><span class="lineNum">     296</span>              :       Result : C.int;</span>
+<span id="L297"><span class="lineNum">     297</span>              :    begin</span>
+<span id="L298"><span class="lineNum">     298</span> <span class="tlaUNC">           0 :       Result := C_Kill_Process (C.int(PID));</span></span>
+<span id="L299"><span class="lineNum">     299</span> <span class="tlaUNC">           0 :       return Result /= 0;</span></span>
+<span id="L300"><span class="lineNum">     300</span>              :    end Kill_Process;</span>
+<span id="L301"><span class="lineNum">     301</span>              : </span>
+<span id="L302"><span class="lineNum">     302</span>              : end System_Stats;</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

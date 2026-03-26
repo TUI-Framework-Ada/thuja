@@ -10,8 +10,13 @@ project Demos_Tests is
 
    package Compiler is
       for Default_Switches ("Ada") use
-        Demos_Tests_Config.Ada_Compiler_Switches;
+      Demos_Tests_Config.Ada_Compiler_Switches &
+      ("-fprofile-arcs", "-ftest-coverage"); -- Added
    end Compiler;
+
+   package Linker is
+      for Default_Switches ("Ada") use ("-fprofile-arcs", "--coverage"); -- Added
+   end Linker;
 
    package Binder is
       for Switches ("Ada") use ("-Es"); --  Symbolic traceback

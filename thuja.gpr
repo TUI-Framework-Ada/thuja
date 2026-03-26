@@ -27,9 +27,14 @@ project Thuja is
    for Library_Kind use Library_Type;
 
    package Compiler is
-      for Default_Switches ("Ada") use Thuja_Config.Ada_Compiler_Switches & ("-gnat2022");
-      for Default_Switches ("C") use ("-O2");
+      for Default_Switches ("Ada") use Thuja_Config.Ada_Compiler_Switches & 
+                                      ("-gnat2022", "-fprofile-arcs", "-ftest-coverage");
+      for Default_Switches ("C")   use ("-O2", "-fprofile-arcs", "-ftest-coverage");
    end Compiler;
+
+   package Linker is
+      for Default_Switches ("Ada") use ("-fprofile-arcs");
+   end Linker;
 
    package Binder is
       for Switches ("Ada") use ("-Es"); --  Symbolic traceback

@@ -6,38 +6,28 @@ project Demos is
    for Object_Dir use "obj/" & Demos_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
    for Exec_Dir use "bin";
-   -- Build a single demo main to avoid gprbuild selecting multiple mains
-   -- which can cause "not a source of project" errors on some systems.
-   -- Point to the source file explicitly to avoid any Source_Dirs resolution issues
-   for Main use (
-      --"comprehensive_demo", 
-      --"resize_and_movement_demo", 
-      -- "keyboard_widget", 
-      -- "tab_demo", 
-      -- "command_palette", 
-      -- "demos", 
-      -- "presentation_2_demo", 
-      -- "task_manager_demo", 
-      "tab_demo");
+   for Main use ("tab_demo");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches &
         ("-gnat2022",
-         "-gnatwB",   --  Suppress fixed-point Small rounding (1.0/30.0 can't be exact)
-         "-gnatwJ");  --  Suppress obsolescent () array syntax (toolchain lacks [] support)
+         "-gnatwB",
+         "-gnatwJ",
+         "-fprofile-arcs", "-ftest-coverage"); -- Added for coverage
    end Compiler;
 
    package Linker is
+      -- We add the coverage flags for EVERY OS, then keep your psapi for Windows
       case Demos_Config.Alire_Host_OS is
          when "windows" =>
-            for Default_Switches ("Ada") use ("-lpsapi");
+            for Default_Switches ("Ada") use ("-fprofile-arcs", "--coverage", "-lpsapi");
          when others =>
-            null;
+            for Default_Switches ("Ada") use ("-fprofile-arcs", "--coverage");
       end case;
    end Linker;
 
    package Binder is
-      for Switches ("Ada") use ("-Es"); --  Symbolic traceback
+      for Switches ("Ada") use ("-Es"); 
    end Binder;
 
    package Install is
