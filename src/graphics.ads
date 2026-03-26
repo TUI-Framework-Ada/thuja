@@ -44,6 +44,8 @@ package Graphics is
    Chartreuse    : constant Color_t := (127, 255, 0);
    Forest_Green  : constant Color_t := (34,  139, 34);
 
+   function Trim (S : String) return String;
+
    type Pixel_t is record
       Char             : Character := ' ';
       Char_Color       : Color_t   := White;
@@ -53,6 +55,9 @@ package Graphics is
       Is_Underline     : Boolean   := False;
       Is_Strikethrough : Boolean   := False;
    end record;
+
+   function "+" (P : Pixel_t) return Wide_Wide_String;
+   function "=" (A, B : Pixel_t) return Boolean;
 
    --  Maximum resolution for the display (Change later)
    type TUI_Width is new Integer range 1 .. 80;
@@ -71,15 +76,18 @@ package Graphics is
    end record;
    type Buffer_Ptr is access Buffer_T;
 
+   type Framebuffer_Index_t is mod 2;
+   type Buffer_Array_t is array (Framebuffer_Index_t) of aliased Buffer_T;
    --  Protected object for double-buffering, for thread-safe access to Buffer_Ptr
    protected type Protected_DB is
-      entry Wait (V : out Boolean); --  Lock flag from being edited and return flag
-      entry Post; --  Release flag lock
-      procedure Swap; --  Swap flag
-      entry Read (V : out Boolean); --  Return flag without locking, only to be used in the same thread as DoubleBufferFlagSystem
+      entry Swap; --  Swap flag
+      procedure Start_Draw;
+      procedure End_Draw;
+      function Front return Framebuffer_Index_t;
+      function Back return Framebuffer_Index_t;
    private
-      Draw_From_1 : Boolean := True;
-      Changing : Boolean := False;
+      Drawing : Boolean := False;
+      Framebuffer_Index : Framebuffer_Index_t := 0;
    end Protected_DB;
    type Protected_DB_Ptr is access Protected_DB;
 

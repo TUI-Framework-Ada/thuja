@@ -25,9 +25,11 @@ package Components is
    -- UPDATED: Added Prev_Terminal_Width/Height for resize detection
    type Render_Info_Component_T is new Component_T with record
       --  Data Fields
-      Framebuffer_1   : aliased Buffer_T;
-      Framebuffer_2   : aliased Buffer_T; --  Double-buffering
+      --Framebuffer_1   : aliased Buffer_T;
+      --Framebuffer_2   : aliased Buffer_T; --  Double-buffering
+      Buffers         : Buffer_Array_t;
       Drawing_FB      : Protected_DB_Ptr; --  Which FB the render thread should use
+      First_Frame     : Boolean := True; --  Only true on first rendering frame, always draws full TUI
       Backbuffer      : Buffer_T;
       Terminal_Width  : TUI_Width;
       Terminal_Height : TUI_Height;
@@ -177,4 +179,28 @@ package Components is
       Active_Tab : Natural := 0;
       Tab_Count  : Natural := 0;
    end record;
+   ---------------------------------------------------------------------------
+   --  Text Editor Component
+   ---------------------------------------------------------------------------
+   --  Stores the internal state of a line-based text editor.
+   --  Mode: Navigation (Vi-like movement) or Insertion (Typing)
+   
+   type Editor_Mode is (Navigation, Insertion);
+
+   -- Explicitly tell Ada to use the Ada.Strings.Unbounded package
+   use all type SU.Unbounded_String;
+   
+   -- Vector utilized here for lines so the editor can grow dynamically
+   package Line_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => SU.Unbounded_String);
+
+   type Text_Editor_Component_T is new Component_T with record
+      Lines         : Line_Vectors.Vector; -- Stores the actual text content
+      Cursor_X      : Positive := 1;       -- Current column (1-indexed)
+      Cursor_Y      : Positive := 1;       -- Current line (1-indexed)
+      Mode          : Editor_Mode := Navigation;
+      Scroll_Offset : Natural := 0;        -- For vertical scrolling if text exceeds height
+      Show_Numbers  : Boolean := True;     -- Toggle for the line numbering gutter
+   end record;
+
 end Components;
