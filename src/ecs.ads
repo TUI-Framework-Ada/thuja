@@ -136,9 +136,33 @@ package ECS is
      (Self : in Entity_Components; Required : Component_Tag_Vector.Vector)
       return Entity_ID_Vector.Vector;
 
+   function Make_Widget -- Comments are in the ADB naming and functionality. 
+   (
+      World : in out Entity_Components_PO; -- 
+      Name : in String;
+      X : in TUI_Width; Y : in TUI_Height;
+      W : in TUI_Width; H : in TUI_Height
+   )
+   return Components_Ptr;
+
+   function Make_Widget_With_BG
+   (World : in out Entity_Components_PO;
+      Name  : in String;
+      X     : in TUI_Width;  Y : in TUI_Height;
+      W     : in TUI_Width;  H : in TUI_Height;
+      BG    : in Color_t)
+   return Components_Ptr;
+
+   procedure Initialize_World
+  (World      : in out Entity_Components_PO;
+      Width      : in     TUI_Width;
+      Height     : in     TUI_Height;
+      Tab_Count  : in     Natural := 0);
+
    --===========================================================================
    -- BUILT-IN SYSTEMS
    --===========================================================================
+   type Tab_Direction is (Next, Prev);
 
    procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure FlexLayoutSystem (Entity_List_PO : in out Entity_Components_PO);
@@ -148,9 +172,15 @@ package ECS is
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure ProgressBarRenderSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO);
+   procedure ResetBackbufferSystem (Entity_List_PO : in out Entity_Components_PO);
+   function Get_Active_Tab (Entity_List_PO : in out Entity_Components_PO) return Natural;
 
    procedure SelectionSystem (Entity_List_PO : in out Entity_Components_PO;
                               Tab_Pressed : in Boolean);
+
+   procedure TabInitSystem (Entity_List_PO : in out Entity_Components_PO);
+   procedure TabSwitchSystem (Entity_List_PO : in out Entity_Components_PO;
+                              Direction : in Tab_Direction);
 
    --===========================================================================
    -- HELPER PROCEDURES

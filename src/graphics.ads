@@ -131,4 +131,20 @@ package Graphics is
    --  Call this before program exit.
    procedure Reset_Styling;
 
+   --  Write a string of characters into a buffer at the given position
+   procedure Write_To_Buffer
+   (Buf  : in out Buffer_T;
+      Col  : in     TUI_Width;
+      Row  : in     TUI_Height;
+      Text : in     String;
+      FG   : in     Color_t;
+      BG   : in     Color_t;
+      Bold : in     Boolean := False);
+
+   --  Fill an entire row of a buffer with a solid background color
+   procedure Fill_Row
+   (Buf : in out Buffer_T;
+      Row : in     TUI_Height;
+      BG  : in     Color_t);
+
 end Graphics;

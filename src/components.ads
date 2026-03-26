@@ -170,7 +170,15 @@ package Components is
       Month : Ada.Calendar.Month_Number;
       Day   : Ada.Calendar.Day_Number;
    end record;
+   -----------------------------------------------------------------------------
+   type Tab_Page_Component_T is new Component_T with record
+      Tab_Index : Natural := 0;
+   end record;
 
+   type Tab_Manager_Component_T is new Component_T with record
+      Active_Tab : Natural := 0;
+      Tab_Count  : Natural := 0;
+   end record;
    ---------------------------------------------------------------------------
    --  Text Editor Component
    ---------------------------------------------------------------------------

@@ -230,6 +230,34 @@ package body ECS is
       return New_Components;
    end Add_Entity;
 
+   -- NEW
+   function Make_Widget -- Function to create a widget entity with basic components
+      (
+      -- World is the container that holds all entities and their components. The widget will be added to this world.
+      World : in out Entity_Components_PO; -- The world to which the widget will be added
+      Name : String; -- Name of the widget
+      x : TUI_Width; y : TUI_Height; -- x/y position of the widget
+      W : TUI_Width; H : TUI_Height -- width/height of the widget
+
+      ) 
+      return Components_Ptr is
+
+      CP : constant Components_Ptr := Add_Entity (World, To_EID (Name)); -- Makes the widget an entity in the world and gets a pointer to its components
+      WC : Widget_Component_T; -- Create a widget component to hold the widget's properties
+   begin
+      WC.Position_X := x; -- Set the widget's x position
+      WC.Position_Y := y; -- Set the widget's y position
+      WC.Size_Width := W; -- Set the widget's width
+      WC.Size_Height := H; -- Set the widget's height
+      WC.Has_Focus := False; -- By default, the widget does not have focus
+      WC.Render_Buffer := Create_Buffer (W, H); -- Create a render buffer for the widget based on its size
+
+      Add_Component (CP.all, To_CID ("WidgetComponent"), WC);
+
+      return CP; -- Return the pointer to the entity's components
+   end Make_Widget;
+
+
    procedure Remove_Entity (Self : in out Entity_Components_PO; Id : Entity_Id) is
       Entity_List : Entity_Components_Ptr;
    begin
@@ -1448,5 +1476,335 @@ package body ECS is
       --  Release lock on entity list
       Entity_List_PO.Release_Reading;
    end CalendarDisplaySystem;
+
+
+   --===========================================================================
+   -- SYSTEM: Get Active Tab
+   --===========================================================================
+   function Get_Active_Tab (Entity_List_PO : in out Entity_Components_PO) return Natural is
+      Entity_List : Entity_Components_Ptr;
+      CP          : Components_Ptr;
+      Result      : Natural;
+   begin
+      Entity_List_PO.Claim_Reading (Entity_List);
+      CP := Get_Entity_Components (Entity_List.all, To_EID ("root"));
+      if CP /= null and then Has_Component (CP.all, Tab_Manager_Component_T'Tag) then
+         Result := Tab_Manager_Component_T (
+            Get_Component (CP.all, Tab_Manager_Component_T'Tag)).Active_Tab;
+      else
+         Result := 0;
+      end if;
+      Entity_List_PO.Release_Reading;
+      return Result;
+   end Get_Active_Tab;
+
+   --===========================================================================
+   -- SYSTEM: Reset Backbuffer
+   --===========================================================================
+
+   procedure Initialize_World
+   (World      : in out Entity_Components_PO;
+      Width      : in     TUI_Width;
+      Height     : in     TUI_Height;
+      Tab_Count  : in     Natural := 0)
+   is
+      CP          : Components_Ptr;
+      RI          : Render_Info_Component_T;
+      RW          : Widget_Component_T;
+      Root_Marker : Root_Widget_Component_T;
+      Root_BG     : Background_Color_Component_T;
+   begin
+      --  Create render info entity
+      CP := Add_Entity (World, To_EID ("render_info"));
+      RI.Terminal_Width       := Width;
+      RI.Terminal_Height      := Height;
+      RI.Prev_Terminal_Width  := Natural (Width);
+      RI.Prev_Terminal_Height := Natural (Height);
+      RI.Backbuffer           := Create_Buffer (Width, Height);
+      RI.Buffers (0)        := Create_Buffer (Width, Height);
+      RI.Buffers (1)        := Create_Buffer (Width, Height);
+      RI.Drawing_FB           := new Protected_DB;
+      for RX in TUI_Width'First .. Width loop
+         for RY in TUI_Height'First .. Height loop
+            Set_Buffer_Pixel (RI.Backbuffer, RX, RY,
+               (Char             => Character'Val (1),
+               Char_Color       => White,
+               Background_Color => White,
+               Is_Bold          => True,
+               Is_Italic        => False,
+               Is_Underline     => False,
+               Is_Strikethrough => False));
+         end loop;
+      end loop;
+      Add_Component (CP.all, To_CID ("RenderInfo"), RI);
+
+      --  Create root entity
+      CP := Add_Entity (World, To_EID ("root"));
+      RW.Position_X    := TUI_Width'First;
+      RW.Position_Y    := TUI_Height'First;
+      RW.Size_Width    := Width;
+      RW.Size_Height   := Height;
+      RW.Render_Buffer := Create_Buffer (Width, Height);
+      Add_Component (CP.all, To_CID ("WidgetComponent"), RW);
+      Add_Component (CP.all, To_CID ("RootWidget"),      Root_Marker);
+      Root_BG.Background_Color := Black;
+      Add_Component (CP.all, To_CID ("BackgroundColorComponent"), Root_BG);
+
+      --  Attach tab manager if tabs are needed
+      if Tab_Count > 0 then
+         declare
+            TM : Tab_Manager_Component_T;
+         begin
+            TM.Active_Tab := 0;
+            TM.Tab_Count  := Tab_Count;
+            Add_Component (CP.all, To_CID ("TabManager"), TM);
+         end;
+      end if;
+   end Initialize_World;
+
+   --===========================================================================
+   -- SYSTEM: Reset Backbuffer
+   --===========================================================================
+   procedure ResetBackbufferSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List : Entity_Components_Ptr;
+      CP          : Components_Ptr;
+      RI          : Render_Info_Component_T;
+   begin
+      Entity_List_PO.Claim_Writing (Entity_List);
+      CP := Get_Entity_Components (Entity_List.all, To_EID ("render_info"));
+      if CP /= null then
+         RI := Render_Info_Component_T (
+            Get_Component (CP.all, To_CID ("RenderInfo")));
+         for RX in TUI_Width'First .. RI.Terminal_Width loop
+            for RY in TUI_Height'First .. RI.Terminal_Height loop
+               Set_Buffer_Pixel (RI.Backbuffer, RX, RY,
+                  (Char             => Character'Val (1),
+                  Char_Color       => White,
+                  Background_Color => White,
+                  Is_Bold          => True,
+                  Is_Italic        => False,
+                  Is_Underline     => False,
+                  Is_Strikethrough => False));
+            end loop;
+         end loop;
+         Add_Component (CP.all, To_CID ("RenderInfo"), RI);
+      end if;
+      Entity_List_PO.Release_Writing;
+   end ResetBackbufferSystem;
+
+--===========================================================================
+-- SYSTEM: TAB SWITCHING
+-- When the user presses [ or ], this system updates which entities are visible
+-- by rebuilding the root widget's children list for the new active tab.
+--===========================================================================
+
+procedure TabSwitchSystem
+  (Entity_List_PO : in out Entity_Components_PO;
+   Direction      : in     Tab_Direction)
+is
+
+   Entity_List   : Entity_Components_Ptr;       --  Points to the whole world of entities
+   Manager_Comps : Components_Ptr;              --  Will point to the tab manager's components
+   Root_Comps    : Components_Ptr;              --  Will point to the root widget's components
+   Matched       : Entity_ID_Vector.Vector;     --  List of entities that have a Tab_Manager
+
+   --  Build a search filter: "find entities that have Tab_Manager_Component_T"
+   Search : constant Component_Tag_Vector.Vector :=
+      Component_Tag_Vector.To_Vector (Tab_Manager_Component_T'Tag, 1);
+begin
+   --  Lock the world for writing because we are going to change the
+   --  root widget's children list
+   Entity_List_PO.Claim_Writing (Entity_List);
+
+   --  Find the entity that has a Tab_Manager component (this will be root)
+   Matched := Get_Entities_Matching (Entity_List.all, Search);
+
+   --  Loop over matched entities (in practice just one - root)
+   for EID of Matched loop
+
+      --  Get the components of this entity
+      Manager_Comps := Get_Entity_Components (Entity_List.all, EID);
+
+      declare
+         --  Get a direct live reference to the Tab_Manager component
+         --  so any change we make to Mgr immediately changes the real data
+         Mgr : Tab_Manager_Component_T renames Tab_Manager_Component_T (
+            Get_Component_Ptr (Manager_Comps, Tab_Manager_Component_T'Tag).all);
+      begin
+         --  STEP 1: Move the active tab number forward or backward
+         if Direction = Next then
+            --  Going forward: increment, but wrap back to 0 if we were on the last tab
+            Mgr.Active_Tab :=
+               (if Mgr.Active_Tab = Mgr.Tab_Count - 1 then 0
+                else Mgr.Active_Tab + 1);
+         else
+            --  Going backward: decrement, but wrap to last tab if we were on tab 0
+            Mgr.Active_Tab :=
+               (if Mgr.Active_Tab = 0 then Mgr.Tab_Count - 1
+                else Mgr.Active_Tab - 1);
+         end if;
+
+         --  STEP 2: Rebuild the root widget's children list for the new tab
+         --  The root's children list is what the renderer uses to decide
+         --  what appears on screen - if an entity is not in this list it
+         --  is invisible even though it still exists in the world
+         Root_Comps := Get_Entity_Components (Entity_List.all, To_EID ("root"));
+         if Root_Comps /= null then
+            declare
+               --  Direct live reference to root's widget component
+               Root_W : Widget_Component_T renames Widget_Component_T (
+                  Get_Component_Ptr (Root_Comps, Widget_Component_T'Tag).all);
+
+               --  Search filter for finding all tab page entities
+               Page_Search : constant Component_Tag_Vector.Vector :=
+                  Component_Tag_Vector.To_Vector (Tab_Page_Component_T'Tag, 1);
+
+               Page_Entities : Entity_ID_Vector.Vector;  --  Will hold all tab page entity IDs
+               Page_Comps    : Components_Ptr;           --  Working pointer for each page entity
+            begin
+               --  Wipe the children list completely so we can refill it fresh
+               Root_W.Children.Clear;
+
+               --  PASS 1: Add chrome entities
+               --  Chrome = help bar, tab bar, separator - things that should
+               --  always be visible regardless of which tab is active.
+               --  We identify chrome by what it does NOT have:
+               --  no Tab_Page tag, not root itself, not the render_info entity
+               --  PASS 1: Add chrome entities
+               for Cursor in Entity_List.all.Iterate loop
+                  declare
+                     All_EID : constant Entity_Id    := Entity_Map.Key (Cursor);
+                     EC      : constant Components_Ptr :=
+                        Get_Entity_Components (Entity_List.all, All_EID);
+                  begin
+                     if EC /= null
+                        and then Has_Component (EC.all, Widget_Component_T'Tag)
+                        and then not Has_Component (EC.all, Tab_Page_Component_T'Tag)
+                        and then not Has_Component (EC.all, Root_Widget_Component_T'Tag)
+                        and then not Has_Component (EC.all, Render_Info_Component_T'Tag)
+                     then
+                        Root_W.Children.Append (All_EID);
+                     end if;
+                  end;
+               end loop;
+
+               --  PASS 2: Add tab page entities for the active tab only
+               --  Get all entities that have a Tab_Page component
+               Page_Entities := Get_Entities_Matching (Entity_List.all, Page_Search);
+
+               for Page_EID of Page_Entities loop
+                  Page_Comps := Get_Entity_Components (Entity_List.all, Page_EID);
+                  declare
+                     --  Read this entity's Tab_Index to see which tab it belongs to
+                     Page : Tab_Page_Component_T renames Tab_Page_Component_T (
+                        Get_Component_Ptr (Page_Comps, Tab_Page_Component_T'Tag).all);
+                  begin
+                     --  Only add it if its tab number matches the one we just switched to
+                     if Page.Tab_Index = Mgr.Active_Tab then
+                        Root_W.Children.Append (Page_EID);
+                     end if;
+                  end;
+               end loop;
+
+            end;
+         end if;
+      end;
+   end loop;
+
+   --  Release the write lock so other systems can access the world
+   Entity_List_PO.Release_Writing;
+end TabSwitchSystem;
+
+
+procedure TabInitSystem (Entity_List_PO : in out Entity_Components_PO) is
+   Entity_List   : Entity_Components_Ptr;
+   Root_Comps    : Components_Ptr;
+   Manager_Comps : Components_Ptr;
+   Matched       : Entity_ID_Vector.Vector;
+   Search : constant Component_Tag_Vector.Vector :=
+      Component_Tag_Vector.To_Vector (Tab_Manager_Component_T'Tag, 1);
+begin
+   Entity_List_PO.Claim_Writing (Entity_List);
+   Matched := Get_Entities_Matching (Entity_List.all, Search);
+   for EID of Matched loop
+      Manager_Comps := Get_Entity_Components (Entity_List.all, EID);
+      declare
+         Mgr : Tab_Manager_Component_T renames Tab_Manager_Component_T (
+            Get_Component_Ptr (Manager_Comps, Tab_Manager_Component_T'Tag).all);
+      begin
+         Root_Comps := Get_Entity_Components (Entity_List.all, To_EID ("root"));
+         if Root_Comps /= null then
+            declare
+               Root_W : Widget_Component_T renames Widget_Component_T (
+                  Get_Component_Ptr (Root_Comps, Widget_Component_T'Tag).all);
+               Page_Search : constant Component_Tag_Vector.Vector :=
+                  Component_Tag_Vector.To_Vector (Tab_Page_Component_T'Tag, 1);
+               Page_Entities : Entity_ID_Vector.Vector;
+               Page_Comps    : Components_Ptr;
+            begin
+               Root_W.Children.Clear;
+               for Cursor in Entity_List.all.Iterate loop
+                  declare
+                     All_EID : constant Entity_Id := Entity_Map.Key (Cursor);
+                     EC      : constant Components_Ptr :=
+                        Get_Entity_Components (Entity_List.all, All_EID);
+                  begin
+                     if EC /= null
+                        and then Has_Component (EC.all, Widget_Component_T'Tag)
+                        and then not Has_Component (EC.all, Tab_Page_Component_T'Tag)
+                        and then not Has_Component (EC.all, Root_Widget_Component_T'Tag)
+                        and then not Has_Component (EC.all, Render_Info_Component_T'Tag)
+                     then
+                        Root_W.Children.Append (All_EID);
+                     end if;
+                  end;
+               end loop;
+               Page_Entities := Get_Entities_Matching (Entity_List.all, Page_Search);
+               for Page_EID of Page_Entities loop
+                  Page_Comps := Get_Entity_Components (Entity_List.all, Page_EID);
+                  declare
+                     Page : Tab_Page_Component_T renames Tab_Page_Component_T (
+                        Get_Component_Ptr (Page_Comps, Tab_Page_Component_T'Tag).all);
+                  begin
+                     if Page.Tab_Index = Mgr.Active_Tab then
+                        Root_W.Children.Append (Page_EID);
+                     end if;
+                  end;
+               end loop;
+            end;
+         end if;
+      end;
+   end loop;
+   Entity_List_PO.Release_Writing;
+end TabInitSystem;
+
+--===========================================================================
+-- HELPER: MAKE WIDGET WITH BACKGROUND COLOR
+-- Convenience wrapper around Make_Widget that also attaches a background
+-- color in one call instead of three separate lines every time.
+--===========================================================================
+function Make_Widget_With_BG
+  (World : in out Entity_Components_PO;  --  The world to add the entity to
+   Name  : String;                        --  Unique name for the entity
+   X     : TUI_Width;  Y : in TUI_Height; --  Position on screen
+   W     : TUI_Width;  H : in TUI_Height; --  Size of the widget
+   BG    : Color_t)                       --  Background color to attach
+   return Components_Ptr                  --  Returns pointer so caller can add more components
+is
+   --  Step 1: Create the base widget entity with position, size and render buffer
+   --  The root parent container never changes — only the children list does
+   CP   : constant Components_Ptr := Make_Widget (World, Name, X, Y, W, H);
+   BG_C : Background_Color_Component_T;  --  Empty background component to fill and attach
+begin
+   --  Step 2: Fill the background component with the requested color
+   --  and attach it to the same entity Make_Widget just created
+   BG_C.Background_Color := BG;
+   Add_Component (CP.all, To_CID ("BackgroundColorComponent"), BG_C);
+
+   --  Return the pointer so the caller can keep attaching more components
+   --  like text, progress bars, tab page tags etc
+   return CP;
+end Make_Widget_With_BG;
+
 
 end ECS;

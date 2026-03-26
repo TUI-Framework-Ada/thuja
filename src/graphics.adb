@@ -176,4 +176,47 @@ package body Graphics is
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "0m"));
    end Reset_Styling;
 
+      procedure Write_To_Buffer
+   (Buf  : in out Buffer_T;
+      Col  : in     TUI_Width;
+      Row  : in     TUI_Height;
+      Text : in     String;
+      FG   : in     Color_t;
+      BG   : in     Color_t;
+      Bold : in     Boolean := False)
+   is
+      X : TUI_Width := Col;
+   begin
+      for I in Text'Range loop
+         exit when X > Buf.Width;
+         Set_Buffer_Pixel (Buf, X, Row,
+            (Char             => Text (I),
+            Char_Color       => FG,
+            Background_Color => BG,
+            Is_Bold          => Bold,
+            Is_Italic        => False,
+            Is_Underline     => False,
+            Is_Strikethrough => False));
+         X := X + 1;
+      end loop;
+   end Write_To_Buffer;
+
+   procedure Fill_Row
+   (Buf : in out Buffer_T;
+      Row : in     TUI_Height;
+      BG  : in     Color_t)
+   is
+   begin
+      for X in TUI_Width'First .. Buf.Width loop
+         Set_Buffer_Pixel (Buf, X, Row,
+            (Char             => ' ',
+            Char_Color       => BG,
+            Background_Color => BG,
+            Is_Bold          => False,
+            Is_Italic        => False,
+            Is_Underline     => False,
+            Is_Strikethrough => False));
+      end loop;
+   end Fill_Row;
+
 end Graphics;
