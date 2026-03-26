@@ -25,9 +25,11 @@ package Components is
    -- UPDATED: Added Prev_Terminal_Width/Height for resize detection
    type Render_Info_Component_T is new Component_T with record
       --  Data Fields
-      Framebuffer_1   : aliased Buffer_T;
-      Framebuffer_2   : aliased Buffer_T; --  Double-buffering
+      --Framebuffer_1   : aliased Buffer_T;
+      --Framebuffer_2   : aliased Buffer_T; --  Double-buffering
+      Buffers         : Buffer_Array_t;
       Drawing_FB      : Protected_DB_Ptr; --  Which FB the render thread should use
+      First_Frame     : Boolean := True; --  Only true on first rendering frame, always draws full TUI
       Backbuffer      : Buffer_T;
       Terminal_Width  : TUI_Width;
       Terminal_Height : TUI_Height;

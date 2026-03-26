@@ -4,6 +4,7 @@
 
 with Ada.Calendar;
 with Ada.Calendar.Arithmetic;
+with Ada.Characters.Conversions;
 with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
@@ -12,6 +13,7 @@ with Graphics;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Text_IO;
 with Ada.Tags; use Ada.Tags;
+with Ada.Wide_Wide_Text_IO;
 with Selection;
 
 package body ECS is
@@ -868,7 +870,7 @@ package body ECS is
       Matched_Roots : Entity_ID_Vector.Vector;
       RI_Components : Components_Ptr;
       Root_Components : Components_Ptr;
-      Rendering_To_FB_2 : Boolean;
+      Framebuffer_Index : Framebuffer_Index_t;
    begin
 
       Entity_List_PO.Claim_Reading (Entity_List);
@@ -881,7 +883,7 @@ package body ECS is
             RenderInfo_C : Render_Info_Component_T renames Render_Info_Component_T (
               Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
          begin
-            RenderInfo_C.Drawing_FB.all.Read (Rendering_To_FB_2);
+            Framebuffer_Index := RenderInfo_C.Drawing_FB.all.Back;
 
             for R_Entity_ID of Matched_Roots loop
                Root_Components := Get_Entity_Components (Entity_List.all, R_Entity_ID);
@@ -890,11 +892,7 @@ package body ECS is
                     Get_Component_Ptr (Root_Components, Widget_Component_T'Tag).all);
                begin
 
-                  if Rendering_To_FB_2 then
-                     RecursiveBufferCopy (RenderInfo_C.Framebuffer_2, Root, Root);
-                  else
-                     RecursiveBufferCopy (RenderInfo_C.Framebuffer_1, Root, Root);
-                  end if;
+                  RecursiveBufferCopy (RenderInfo_C.Buffers (Framebuffer_Index), Root, Root);
                end;
             end loop;
          end;
@@ -907,47 +905,33 @@ package body ECS is
    -- SYSTEM: BUFFER DRAW (TERMINAL OUTPUT)
    --===========================================================================
 
-   --  TODO: Move code of local functions (Trim, etc) into Graphics and make
-   --    them use constant, fixed-length strings
    --  TODO: Undo stateful optimization, replace with separated checking,
    --    string conversion, and printing (the hot loop issue)
    --  TODO: Compare the current framebuffer against the other one & remove
    --    mentions to backbuffer (backbuffer is unneeded and should eventually
    --    be removed)
+
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
 
       package GFX renames Graphics;
 
-      function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
-      function FG (P : Pixel_t) return String is
-        (GFX.CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
-             & Trim (P.Char_Color.Green'Image) & ";"
-             & Trim (P.Char_Color.Blue'Image) & "m");
-      function BG (P : Pixel_t) return String is
-        (GFX.CSI & "48;2;" & Trim (P.Background_Color.Red'Image) & ";"
-             & Trim (P.Background_Color.Green'Image) & ";"
-             & Trim (P.Background_Color.Blue'Image) & "m");
-      function Bold (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Bold then "1m" else "22m"));
-      function Italic (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Italic then "3m" else "23m"));
-      function Underline (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Underline then "4m" else "24m"));
-      function Strikethrough (P : Pixel_t) return String is
-        (GFX.CSI & (if P.Is_Strikethrough then "9m" else "29m"));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
-        (GFX.CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
-      Reset : constant String := GFX.CSI & "0m";
+        (GFX.CSI & GFX.Trim (Row'Image) & ";" & GFX.Trim (Col'Image) & "H");
+
       Entity_List : Entity_Components_Ptr;
       Search_Components : constant Component_Tag_Vector.Vector :=
         Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       RI_Component_List : Components_Ptr;
-      FB_Pixel : Pixel_t;
-      Drawing_From_FB_1 : Boolean;
 
-      type Drawing_Ptr is access all Buffer_T;
-      Drawing : Drawing_Ptr;
+      Frontbuffer_Index : Framebuffer_Index_t;
+      Backbuffer_Index : Framebuffer_Index_t;
+
+      type PosPixel_t is record
+         X : TUI_Width;
+         Y : TUI_Height;
+         P : Pixel_t;
+      end record;
    begin
       Entity_List_PO.Claim_Reading (Entity_List);
       Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Components);
@@ -961,92 +945,71 @@ package body ECS is
               Render_Info_Component_T
                 (Get_Component_Ptr
                    (RI_Component_List, Render_Info_Component_T'Tag).all);
+            type Flat_Buffer_t is range 1 .. Positive (TUI_Width'Last) * Positive(TUI_Height'Last);
+            All_Pixels : array (Flat_Buffer_t) of PosPixel_t;
+            Updated_Pixels : array (Flat_Buffer_t) of PosPixel_t;
+            All_Pixels_Length : Natural := 0;
+            Updated_Pixels_Length : Natural := 0;
          begin
-            RI.Drawing_FB.all.Wait (Drawing_From_FB_1);
-            -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
-            Drawing :=
-              (if Drawing_From_FB_1
-               then RI.Framebuffer_1'Unchecked_Access
-               else RI.Framebuffer_2'Unchecked_Access);
+            RI.Drawing_FB.all.Start_Draw;
+            Frontbuffer_Index := RI.Drawing_FB.all.Front;
+            Backbuffer_Index := RI.Drawing_FB.all.Back;
 
-            --  Begin comparing FB to BB and drawing
-            --  Batched output with differential cursor/format tracking
+            --  Record pixels with their positions into array
             declare
-               Frame_Output : SU.Unbounded_String;
-               --  Cursor position tracking (skip Move for consecutive pixels)
-               Last_X : TUI_Width := TUI_Width'First;
-               Last_Y : TUI_Height := TUI_Height'First;
-               First_Pixel : Boolean := True;
-               --  Format state tracking (skip unchanged ANSI codes)
-               Cur_FG     : Color_t := (0, 0, 0);
-               Cur_BG     : Color_t := (0, 0, 0);
-               Cur_Bold   : Boolean := False;
-               Cur_Italic : Boolean := False;
-               Cur_ULine  : Boolean := False;
-               Cur_Strike : Boolean := False;
-               Fmt_Set    : Boolean := False;
+               All_Pixels_Index : Flat_Buffer_t := 1;
             begin
                for Y in TUI_Height'First .. RI.Terminal_Height loop
                   for X in TUI_Width'First .. RI.Terminal_Width loop
-                     if Get_Buffer_Pixel (Drawing.all, X, Y)
-                       /= Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-                     then
-                        FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
-
-                        --  Only move cursor when not at expected position
-                        if First_Pixel or else Y /= Last_Y
-                           or else Integer (X) /= Integer (Last_X) + 1
-                        then
-                           SU.Append (Frame_Output, Move (Y, X));
-                        end if;
-
-                        --  Only emit format codes that differ from current state
-                        if not Fmt_Set or else FB_Pixel.Char_Color /= Cur_FG then
-                           SU.Append (Frame_Output, FG (FB_Pixel));
-                           Cur_FG := FB_Pixel.Char_Color;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Background_Color /= Cur_BG then
-                           SU.Append (Frame_Output, BG (FB_Pixel));
-                           Cur_BG := FB_Pixel.Background_Color;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Bold /= Cur_Bold then
-                           SU.Append (Frame_Output, Bold (FB_Pixel));
-                           Cur_Bold := FB_Pixel.Is_Bold;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Italic /= Cur_Italic then
-                           SU.Append (Frame_Output, Italic (FB_Pixel));
-                           Cur_Italic := FB_Pixel.Is_Italic;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Underline /= Cur_ULine then
-                           SU.Append (Frame_Output, Underline (FB_Pixel));
-                           Cur_ULine := FB_Pixel.Is_Underline;
-                        end if;
-                        if not Fmt_Set or else FB_Pixel.Is_Strikethrough /= Cur_Strike then
-                           SU.Append (Frame_Output, Strikethrough (FB_Pixel));
-                           Cur_Strike := FB_Pixel.Is_Strikethrough;
-                        end if;
-                        Fmt_Set := True;
-
-                        --  Emit character (no per-pixel Reset)
-                        SU.Append (Frame_Output, "" & FB_Pixel.Char);
-
-                        Last_X := X;
-                        Last_Y := Y;
-                        First_Pixel := False;
-
-                        Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                     All_Pixels (All_Pixels_Index) := (
+                       X => X,
+                       Y => Y,
+                       P => Graphics.Get_Buffer_Pixel (RI.Buffers (Frontbuffer_Index), X, Y)
+                     );
+                     All_Pixels_Length := All_Pixels_Length + 1;
+                     if All_Pixels_Index /= Flat_Buffer_t'Last then
+                        All_Pixels_Index := All_Pixels_Index + 1;
                      end if;
                   end loop;
                end loop;
-
-               if SU.Length (Frame_Output) > 0 then
-                  SU.Append (Frame_Output, Reset);
-                  Ada.Text_IO.Put (SU.To_String (Frame_Output));
-               end if;
             end;
 
+            --  Filter out pixels that aren't different (unless this is the first frame)
+            declare
+               Cur : PosPixel_t;
+               Back : Pixel_t;
+               Updated_Pixels_Index : Flat_Buffer_t := 1;
+            begin
+               for All_Pixels_Index in 1 .. All_Pixels_Length loop
+                  Cur := All_Pixels (Flat_Buffer_t (All_Pixels_Index));
+                  Back := Graphics.Get_Buffer_Pixel (RI.Buffers (Backbuffer_Index), Cur.X, Cur.Y);
+
+                  if not (Cur.P = Back) or RI.First_Frame then
+                     Updated_Pixels (Updated_Pixels_Index) := Cur;
+                     Updated_Pixels_Length := Updated_Pixels_Length + 1;
+                     if Updated_Pixels_Index /= Flat_Buffer_t'Last then
+                        Updated_Pixels_Index := Updated_Pixels_Index + 1;
+                     end if;
+                  end if;
+               end loop;
+            end;
+
+            --  Draw updated pixels
+            declare
+               Px : PosPixel_t;
+            begin
+               for Updated_Pixels_Index in 1 .. Updated_Pixels_Length loop
+                  Px := Updated_Pixels (Flat_Buffer_t (Updated_Pixels_Index));
+                  Ada.Text_IO.Put (Move (Px.Y, Px.X));
+                  Ada.Wide_Wide_Text_IO.Put (+(Px.P));
+               end loop;
+            end;
+
+            --  Update first-frame var (if needed)
+            RI.First_Frame := False;
+
             --  Release RenderInfo
-            RI.Drawing_FB.all.Post;
+            RI.Drawing_FB.all.End_Draw;
          end;
       end loop;
 
@@ -1063,7 +1026,6 @@ package body ECS is
         Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
       Matched_Entities : Entity_ID_Vector.Vector;
       Component_List : Components_Ptr;
-      Drawing_From_FB_1 : Boolean;
    begin
 
       Entity_List_PO.Claim_Reading (Entity_List);
@@ -1076,9 +1038,7 @@ package body ECS is
             Render_Info : Render_Info_Component_T renames Render_Info_Component_T (
               Get_Component_Ptr (Component_List, Render_Info_Component_T'Tag).all);
          begin
-            Render_Info.Drawing_FB.all.Wait (Drawing_From_FB_1);
             Render_Info.Drawing_FB.all.Swap;
-            Render_Info.Drawing_FB.all.Post;
          end;
       end loop;
 
