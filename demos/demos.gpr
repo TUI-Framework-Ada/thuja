@@ -17,7 +17,8 @@ project Demos is
    -- "command_palette", 
    -- "demos", 
    -- "presentation_2_demo",
-   "text_editor_demo");
+   "text_editor_demo",
+   "sine_wave_demo");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches &
