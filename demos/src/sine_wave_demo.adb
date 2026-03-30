@@ -91,6 +91,9 @@ procedure Sine_Wave_Demo is
    Graph_Width  : constant Positive := 80;
    Graph_Height : constant Positive := 22;
 
+   --  The row index of the zero axis (centre of the graph)
+   Zero_Row : constant Natural := Graph_Height / 2;
+
    Should_Quit : Boolean := False;
 
    --------------------------------------------------------
@@ -143,56 +146,72 @@ procedure Sine_Wave_Demo is
    -- Places '*' at the wave position only.
    --------------------------------------------------------
    function Build_Graph_Text return Unbounded_String is
-      Result : Unbounded_String := Null_Unbounded_String;
+   Result   : Unbounded_String := Null_Unbounded_String;
+   Wave_Row : array (0 .. Graph_Width - 1) of Integer;
+   
+   -- We shift the center UP to Row 6 (Top quarter of your 22-row widget)
+   -- This moves the entire wave away from the bottom "danger zone".
+   Center_Row : constant Float := 6.0;
+   
+   -- We reduce the swing to 4.0. 
+   -- Peak will be at Row 2 (6 - 4)
+   -- Trough will be at Row 10 (6 + 4)
+   -- This wave only uses rows 2 through 10.
+   Max_Swing  : constant Float := 4.0;
 
-      type Grid_T is
-        array (0 .. Graph_Height - 1, 0 .. Graph_Width - 1) of Boolean;
-      Grid : Grid_T := (others => (others => False));
+   type Grid_T is array (0 .. Graph_Height - 1, 0 .. Graph_Width - 1) of Boolean;
+   Grid : Grid_T := (others => (others => False));
+begin
+   -- 1. Calculate Positions
+   for Col in 0 .. Graph_Width - 1 loop
+      declare
+         X     : constant Float := Float (Col) / Float (Graph_Width);
+         Angle : constant Float := 2.0 * Ada.Numerics.Pi * Frequency * X + Phase;
+         
+         -- Small amplitude swing
+         Value : constant Float := Amplitude * Sin (Angle) * Max_Swing;
+         
+         -- Calculate Row
+         R_Val : Integer := Integer (Center_Row - Value);
+      begin
+         -- Safety Clamp
+         if R_Val < 0 then R_Val := 0; end if;
+         if R_Val > Graph_Height - 1 then R_Val := Graph_Height - 1; end if;
+         
+         Wave_Row (Col) := R_Val;
+      end;
+   end loop;
 
-      Samples_Per_Col : constant Positive := 8;
-   begin
+   -- 2. Vertical Interpolation (Connect the dots)
+   for Col in 0 .. Graph_Width - 1 loop
+      declare
+         This_Row : constant Integer := Wave_Row (Col);
+         Next_Row : constant Integer := (if Col < Graph_Width - 1 then Wave_Row (Col + 1) else This_Row);
+         Row_Min  : constant Integer := Integer'Min (This_Row, Next_Row);
+         Row_Max  : constant Integer := Integer'Max (This_Row, Next_Row);
+      begin
+         for R in Row_Min .. Row_Max loop
+            Grid (R, Col) := True;
+         end loop;
+      end;
+   end loop;
+
+   -- 3. Build String
+   for Row in 0 .. Graph_Height - 1 loop
       for Col in 0 .. Graph_Width - 1 loop
-         for S in 0 .. Samples_Per_Col - 1 loop
-            declare
-               X         : constant Float :=
-                 (Float (Col) + Float (S) / Float (Samples_Per_Col))
-                 / Float (Graph_Width);
-               Angle     : constant Float :=
-                 2.0 * Ada.Numerics.Pi * Frequency * X + Phase;
-               --  Sin returns -1.0 to 1.0, we only use 0.0 to 1.0
-               --  so clamp negative values to 0
-               Raw_Value : constant Float := Amplitude * Sin (Angle);
-               Value     : constant Float :=
-                 (if Raw_Value < 0.0 then 0.0 else Raw_Value);
-               --  Map 0.0..1.0 to Graph_Height-1..0
-               --  so 1.0 is at the top and 0.0 is at the bottom
-               Row       : Integer :=
-                 Graph_Height - 1 - Integer (Value * Float (Graph_Height - 1));
-            begin
-               if Row < 0 then
-                  Row := 0;
-               elsif Row > Graph_Height - 1 then
-                  Row := Graph_Height - 1;
-               end if;
-               Grid (Row, Col) := True;
-            end;
-         end loop;
+         if Grid (Row, Col) then
+            Append (Result, '*');
+         elsif Row = Integer(Center_Row) then
+            Append (Result, '-'); -- This line will now appear very high up
+         else
+            Append (Result, ' ');
+         end if;
       end loop;
+      Append (Result, Character'Val (10));
+   end loop;
 
-      --  Build the display string row by row from the grid
-      for Row in 0 .. Graph_Height - 1 loop
-         for Col in 0 .. Graph_Width - 1 loop
-            if Grid (Row, Col) then
-               Append (Result, '*');
-            else
-               Append (Result, ' ');
-            end if;
-         end loop;
-         Append (Result, Character'Val (10));
-      end loop;
-
-      return Result;
-   end Build_Graph_Text;
+   return Result;
+end Build_Graph_Text;
 
    --------------------------------------------------------
    -- HELPER: Build_Title_Text
