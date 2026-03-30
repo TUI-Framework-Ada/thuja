@@ -25,28 +25,12 @@ procedure Sine_Wave_Demo is
    --  Renders a scrolling sine wave on screen using ASCII characters,
    --  with live parameter control via keyboard input.
    --
-   --  VISUAL LAYOUT
-   --  -------------
-   --  ┌────────────────────────────────────────────────────────────────┐
-   --  │  Sine Wave Visualiser   AMP: 1.0   FREQ: 1.0   SPEED: 1.0    │
-   --  ├────────────────────────────────────────────────────────────────┤
-   --  │  *   *           *   *           *   *           *   *        │
-   --  │*       *       *       *       *       *       *       *      │
-   --  │          *   *           *   *           *   *           *    │
-   --  │            *               *               *               *  │
-   --  │                                                               │
-   --  ├────────────────────────────────────────────────────────────────┤
-   --  │  w/s: amplitude  |  a/d: frequency  |  q/e: speed  |  ESC: quit│
-   --  └────────────────────────────────────────────────────────────────┘
-   --
    --  KEYBINDINGS
    --  -----------
    --  w / s   Increase / decrease amplitude
    --  a / d   Decrease / increase frequency
    --  q / e   Decrease / increase scroll speed
    --  ESC     Quit the demo
-   ------------------------------------------------------------------------------
-
    --------------------------------------------------------
    -- WAVE PARAMETERS
    -- These control the shape and behaviour of the sine wave.
@@ -59,7 +43,7 @@ procedure Sine_Wave_Demo is
 
    --  Frequency: how many cycles appear across the screen.
    --  Higher values produce more compressed waves.
-   Frequency : Float := 1.0;
+   Frequency : Float := 2.5;
 
    --  Speed: how fast the wave scrolls left each frame.
    --  Higher values make the wave move faster.
@@ -138,7 +122,6 @@ procedure Sine_Wave_Demo is
         & Integer'Image (Dec_Part) (2 .. Integer'Image (Dec_Part)'Last);
    end Float_To_String;
 
-   --------------------------------------------------------
    -- HELPER: Build_Graph_Text
    -- Builds the full display string for the graph widget.
    -- For each column calculates the sine value and maps
@@ -149,11 +132,11 @@ procedure Sine_Wave_Demo is
    Result   : Unbounded_String := Null_Unbounded_String;
    Wave_Row : array (0 .. Graph_Width - 1) of Integer;
    
-   -- We shift the center UP to Row 6 (Top quarter of your 22-row widget)
-   -- This moves the entire wave away from the bottom "danger zone".
+   -- Shift the center UP to Row 6 (Top quarter of your 22-row widget)
+   -- This moves the entire wave away from the bottom.
    Center_Row : constant Float := 6.0;
    
-   -- We reduce the swing to 4.0. 
+   -- Reduce the swing to 4.0. 
    -- Peak will be at Row 2 (6 - 4)
    -- Trough will be at Row 10 (6 + 4)
    -- This wave only uses rows 2 through 10.
@@ -541,9 +524,10 @@ begin
       --------------------------------------------------------
       -- ADVANCE PHASE
       -- Increment the phase offset each frame by the speed
-      -- value scaled to keep the scrolling smooth at 30 FPS.
+      -- value scaled to keep the scrolling smooth at rates
+      --  higher than 30fps - currently set to near 60fps.
       --------------------------------------------------------
-      Phase := Phase - (Speed * 0.15);
+      Phase := Phase - (Speed * 0.16);
 
       --------------------------------------------------------
       -- REBUILD TEXT COMPONENTS
@@ -569,7 +553,7 @@ begin
       ECS.BufferDrawSystem (Entities_PO);
       ECS.DoubleBufferFlagSystem (Entities_PO);
 
-      delay Duration (0.016); -- ~30 FPS
+      delay Duration (0.016); -- ~60 FPS
    end loop;
 
    --------------------------------------------------------
