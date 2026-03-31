@@ -184,12 +184,12 @@ package Components is
    ---------------------------------------------------------------------------
    --  Stores the internal state of a line-based text editor.
    --  Mode: Navigation (Vi-like movement) or Insertion (Typing)
-   
+
    type Editor_Mode is (Navigation, Insertion);
 
    -- Explicitly tell Ada to use the Ada.Strings.Unbounded package
    use all type SU.Unbounded_String;
-   
+
    -- Vector utilized here for lines so the editor can grow dynamically
    package Line_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => SU.Unbounded_String);
