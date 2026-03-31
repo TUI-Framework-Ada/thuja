@@ -360,63 +360,93 @@ end Update_Chrome;
    begin
       World.Claim_Writing (EL);
 
-      for C in 0 .. Num_Cores - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Img (C)));
-         if CP /= null then
-            PB := Progress_Bar_Component_T (
-               Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-            declare
-               Usage : constant Float := SS.Get_CPU_Usage (C) / 100.0;
-            begin
-               PB.Value        := Usage;
-               PB.Filled_Color :=
-                  (if Usage < 0.33 then Green
-                   elsif Usage < 0.66 then Yellow else Red);
-            end;
-            Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-         end if;
-      end loop;
-
-      SS.Get_Memory_Detailed (Tot_MB, Used_MB, Free_MB, Avail_MB,
-                              Buff_MB, Cache_MB, Swap_Tot_MB, Swap_Used_MB);
       declare
-         Real_Used : constant Natural :=
-            Tot_MB - Free_MB - Buff_MB - Cache_MB;
+         Usages     : SS.CPU_Usage_Array;
+         Core_Count : Natural;
+      begin
+         SS.Get_All_CPU_Usages (Usages, Core_Count);
+         for C in 0 .. Num_Cores - 1 loop
+            CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Img (C)));
+            if CP /= null then
+               PB :=
+                 Progress_Bar_Component_T
+                   (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
+               declare
+                  Usage : constant Float := Usages (C);
+               begin
+                  PB.Value := Usage;
+                  PB.Filled_Color :=
+                    (if Usage < 0.33
+                     then Green
+                     elsif Usage < 0.66
+                     then Yellow
+                     else Red);
+               end;
+               Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
+            end if;
+         end loop;
+      end;
+
+      SS.Get_Memory_Detailed
+        (Tot_MB,
+         Used_MB,
+         Free_MB,
+         Avail_MB,
+         Buff_MB,
+         Cache_MB,
+         Swap_Tot_MB,
+         Swap_Used_MB);
+      declare
+         Real_Used : constant Natural := Tot_MB - Free_MB - Buff_MB - Cache_MB;
          Mem_Pct   : constant Float :=
-            (if Tot_MB > 0 then Float (Real_Used) / Float (Tot_MB) else 0.0);
+           (if Tot_MB > 0 then Float (Real_Used) / Float (Tot_MB) else 0.0);
          Swap_Pct  : constant Float :=
-            (if Swap_Tot_MB > 0
-             then Float (Swap_Used_MB) / Float (Swap_Tot_MB) else 0.0);
+           (if Swap_Tot_MB > 0
+            then Float (Swap_Used_MB) / Float (Swap_Tot_MB)
+            else 0.0);
       begin
          CP := Get_Entity_Components (EL.all, To_EID ("memlabel"));
          if CP /= null then
-            T := Text_Component_T (
-               Get_Component (CP.all, To_CID ("TextComponent")));
-            T.Text := SU.To_Unbounded_String (
-               "Memory: " & Img_F1 (Float (Real_Used) / 1024.0) &
-               "G / " & Img_F1 (Float (Tot_MB) / 1024.0) & "G");
+            T :=
+              Text_Component_T
+                (Get_Component (CP.all, To_CID ("TextComponent")));
+            T.Text :=
+              SU.To_Unbounded_String
+                ("Memory: "
+                 & Img_F1 (Float (Real_Used) / 1024.0)
+                 & "G / "
+                 & Img_F1 (Float (Tot_MB) / 1024.0)
+                 & "G");
             Add_Component (CP.all, To_CID ("TextComponent"), T);
          end if;
 
          CP := Get_Entity_Components (EL.all, To_EID ("rambar"));
          if CP /= null then
-            PB := Progress_Bar_Component_T (
-               Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-            PB.Value        := Mem_Pct;
+            PB :=
+              Progress_Bar_Component_T
+                (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
+            PB.Value := Mem_Pct;
             PB.Filled_Color :=
-               (if Mem_Pct < 0.5 then Green
-                elsif Mem_Pct < 0.75 then Yellow else Red);
+              (if Mem_Pct < 0.5
+               then Green
+               elsif Mem_Pct < 0.75
+               then Yellow
+               else Red);
             Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
          end if;
 
          CP := Get_Entity_Components (EL.all, To_EID ("swpbar"));
          if CP /= null then
-            PB := Progress_Bar_Component_T (
-               Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-            PB.Value        := Swap_Pct;
+            PB :=
+              Progress_Bar_Component_T
+                (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
+            PB.Value := Swap_Pct;
             PB.Filled_Color :=
-               (if Swap_Pct < 0.5 then Green
-                elsif Swap_Pct < 0.75 then Yellow else Red);
+              (if Swap_Pct < 0.5
+               then Green
+               elsif Swap_Pct < 0.75
+               then Yellow
+               else Red);
             Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
          end if;
       end;
@@ -427,22 +457,31 @@ end Update_Chrome;
       begin
          CP := Get_Entity_Components (EL.all, To_EID ("disklabel"));
          if CP /= null then
-            T := Text_Component_T (
-               Get_Component (CP.all, To_CID ("TextComponent")));
-            T.Text := SU.To_Unbounded_String (
-               "Disk: " & Img_F1 (Disk_Used_GB) &
-               "G / " & Img_F1 (Disk_Total_GB) & "G");
+            T :=
+              Text_Component_T
+                (Get_Component (CP.all, To_CID ("TextComponent")));
+            T.Text :=
+              SU.To_Unbounded_String
+                ("Disk: "
+                 & Img_F1 (Disk_Used_GB)
+                 & "G / "
+                 & Img_F1 (Disk_Total_GB)
+                 & "G");
             Add_Component (CP.all, To_CID ("TextComponent"), T);
          end if;
 
          CP := Get_Entity_Components (EL.all, To_EID ("diskbar"));
          if CP /= null then
-            PB := Progress_Bar_Component_T (
-               Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-            PB.Value        := Disk_Pct;
+            PB :=
+              Progress_Bar_Component_T
+                (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
+            PB.Value := Disk_Pct;
             PB.Filled_Color :=
-               (if Disk_Pct < 0.5 then Green
-                elsif Disk_Pct < 0.75 then Yellow else Red);
+              (if Disk_Pct < 0.5
+               then Green
+               elsif Disk_Pct < 0.75
+               then Yellow
+               else Red);
             Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
          end if;
       end;
@@ -451,33 +490,39 @@ end Update_Chrome;
       for R in 0 .. 9 loop
          CP := Get_Entity_Components (EL.all, To_EID ("procList" & Img (R)));
          if CP /= null then
-            T := Text_Component_T (
-               Get_Component (CP.all, To_CID ("TextComponent")));
+            T :=
+              Text_Component_T
+                (Get_Component (CP.all, To_CID ("TextComponent")));
             if Procs /= null and then R < Procs'Length then
                declare
                   P       : SS.Process_Info renames Procs (R + 1);
                   CPU_Pct : constant Natural :=
-                     Natural'Min (100, Natural (P.CPU));
+                    Natural'Min (100, Natural (P.CPU));
                   Mem_Pct : constant Natural :=
-                     Natural'Min (100, Natural (P.Memory));
-                  St : constant Character_t :=
-                     (case P.State is
-                      when SS.Running       => 'R',
-                      when SS.Sleeping      => 'S',
-                      when SS.Stopped       => 'T',
-                      when SS.Zombie        => 'Z',
-                      when SS.Unknown_State => '?');
+                    Natural'Min (100, Natural (P.Memory));
+                  St      : constant Character_t :=
+                    (case P.State is
+                       when SS.Running       => 'R',
+                       when SS.Sleeping      => 'S',
+                       when SS.Stopped       => 'T',
+                       when SS.Zombie        => 'Z',
+                       when SS.Unknown_State => '?');
                begin
-                  T.Text := SU.To_Unbounded_String (
-                     Pad (Img (P.PID), 7) &
-                     Pad (SU.To_String (P.User), 10) &
-                     Pad (Img (CPU_Pct) & "%", 6) &
-                     Pad (Img (Mem_Pct) & "%", 6) &
-                     St & "  " &
-                     Pad (SU.To_String (P.Name), 30));
+                  T.Text :=
+                    SU.To_Unbounded_String
+                      (Pad (Img (P.PID), 7)
+                       & Pad (SU.To_String (P.User), 10)
+                       & Pad (Img (CPU_Pct) & "%", 6)
+                       & Pad (Img (Mem_Pct) & "%", 6)
+                       & St
+                       & "  "
+                       & Pad (SU.To_String (P.Name), 30));
                   T.Text_Color :=
-                     (if CPU_Pct > 50 then Red
-                      elsif CPU_Pct > 20 then Gold else White);
+                    (if CPU_Pct > 50
+                     then Red
+                     elsif CPU_Pct > 20
+                     then Gold
+                     else White);
                end;
             else
                T.Text := SU.To_Unbounded_String ("");
@@ -486,7 +531,9 @@ end Update_Chrome;
          end if;
       end loop;
 
-      if Procs /= null then SS.Free_Process_List (Procs); end if;
+      if Procs /= null then
+         SS.Free_Process_List (Procs);
+      end if;
 
       World.Release_Writing;
    end Update_HTop_Stats;

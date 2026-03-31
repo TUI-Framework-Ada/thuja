@@ -20,9 +20,12 @@ package System_Stats is
    -- CPU STATISTICS
    --------------------------------------------------------
 
+   type CPU_Usage_Array is array (0 .. 127) of Float;
    function Get_CPU_Count return Natural;
    function Get_CPU_Usage (Core : Natural) return Float;
    function Get_CPU_Usage_Average return Float;
+   procedure Get_All_CPU_Usages
+   (Usages : out CPU_Usage_Array; Count : out Natural);
 
    --------------------------------------------------------
    -- MEMORY STATISTICS
@@ -30,22 +33,18 @@ package System_Stats is
 
    function Get_Memory_Usage return Float;
 
-   procedure Get_Memory_GB (
-      Total     : out Float;
-      Used      : out Float;
-      Available : out Float
-   );
+   procedure Get_Memory_GB
+     (Total : out Float; Used : out Float; Available : out Float);
 
-   procedure Get_Memory_Detailed (
-      Total      : out Natural;
+   procedure Get_Memory_Detailed
+     (Total      : out Natural;
       Used       : out Natural;
       Free       : out Natural;
       Available  : out Natural;
       Buffers    : out Natural;
       Cached     : out Natural;
       Swap_Total : out Natural;
-      Swap_Used  : out Natural
-   );
+      Swap_Used  : out Natural);
 
    --------------------------------------------------------
    -- DISK STATISTICS
@@ -53,25 +52,16 @@ package System_Stats is
 
    function Get_Disk_Usage (Path : String) return Float;
 
-   procedure Get_Disk_Space_GB (
-      Path     : String;
-      Total_GB : out Float;
-      Used_GB  : out Float
-   );
+   procedure Get_Disk_Space_GB
+     (Path : String; Total_GB : out Float; Used_GB : out Float);
 
-   procedure Get_Disk_IO (
-      Read_MB  : out Float;
-      Write_MB : out Float
-   );
+   procedure Get_Disk_IO (Read_MB : out Float; Write_MB : out Float);
 
    --------------------------------------------------------
    -- NETWORK STATISTICS
    --------------------------------------------------------
 
-   procedure Get_Network_IO (
-      RX_MB : out Float;
-      TX_MB : out Float
-   );
+   procedure Get_Network_IO (RX_MB : out Float; TX_MB : out Float);
 
    --------------------------------------------------------
    -- SYSTEM INFO
