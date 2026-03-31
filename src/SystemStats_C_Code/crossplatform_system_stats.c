@@ -28,7 +28,7 @@
 //==============================================================================
 
 int get_platform(void) {
-    return IS_WINDOWS ? 1 : 0;  // 0 = Linux, 1 = Windows
+    return IS_WINDOWS ? 1 : 0;
 }
 
 //==============================================================================
@@ -37,56 +37,58 @@ int get_platform(void) {
 
 #if IS_WINDOWS
 
-static FILETIME prev_idle[128], prev_kernel[128], prev_user[128];
-static int win_initialized = 0;
+static FILETIME prev_idle, prev_kernel, prev_user;
+static int win_cpu_initialized = 0;
 
 int get_num_cpu_cores(void) {
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
-    return sysinfo.dwNumberOfProcessors;
+    return (int)sysinfo.dwNumberOfProcessors;
 }
 
 int get_cpu_usage(float usage[], int max) {
     int num_cores = get_num_cpu_cores();
     if (num_cores > max) num_cores = max;
-    
-    // On Windows, we get overall CPU, not per-core easily
-    // For now, return same value for all cores
+
     FILETIME idle, kernel, user;
-    if (GetSystemTimes(&idle, &kernel, &user)) {
-        if (!win_initialized) {
-            prev_idle[0] = idle;
-            prev_kernel[0] = kernel;
-            prev_user[0] = user;
-            win_initialized = 1;
-            for (int i = 0; i < num_cores; i++) usage[i] = 0.0f;
-            return num_cores;
-        }
-        
-        ULONGLONG idle_diff = ((ULONGLONG)idle.dwHighDateTime << 32 | idle.dwLowDateTime) -
-                              ((ULONGLONG)prev_idle[0].dwHighDateTime << 32 | prev_idle[0].dwLowDateTime);
-        ULONGLONG kernel_diff = ((ULONGLONG)kernel.dwHighDateTime << 32 | kernel.dwLowDateTime) -
-                                ((ULONGLONG)prev_kernel[0].dwHighDateTime << 32 | prev_kernel[0].dwLowDateTime);
-        ULONGLONG user_diff = ((ULONGLONG)user.dwHighDateTime << 32 | user.dwLowDateTime) -
-                              ((ULONGLONG)prev_user[0].dwHighDateTime << 32 | prev_user[0].dwLowDateTime);
-        
-        ULONGLONG total = kernel_diff + user_diff;
-        float cpu_percent = total > 0 ? (float)(total - idle_diff) / total : 0.0f;
-        
-        for (int i = 0; i < num_cores; i++) usage[i] = cpu_percent;
-        
-        prev_idle[0] = idle;
-        prev_kernel[0] = kernel;
-        prev_user[0] = user;
-        
+    if (!GetSystemTimes(&idle, &kernel, &user)) {
+        for (int i = 0; i < num_cores; i++) usage[i] = 0.0f;
         return num_cores;
     }
-    
-    for (int i = 0; i < num_cores; i++) usage[i] = 0.0f;
+
+    if (!win_cpu_initialized) {
+        prev_idle   = idle;
+        prev_kernel = kernel;
+        prev_user   = user;
+        win_cpu_initialized = 1;
+        for (int i = 0; i < num_cores; i++) usage[i] = 0.0f;
+        return num_cores;
+    }
+
+    ULONGLONG idle_diff =
+        ((ULONGLONG)idle.dwHighDateTime   << 32 | idle.dwLowDateTime) -
+        ((ULONGLONG)prev_idle.dwHighDateTime << 32 | prev_idle.dwLowDateTime);
+    ULONGLONG kernel_diff =
+        ((ULONGLONG)kernel.dwHighDateTime   << 32 | kernel.dwLowDateTime) -
+        ((ULONGLONG)prev_kernel.dwHighDateTime << 32 | prev_kernel.dwLowDateTime);
+    ULONGLONG user_diff =
+        ((ULONGLONG)user.dwHighDateTime   << 32 | user.dwLowDateTime) -
+        ((ULONGLONG)prev_user.dwHighDateTime << 32 | prev_user.dwLowDateTime);
+
+    ULONGLONG total = kernel_diff + user_diff;
+    float cpu_pct = (total > 0)
+        ? (float)(total - idle_diff) / (float)total
+        : 0.0f;
+
+    for (int i = 0; i < num_cores; i++) usage[i] = cpu_pct;
+
+    prev_idle   = idle;
+    prev_kernel = kernel;
+    prev_user   = user;
     return num_cores;
 }
 
-#else  // Linux
+#else  /* Linux */
 
 typedef struct {
     unsigned long long user, nice, system, idle, iowait, irq, softirq;
@@ -99,10 +101,8 @@ static int initialized = 0;
 static int read_cpu_stats(cpu_stat_t stats[], int max) {
     FILE *fp = fopen("/proc/stat", "r");
     if (!fp) return -1;
-    
     char line[256];
     int count = 0;
-    
     while (fgets(line, sizeof(line), fp) && count < max) {
         if (strncmp(line, "cpu", 3) == 0 && line[3] >= '0' && line[3] <= '9') {
             sscanf(line, "cpu%*d %llu %llu %llu %llu %llu %llu %llu",
@@ -117,27 +117,24 @@ static int read_cpu_stats(cpu_stat_t stats[], int max) {
 }
 
 static float calc_usage(cpu_stat_t *p, cpu_stat_t *c) {
-    unsigned long long p_idle = p->idle + p->iowait;
-    unsigned long long c_idle = c->idle + c->iowait;
+    unsigned long long p_idle  = p->idle + p->iowait;
+    unsigned long long c_idle  = c->idle + c->iowait;
     unsigned long long p_total = p->user + p->nice + p->system + p_idle + p->irq + p->softirq;
     unsigned long long c_total = c->user + c->nice + c->system + c_idle + c->irq + c->softirq;
-    
     unsigned long long total_diff = c_total - p_total;
-    unsigned long long idle_diff = c_idle - p_idle;
-    
+    unsigned long long idle_diff  = c_idle  - p_idle;
     if (total_diff == 0) return 0.0f;
     return (float)(total_diff - idle_diff) / (float)total_diff;
 }
 
 int get_num_cpu_cores(void) {
-    return sysconf(_SC_NPROCESSORS_ONLN);
+    return (int)sysconf(_SC_NPROCESSORS_ONLN);
 }
 
 int get_cpu_usage(float usage[], int max) {
     cpu_stat_t curr[128];
     int cores = read_cpu_stats(curr, max);
     if (cores <= 0) return 0;
-    
     if (!initialized) {
         memcpy(prev_stats, curr, sizeof(cpu_stat_t) * cores);
         num_cores = cores;
@@ -145,10 +142,8 @@ int get_cpu_usage(float usage[], int max) {
         for (int i = 0; i < cores; i++) usage[i] = 0.0f;
         return cores;
     }
-    
     for (int i = 0; i < cores && i < num_cores; i++)
         usage[i] = calc_usage(&prev_stats[i], &curr[i]);
-    
     memcpy(prev_stats, curr, sizeof(cpu_stat_t) * cores);
     num_cores = cores;
     return cores;
@@ -162,21 +157,23 @@ int get_cpu_usage(float usage[], int max) {
 
 #if IS_WINDOWS
 
-void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb, 
+void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb,
                          int *avail_mb, int *buff_mb, int *cached_mb,
                          int *swap_total_mb, int *swap_used_mb) {
-    MEMORYSTATUSEX memInfo;
-    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
-    
-    if (GlobalMemoryStatusEx(&memInfo)) {
-        *total_mb = (int)(memInfo.ullTotalPhys / (1024 * 1024));
-        *avail_mb = (int)(memInfo.ullAvailPhys / (1024 * 1024));
-        *used_mb = *total_mb - *avail_mb;
-        *free_mb = *avail_mb;
-        *buff_mb = 0;  // Not available on Windows
-        *cached_mb = 0;
-        *swap_total_mb = (int)(memInfo.ullTotalPageFile / (1024 * 1024)) - *total_mb;
-        *swap_used_mb = *swap_total_mb - (int)((memInfo.ullAvailPageFile - memInfo.ullAvailPhys) / (1024 * 1024));
+    MEMORYSTATUSEX mem;
+    mem.dwLength = sizeof(MEMORYSTATUSEX);
+    if (GlobalMemoryStatusEx(&mem)) {
+        *total_mb      = (int)(mem.ullTotalPhys / (1024 * 1024));
+        *avail_mb      = (int)(mem.ullAvailPhys / (1024 * 1024));
+        *used_mb       = *total_mb - *avail_mb;
+        *free_mb       = *avail_mb;
+        *buff_mb       = 0;
+        *cached_mb     = 0;
+        *swap_total_mb = (int)(mem.ullTotalPageFile / (1024 * 1024)) - *total_mb;
+        *swap_used_mb  = *swap_total_mb -
+            (int)((mem.ullAvailPageFile - mem.ullAvailPhys) / (1024 * 1024));
+        if (*swap_total_mb < 0) *swap_total_mb = 0;
+        if (*swap_used_mb  < 0) *swap_used_mb  = 0;
     } else {
         *total_mb = *used_mb = *free_mb = *avail_mb = 0;
         *buff_mb = *cached_mb = *swap_total_mb = *swap_used_mb = 0;
@@ -184,16 +181,12 @@ void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb,
 }
 
 float get_memory_usage_percent(void) {
-    MEMORYSTATUSEX memInfo;
-    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
-    
-    if (GlobalMemoryStatusEx(&memInfo)) {
-        return (float)memInfo.dwMemoryLoad / 100.0f;
-    }
-    return 0.0f;
+    MEMORYSTATUSEX mem;
+    mem.dwLength = sizeof(MEMORYSTATUSEX);
+    return GlobalMemoryStatusEx(&mem) ? (float)mem.dwMemoryLoad / 100.0f : 0.0f;
 }
 
-#else  // Linux
+#else  /* Linux */
 
 typedef struct {
     unsigned long total_kb, free_kb, available_kb, buffers_kb, cached_kb;
@@ -203,18 +196,16 @@ typedef struct {
 static int get_memory_stats(memory_stat_t *mem) {
     FILE *fp = fopen("/proc/meminfo", "r");
     if (!fp) return -1;
-    
     char line[256];
     memset(mem, 0, sizeof(memory_stat_t));
-    
     while (fgets(line, sizeof(line), fp)) {
-        sscanf(line, "MemTotal: %lu kB", &mem->total_kb);
-        sscanf(line, "MemFree: %lu kB", &mem->free_kb);
+        sscanf(line, "MemTotal: %lu kB",     &mem->total_kb);
+        sscanf(line, "MemFree: %lu kB",      &mem->free_kb);
         sscanf(line, "MemAvailable: %lu kB", &mem->available_kb);
-        sscanf(line, "Buffers: %lu kB", &mem->buffers_kb);
-        sscanf(line, "Cached: %lu kB", &mem->cached_kb);
-        sscanf(line, "SwapTotal: %lu kB", &mem->swap_total_kb);
-        sscanf(line, "SwapFree: %lu kB", &mem->swap_free_kb);
+        sscanf(line, "Buffers: %lu kB",      &mem->buffers_kb);
+        sscanf(line, "Cached: %lu kB",       &mem->cached_kb);
+        sscanf(line, "SwapTotal: %lu kB",    &mem->swap_total_kb);
+        sscanf(line, "SwapFree: %lu kB",     &mem->swap_free_kb);
     }
     fclose(fp);
     return 0;
@@ -222,14 +213,11 @@ static int get_memory_stats(memory_stat_t *mem) {
 
 float get_memory_usage_percent(void) {
     memory_stat_t mem;
-    if (get_memory_stats(&mem) != 0) return 0.0f;
-    if (mem.total_kb == 0) return 0.0f;
-    
-    unsigned long used = mem.total_kb - mem.available_kb;
-    return (float)used / (float)mem.total_kb;
+    if (get_memory_stats(&mem) != 0 || mem.total_kb == 0) return 0.0f;
+    return (float)(mem.total_kb - mem.available_kb) / (float)mem.total_kb;
 }
 
-void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb, 
+void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb,
                          int *avail_mb, int *buff_mb, int *cached_mb,
                          int *swap_total_mb, int *swap_used_mb) {
     memory_stat_t mem;
@@ -238,17 +226,13 @@ void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb,
         *buff_mb = *cached_mb = *swap_total_mb = *swap_used_mb = 0;
         return;
     }
-    
-    *total_mb    = (int)(mem.total_kb     / 1024);
-    *free_mb     = (int)(mem.free_kb      / 1024);
-    *avail_mb    = (int)(mem.available_kb / 1024);
-    *buff_mb     = (int)(mem.buffers_kb   / 1024);
-    *cached_mb   = (int)(mem.cached_kb    / 1024);
+    *total_mb      = (int)(mem.total_kb     / 1024);
+    *free_mb       = (int)(mem.free_kb      / 1024);
+    *avail_mb      = (int)(mem.available_kb / 1024);
+    *buff_mb       = (int)(mem.buffers_kb   / 1024);
+    *cached_mb     = (int)(mem.cached_kb    / 1024);
     *swap_total_mb = (int)(mem.swap_total_kb / 1024);
     *swap_used_mb  = (int)((mem.swap_total_kb - mem.swap_free_kb) / 1024);
-
-    /* used = total - free - buffers - cache  (matches htop's definition)
-       avail_mb alone over-reports because Linux reclaims buffers/cache freely */
     unsigned long used_kb = mem.total_kb - mem.free_kb
                             - mem.buffers_kb - mem.cached_kb;
     *used_mb = (int)(used_kb / 1024);
@@ -257,66 +241,50 @@ void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb,
 #endif
 
 //==============================================================================
-// DISK & NETWORK (Simplified for cross-platform)
+// DISK & NETWORK
 //==============================================================================
 
 float get_disk_usage(const char *path) {
 #if IS_WINDOWS
     ULARGE_INTEGER free, total;
-    if (GetDiskFreeSpaceExA(path, &free, &total, NULL)) {
-        if (total.QuadPart == 0) return 0.0f;
-        return 1.0f - ((float)free.QuadPart / (float)total.QuadPart);
-    }
-    return 0.0f;
+    if (!GetDiskFreeSpaceExA(path, &free, &total, NULL) || total.QuadPart == 0)
+        return 0.0f;
+    return 1.0f - ((float)free.QuadPart / (float)total.QuadPart);
 #else
-    struct statvfs stat;
-    if (statvfs(path, &stat) != 0) return 0.0f;
-    
-    unsigned long long total = stat.f_blocks * stat.f_frsize;
-    unsigned long long avail = stat.f_bavail * stat.f_frsize;
-    
+    struct statvfs st;
+    if (statvfs(path, &st) != 0) return 0.0f;
+    unsigned long long total = (unsigned long long)st.f_blocks * st.f_frsize;
+    unsigned long long avail = (unsigned long long)st.f_bavail * st.f_frsize;
     if (total == 0) return 0.0f;
     return (float)(total - avail) / (float)total;
 #endif
 }
 
-/* Returns total and used disk space in GB for a given path */
 void get_disk_space_gb(const char *path, float *total_gb, float *used_gb) {
 #if IS_WINDOWS
     ULARGE_INTEGER free_bytes, total_bytes;
     if (GetDiskFreeSpaceExA(path, &free_bytes, &total_bytes, NULL)) {
         *total_gb = (float)total_bytes.QuadPart / (1024.0f * 1024.0f * 1024.0f);
-        float free_gb = (float)free_bytes.QuadPart / (1024.0f * 1024.0f * 1024.0f);
-        *used_gb = *total_gb - free_gb;
+        *used_gb  = *total_gb - (float)free_bytes.QuadPart / (1024.0f * 1024.0f * 1024.0f);
     } else {
-        *total_gb = 0.0f;
-        *used_gb  = 0.0f;
+        *total_gb = *used_gb = 0.0f;
     }
 #else
-    struct statvfs stat;
-    if (statvfs(path, &stat) != 0) {
-        *total_gb = 0.0f;
-        *used_gb  = 0.0f;
-        return;
-    }
-    unsigned long long total_bytes = (unsigned long long)stat.f_blocks * stat.f_frsize;
-    unsigned long long avail_bytes = (unsigned long long)stat.f_bavail * stat.f_frsize;
+    struct statvfs st;
+    if (statvfs(path, &st) != 0) { *total_gb = *used_gb = 0.0f; return; }
+    unsigned long long total_bytes = (unsigned long long)st.f_blocks * st.f_frsize;
+    unsigned long long avail_bytes = (unsigned long long)st.f_bavail * st.f_frsize;
     *total_gb = (float)total_bytes / (1024.0f * 1024.0f * 1024.0f);
     *used_gb  = (float)(total_bytes - avail_bytes) / (1024.0f * 1024.0f * 1024.0f);
 #endif
 }
 
 void get_disk_io(float *read_mb, float *write_mb) {
-    // Simplified - just return 0 for now on both platforms
-    // Full implementation would require platform-specific APIs
-    *read_mb = 0.0f;
-    *write_mb = 0.0f;
+    *read_mb = *write_mb = 0.0f;
 }
 
 void get_network_io(float *rx_mb, float *tx_mb) {
-    // Simplified - return 0 for now
-    *rx_mb = 0.0f;
-    *tx_mb = 0.0f;
+    *rx_mb = *tx_mb = 0.0f;
 }
 
 //==============================================================================
@@ -325,11 +293,10 @@ void get_network_io(float *rx_mb, float *tx_mb) {
 
 long get_uptime_seconds(void) {
 #if IS_WINDOWS
-    return GetTickCount64() / 1000;
+    return (long)(GetTickCount64() / 1000);
 #else
     struct sysinfo info;
-    if (sysinfo(&info) != 0) return 0;
-    return info.uptime;
+    return (sysinfo(&info) == 0) ? info.uptime : 0;
 #endif
 }
 
@@ -338,17 +305,12 @@ void get_load_average(char *buffer, int buf_size) {
     snprintf(buffer, buf_size, "N/A");
 #else
     FILE *fp = fopen("/proc/loadavg", "r");
-    if (!fp) {
+    if (!fp) { snprintf(buffer, buf_size, "0.00 0.00 0.00"); return; }
+    float l1, l5, l15;
+    if (fscanf(fp, "%f %f %f", &l1, &l5, &l15) == 3)
+        snprintf(buffer, buf_size, "%.2f %.2f %.2f", l1, l5, l15);
+    else
         snprintf(buffer, buf_size, "0.00 0.00 0.00");
-        return;
-    }
-    
-    float load1, load5, load15;
-    if (fscanf(fp, "%f %f %f", &load1, &load5, &load15) == 3) {
-        snprintf(buffer, buf_size, "%.2f %.2f %.2f", load1, load5, load15);
-    } else {
-        snprintf(buffer, buf_size, "0.00 0.00 0.00");
-    }
     fclose(fp);
 #endif
 }
@@ -361,162 +323,243 @@ typedef struct {
     int pid;
     char name[256];
     char user[32];
-    int state;  // 0=Running, 1=Sleeping, 2=Stopped, 3=Zombie, 4=Unknown
+    int state;   /* 0=Running 1=Sleeping 2=Stopped 3=Zombie 4=Unknown */
     float cpu_percent;
     float mem_percent;
     unsigned long mem_kb;
 } process_info_t;
 
+/* ── Windows ──────────────────────────────────────────────────────────────── */
 #if IS_WINDOWS
 
-process_info_t* get_process_list(int *count) {
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) {
-        *count = 0;
-        return NULL;
-    }
-    
-    // Removed 'A' at end of PROCESSENTRY32A to allow for compiler to map
-    //  to the correct ANSI/Unicode version to avoid "unknown type" errors 
-    // Count processes - use PROCESSENTRY32 (ANSI version, no wide chars)
-    PROCESSENTRY32 pe32;
-    pe32.dwSize = sizeof(PROCESSENTRY32);
-    int proc_count = 0;
-    
-    if (Process32First(snapshot, &pe32)) {
+#define MAX_WIN_PROCS 512
+
+typedef struct {
+    DWORD pid;
+    ULONGLONG prev_kernel_time;
+    ULONGLONG prev_user_time;
+    ULONGLONG prev_query_time;   /* QueryPerformanceCounter snapshot */
+} win_proc_cache_t;
+
+static win_proc_cache_t win_proc_cache[MAX_WIN_PROCS];
+static int win_proc_cache_count = 0;
+
+static LARGE_INTEGER qpc_freq = {0};
+
+static win_proc_cache_t *win_find_or_create(DWORD pid) {
+    for (int i = 0; i < win_proc_cache_count; i++)
+        if (win_proc_cache[i].pid == pid) return &win_proc_cache[i];
+    if (win_proc_cache_count >= MAX_WIN_PROCS) return NULL;
+    win_proc_cache[win_proc_cache_count].pid = pid;
+    win_proc_cache[win_proc_cache_count].prev_kernel_time = 0;
+    win_proc_cache[win_proc_cache_count].prev_user_time   = 0;
+    win_proc_cache[win_proc_cache_count].prev_query_time  = 0;
+    return &win_proc_cache[win_proc_cache_count++];
+}
+
+static ULONGLONG filetime_to_ull(FILETIME ft) {
+    return ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+}
+
+process_info_t *get_process_list(int *count) {
+    if (qpc_freq.QuadPart == 0)
+        QueryPerformanceFrequency(&qpc_freq);
+
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) { *count = 0; return NULL; }
+
+    /* Count */
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(PROCESSENTRY32);
+    int total = 0;
+    if (Process32First(snap, &pe)) do { total++; } while (Process32Next(snap, &pe));
+    if (total == 0) { CloseHandle(snap); *count = 0; return NULL; }
+
+    process_info_t *procs =
+        (process_info_t *)malloc(sizeof(process_info_t) * total);
+    if (!procs) { CloseHandle(snap); *count = 0; return NULL; }
+
+    /* Total physical memory for mem% */
+    MEMORYSTATUSEX memst;
+    memst.dwLength = sizeof(MEMORYSTATUSEX);
+    ULONGLONG total_phys = GlobalMemoryStatusEx(&memst) ? memst.ullTotalPhys : 1;
+
+    /* Wall-clock snapshot (100ns units, same as FILETIME) */
+    LARGE_INTEGER qpc_now;
+    QueryPerformanceCounter(&qpc_now);
+    ULONGLONG wall_100ns = (qpc_freq.QuadPart > 0)
+        ? (ULONGLONG)((double)qpc_now.QuadPart / qpc_freq.QuadPart * 1e7)
+        : 0;
+
+    pe.dwSize = sizeof(PROCESSENTRY32);
+    int idx = 0;
+    if (Process32First(snap, &pe)) {
         do {
-            proc_count++;
-        } while (Process32Next(snapshot, &pe32));
-    }
-    
-    if (proc_count == 0) {
-        CloseHandle(snapshot);
-        *count = 0;
-        return NULL;
-    }
-    
-    process_info_t *procs = (process_info_t*)malloc(sizeof(process_info_t) * proc_count);
-    if (!procs) {
-        CloseHandle(snapshot);
-        *count = 0;
-        return NULL;
-    }
-    
-    // Get process info - restart from beginning
-    pe32.dwSize = sizeof(PROCESSENTRY32);
-    int index = 0;
-    
-    // Use generic Process32First/Next to match generic PROCESSENTRY32 struct type
-    if (Process32First(snapshot, &pe32)) {
-        do {
-            procs[index].pid = (int)pe32.th32ProcessID;
-            
-            // szExeFile is already ANSI (char*), just copy directly
-            strncpy(procs[index].name, pe32.szExeFile, sizeof(procs[index].name) - 1);
-            procs[index].name[sizeof(procs[index].name) - 1] = '\0';
-            
-            strcpy(procs[index].user, "user");
-            procs[index].state = 1;      // Sleeping (default)
-            procs[index].cpu_percent = 0.0f;
-            procs[index].mem_percent = 0.0f;
-            
-            // Get memory using OpenProcess + GetProcessMemoryInfo
-            // th32MemoryUsage does NOT exist in PROCESSENTRY32
-            procs[index].mem_kb = 0;
-            {
-                HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-                                           FALSE, pe32.th32ProcessID);
-                if (hProc != NULL) {
-                    PROCESS_MEMORY_COUNTERS pmc;
-                    if (GetProcessMemoryInfo(hProc, &pmc, sizeof(pmc))) {
-                        procs[index].mem_kb = (unsigned long)(pmc.WorkingSetSize / 1024);
-                    }
-                    CloseHandle(hProc);
+            process_info_t *p = &procs[idx];
+            memset(p, 0, sizeof(process_info_t));
+            p->pid = (int)pe.th32ProcessID;
+            strncpy(p->name, pe.szExeFile, sizeof(p->name) - 1);
+            strcpy(p->user, "user");
+            p->state = 1; /* Sleeping default */
+
+            HANDLE hp = OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+                FALSE, pe.th32ProcessID);
+            if (hp) {
+                /* Memory */
+                PROCESS_MEMORY_COUNTERS pmc;
+                if (GetProcessMemoryInfo(hp, &pmc, sizeof(pmc))) {
+                    p->mem_kb = (unsigned long)(pmc.WorkingSetSize / 1024);
+                    p->mem_percent =
+                        (float)pmc.WorkingSetSize / (float)total_phys * 100.0f;
                 }
+
+                /* CPU delta */
+                FILETIME cr, ex, kt, ut;
+                if (GetProcessTimes(hp, &cr, &ex, &kt, &ut)) {
+                    ULONGLONG k = filetime_to_ull(kt);
+                    ULONGLONG u = filetime_to_ull(ut);
+                    ULONGLONG proc_total = k + u;
+
+                    win_proc_cache_t *c = win_find_or_create(pe.th32ProcessID);
+                    if (c && c->prev_query_time > 0 && wall_100ns > c->prev_query_time) {
+                        ULONGLONG delta_proc = proc_total -
+                            (c->prev_kernel_time + c->prev_user_time);
+                        ULONGLONG delta_wall = wall_100ns - c->prev_query_time;
+                        p->cpu_percent =
+                            (float)delta_proc / (float)delta_wall * 100.0f;
+                        /* Clamp to num_cores * 100 */
+                        float cap = (float)get_num_cpu_cores() * 100.0f;
+                        if (p->cpu_percent > cap) p->cpu_percent = cap;
+                    }
+                    if (c) {
+                        c->prev_kernel_time = k;
+                        c->prev_user_time   = u;
+                        c->prev_query_time  = wall_100ns;
+                    }
+                }
+                CloseHandle(hp);
             }
-            
-            index++;
-        } while (Process32Next(snapshot, &pe32) && index < proc_count);
+            idx++;
+        } while (Process32Next(snap, &pe) && idx < total);
     }
-    
-    CloseHandle(snapshot);
-    *count = index;
+    CloseHandle(snap);
+
+    /* Sort by CPU descending */
+    for (int i = 0; i < idx - 1; i++)
+        for (int j = 0; j < idx - i - 1; j++)
+            if (procs[j].cpu_percent < procs[j + 1].cpu_percent) {
+                process_info_t tmp = procs[j];
+                procs[j] = procs[j + 1];
+                procs[j + 1] = tmp;
+            }
+
+    *count = idx;
     return procs;
 }
 
 int kill_process(int pid) {
-    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
-    if (hProcess == NULL) return 0;
-    
-    BOOL result = TerminateProcess(hProcess, 0);
-    CloseHandle(hProcess);
-    return result ? 1 : 0;
+    HANDLE hp = OpenProcess(PROCESS_TERMINATE, FALSE, (DWORD)pid);
+    if (!hp) return 0;
+    BOOL ok = TerminateProcess(hp, 0);
+    CloseHandle(hp);
+    return ok ? 1 : 0;
 }
 
-#else  // Linux
+/* ── Linux ────────────────────────────────────────────────────────────────── */
+#else
+
+#define MAX_TRACKED_PROCS 512
+
+typedef struct {
+    int pid;
+    unsigned long prev_total_ticks;
+    unsigned long prev_uptime_ticks;
+} proc_cpu_cache_t;
+
+static proc_cpu_cache_t proc_cache[MAX_TRACKED_PROCS];
+static int proc_cache_count = 0;
+
+static proc_cpu_cache_t *find_or_create_cache(int pid) {
+    for (int i = 0; i < proc_cache_count; i++)
+        if (proc_cache[i].pid == pid) return &proc_cache[i];
+    if (proc_cache_count >= MAX_TRACKED_PROCS) return NULL;
+    proc_cache[proc_cache_count].pid = pid;
+    proc_cache[proc_cache_count].prev_total_ticks  = 0;
+    proc_cache[proc_cache_count].prev_uptime_ticks = 0;
+    return &proc_cache[proc_cache_count++];
+}
 
 static int is_number(const char *str) {
-    while (*str) {
-        if (!isdigit(*str)) return 0;
-        str++;
-    }
+    while (*str) { if (!isdigit(*str)) return 0; str++; }
     return 1;
 }
 
-static void get_process_info(int pid, process_info_t *info) {
+static void get_process_info(int pid, process_info_t *info,
+                             unsigned long uptime_ticks, long hz) {
     char path[256];
     FILE *fp;
-    
+
     memset(info, 0, sizeof(process_info_t));
     info->pid = pid;
-    
+
     snprintf(path, sizeof(path), "/proc/%d/stat", pid);
     fp = fopen(path, "r");
-    if (fp) {
-        unsigned long utime, stime;
-        long rss;
-        char state;
-        
-        fscanf(fp, "%*d (%255[^)]) %c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %*u %*u %ld",
-               info->name, &state, &utime, &stime, &rss);
-        
-        info->mem_kb = rss * (sysconf(_SC_PAGESIZE) / 1024);
-        
-        // Map state character to enum
-        switch (state) {
-            case 'R': info->state = 0; break;  // Running
-            case 'S': case 'D': info->state = 1; break;  // Sleeping
-            case 'T': info->state = 2; break;  // Stopped
-            case 'Z': info->state = 3; break;  // Zombie
-            default: info->state = 4; break;   // Unknown
-        }
-        
-        long hz = sysconf(_SC_CLK_TCK);
-        unsigned long total_time = utime + stime;
-        info->cpu_percent = (float)total_time / hz / get_uptime_seconds() * 100.0f;
-        
-        fclose(fp);
+    if (!fp) return;
+
+    unsigned long utime = 0, stime = 0;
+    long rss = 0;
+    char state = 'S';
+    fscanf(fp, "%*d (%255[^)]) %c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u "
+               "%lu %lu %*d %*d %*d %*d %*d %*d %*u %*u %ld",
+           info->name, &state, &utime, &stime, &rss);
+    fclose(fp);
+
+    info->mem_kb = (unsigned long)(rss * (sysconf(_SC_PAGESIZE) / 1024));
+
+    switch (state) {
+        case 'R': info->state = 0; break;
+        case 'S': case 'D': info->state = 1; break;
+        case 'T': info->state = 2; break;
+        case 'Z': info->state = 3; break;
+        default:  info->state = 4; break;
     }
-    
+
+    /* Delta-based CPU% */
+    unsigned long total_ticks = utime + stime;
+    proc_cpu_cache_t *cache = find_or_create_cache(pid);
+    if (cache && cache->prev_uptime_ticks > 0) {
+        unsigned long delta_proc   = total_ticks  - cache->prev_total_ticks;
+        unsigned long delta_uptime = uptime_ticks - cache->prev_uptime_ticks;
+        info->cpu_percent = (delta_uptime > 0)
+            ? ((float)delta_proc / (float)delta_uptime) * 100.0f
+            : 0.0f;
+    } else {
+        info->cpu_percent = 0.0f;
+    }
+    if (cache) {
+        cache->prev_total_ticks  = total_ticks;
+        cache->prev_uptime_ticks = uptime_ticks;
+    }
+
+    /* Memory % */
     memory_stat_t mem;
-    if (get_memory_stats(&mem) == 0 && mem.total_kb > 0) {
+    if (get_memory_stats(&mem) == 0 && mem.total_kb > 0)
         info->mem_percent = (float)info->mem_kb / (float)mem.total_kb * 100.0f;
-    }
-    
+
+    /* Username */
     snprintf(path, sizeof(path), "/proc/%d/status", pid);
     fp = fopen(path, "r");
     if (fp) {
         char line[256];
         int uid = 0;
-        
         while (fgets(line, sizeof(line), fp)) {
             if (sscanf(line, "Uid:\t%d", &uid) == 1) {
                 struct passwd *pw = getpwuid(uid);
-                if (pw) {
+                if (pw)
                     strncpy(info->user, pw->pw_name, sizeof(info->user) - 1);
-                } else {
+                else
                     snprintf(info->user, sizeof(info->user), "%d", uid);
-                }
                 break;
             }
         }
@@ -524,58 +567,47 @@ static void get_process_info(int pid, process_info_t *info) {
     }
 }
 
-process_info_t* get_process_list(int *count) {
+process_info_t *get_process_list(int *count) {
     DIR *dir = opendir("/proc");
-    if (!dir) {
-        *count = 0;
-        return NULL;
-    }
-    
-    // Count processes
+    if (!dir) { *count = 0; return NULL; }
+
+    long hz = sysconf(_SC_CLK_TCK);
+    struct sysinfo si;
+    unsigned long uptime_ticks =
+        (sysinfo(&si) == 0) ? (unsigned long)(si.uptime * hz) : 0;
+
     struct dirent *entry;
     int max_procs = 0;
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = readdir(dir)) != NULL)
         if (is_number(entry->d_name)) max_procs++;
-    }
-    
-    if (max_procs == 0) {
-        closedir(dir);
-        *count = 0;
-        return NULL;
-    }
-    
-    process_info_t *procs = (process_info_t*)malloc(sizeof(process_info_t) * max_procs);
-    if (!procs) {
-        closedir(dir);
-        *count = 0;
-        return NULL;
-    }
-    
+
+    if (max_procs == 0) { closedir(dir); *count = 0; return NULL; }
+
+    process_info_t *procs =
+        (process_info_t *)malloc(sizeof(process_info_t) * max_procs);
+    if (!procs) { closedir(dir); *count = 0; return NULL; }
+
     rewinddir(dir);
     int index = 0;
-    
     while ((entry = readdir(dir)) != NULL && index < max_procs) {
         if (is_number(entry->d_name)) {
             int pid = atoi(entry->d_name);
-            get_process_info(pid, &procs[index]);
+            get_process_info(pid, &procs[index], uptime_ticks, hz);
             if (procs[index].pid > 0) index++;
         }
     }
     closedir(dir);
-    
-    *count = index;
-    
-    // Sort by CPU
-    for (int i = 0; i < index - 1; i++) {
-        for (int j = 0; j < index - i - 1; j++) {
+
+    /* Sort by CPU descending */
+    for (int i = 0; i < index - 1; i++)
+        for (int j = 0; j < index - i - 1; j++)
             if (procs[j].cpu_percent < procs[j + 1].cpu_percent) {
-                process_info_t temp = procs[j];
+                process_info_t tmp = procs[j];
                 procs[j] = procs[j + 1];
-                procs[j + 1] = temp;
+                procs[j + 1] = tmp;
             }
-        }
-    }
-    
+
+    *count = index;
     return procs;
 }
 
@@ -583,7 +615,7 @@ int kill_process(int pid) {
     return kill(pid, SIGTERM) == 0 ? 1 : 0;
 }
 
-#endif
+#endif  /* IS_WINDOWS / Linux */
 
 void free_process_list(process_info_t *list) {
     if (list) free(list);
