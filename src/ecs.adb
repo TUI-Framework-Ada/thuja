@@ -64,19 +64,19 @@ package body ECS is
 
    end Components_PO;
 
-   procedure Initialize (Self : in out Component_Class_Ref) is
+   procedure Initialize_Ref (Self : in out Component_Class_Ref) is
    begin
-      Self.Entity.all.PO.Claim_Element;
-   end Initialize;
+      Self.Entity.Claim_Element;
+   end Initialize_Ref;
 
    procedure Adjust (Self : in out Component_Class_Ref) is
    begin
-      Self.Entity.all.PO.Claim_Element;
+      Self.Entity.Claim_Element;
    end Adjust;
 
    procedure Finalize (Self : in out Component_Class_Ref) is
    begin
-      Self.Entity.all.PO.Release_Element;
+      Self.Entity.Release_Element;
    end Finalize;
 
    procedure Add_Component (Self : in out Components;
@@ -175,12 +175,13 @@ package body ECS is
                                Component_Key : Component_Id)
                                return Component_Class_Ref is
       Map : Component_Map renames Self.all.Components_Map;
-   begin
-      --return Map.Reference (Component_Key).Element;
-      return Component_Class_Ref'(Ada.Finalization.Controlled with
+      Ref : Component_Class_Ref := Component_Class_Ref'(Ada.Finalization.Controlled with
         Data => Map.Reference (Component_Key).Element,
-        Entity => Self
+        Entity => Self.PO'Access
       );
+   begin
+      Initialize_Ref (Ref);
+      return Ref;
    end Get_Component_Ptr;
 
    function Get_Component_Ptr (Self : Components_Ptr;

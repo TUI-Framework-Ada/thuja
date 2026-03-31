@@ -37,10 +37,11 @@ package ECS is
       Element_Using : Natural := 0;
       List_Using : Boolean := False;
    end Components_PO;
+   type Components_PO_Ptr is access all Components_PO;
 
    type Components is record
       Components_Map : Component_Map;
-      PO : Components_PO;
+      PO : aliased Components_PO;
    end record;
    type Components_Ptr is access all Components;
 
@@ -49,13 +50,12 @@ package ECS is
    --===========================================================================
 
    type Component_Class_Ref (Data : access Component_T'Class)
-   is new Ada.Finalization.Controlled
-     with record
-      Entity : Components_Ptr := null;
+   is new Ada.Finalization.Controlled with record
+      Entity : Components_PO_Ptr;
    end record
      with Implicit_Dereference => Data;
 
-   overriding procedure Initialize (Self : in out Component_Class_Ref);
+   procedure Initialize_Ref (Self : in out Component_Class_Ref); --  Stand-in for Ada.Finalization.Controlled.Initialize since I can't get it to run
    overriding procedure Adjust (Self : in out Component_Class_ref);
    overriding procedure Finalize (Self : in out Component_Class_Ref);
 
