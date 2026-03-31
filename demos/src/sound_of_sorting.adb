@@ -6,14 +6,15 @@
 --  to show comparisons, swaps, and sorted positions.  A companion code
 --  panel highlights the current line of the algorithm's Ada source.
 --
---  Color Key:
+--  Color Key (varies per algorithm -- see in-app legend):
 --    Gray    unsorted bar
---    Yellow  bars being compared
---    Red     bars being swapped
+--    Yellow  bars being compared / examined
+--    Red     bars being swapped / written
 --    Green   bar in its final sorted position
+--    Black   deleted (Stalin Sort only)
 --
 --  Controls:
---    1..5    Select algorithm (Bubble/Insertion/Selection/Quick/Merge)
+--    1..6    Select algorithm (Bubble/Insertion/Selection/Quick/Merge/Stalin)
 --    Space   Start / Pause / Reset (when finished)
 --    N       Single-step forward (while paused)
 --    + / -   Increase / decrease step delay (10 ms increments)
@@ -77,7 +78,8 @@ procedure Sound_Of_Sorting is
    ---------------------------------------------------------------
 
    type Step_Action_T is (Compare, Swap, Set_Value,
-                          Mark_Sorted, Mark_All_Sorted);
+                          Mark_Sorted, Mark_All_Sorted,
+                          Mark_Deleted);
 
    type Sort_Step_T is record
       Action    : Step_Action_T := Compare;
@@ -92,9 +94,9 @@ procedure Sound_Of_Sorting is
 
    type Sort_Algorithm_T is
       (Bubble_Sort, Insertion_Sort, Selection_Sort,
-       Quick_Sort, Merge_Sort);
+       Quick_Sort, Merge_Sort, Stalin_Sort);
 
-   type Bar_State_T is (Unsorted, Comparing, Swapping, Sorted);
+   type Bar_State_T is (Unsorted, Comparing, Swapping, Sorted, Deleted);
 
    type Bar_Array_T       is array (1 .. Num_Bars) of Positive;
    type Bar_State_Array_T is array (1 .. Num_Bars) of Bar_State_T;
@@ -125,9 +127,12 @@ procedure Sound_Of_Sorting is
 
    Last_Step_Time : Ada.Real_Time.Time := Ada.Real_Time.Clock;
 
-   Bubble_Source : Source_Code_T;
-   Empty_Source  : constant Source_Code_T :=
-      (Lines => (others => Null_Unbounded_String), Count => 0);
+   Bubble_Source    : Source_Code_T;
+   Insertion_Source : Source_Code_T;
+   Selection_Source : Source_Code_T;
+   Quick_Source     : Source_Code_T;
+   Merge_Source     : Source_Code_T;
+   Stalin_Source    : Source_Code_T;
 
    ---------------------------------------------------------------
    --  RANDOM NUMBER GENERATOR
@@ -276,6 +281,7 @@ procedure Sound_Of_Sorting is
          when Selection_Sort => return "Selection Sort";
          when Quick_Sort     => return "Quick Sort";
          when Merge_Sort     => return "Merge Sort";
+         when Stalin_Sort    => return "Stalin Sort";
       end case;
    end Algo_Name;
 
@@ -288,8 +294,12 @@ procedure Sound_Of_Sorting is
    function Get_Source return Source_Code_T is
    begin
       case Current_Algo is
-         when Bubble_Sort => return Bubble_Source;
-         when others      => return Empty_Source;
+         when Bubble_Sort    => return Bubble_Source;
+         when Insertion_Sort => return Insertion_Source;
+         when Selection_Sort => return Selection_Source;
+         when Quick_Sort     => return Quick_Source;
+         when Merge_Sort     => return Merge_Source;
+         when Stalin_Sort    => return Stalin_Source;
       end case;
    end Get_Source;
 
@@ -300,6 +310,7 @@ procedure Sound_Of_Sorting is
          when Comparing => return Color_Bar_Cmp;
          when Swapping  => return Color_Bar_Swap;
          when Sorted    => return Color_Bar_Done;
+         when Deleted   => return Color_Bar_BG;
       end case;
    end State_Color;
 
@@ -315,6 +326,7 @@ procedure Sound_Of_Sorting is
 
    procedure Init_Source is
    begin
+      --  Bubble Sort
       AL (Bubble_Source, "procedure Bubble_Sort is");
       AL (Bubble_Source, "   Tmp : Positive;");
       AL (Bubble_Source, "begin");
@@ -328,6 +340,97 @@ procedure Sound_Of_Sorting is
       AL (Bubble_Source, "      end loop;");
       AL (Bubble_Source, "   end loop;");
       AL (Bubble_Source, "end Bubble_Sort;");
+
+      --  Insertion Sort
+      AL (Insertion_Source, "procedure Insertion_Sort is");
+      AL (Insertion_Source, "   Key : Positive;");
+      AL (Insertion_Source, "   J   : Natural;");
+      AL (Insertion_Source, "begin");
+      AL (Insertion_Source, "   for I in 2..N loop");
+      AL (Insertion_Source, "      Key := A(I);");
+      AL (Insertion_Source, "      J := I - 1;");
+      AL (Insertion_Source, "      while J >= 1");
+      AL (Insertion_Source, "        and then A(J) > Key");
+      AL (Insertion_Source, "      loop");
+      AL (Insertion_Source, "         A(J+1) := A(J);");
+      AL (Insertion_Source, "         J := J - 1;");
+      AL (Insertion_Source, "      end loop;");
+      AL (Insertion_Source, "      A(J+1) := Key;");
+      AL (Insertion_Source, "   end loop;");
+      AL (Insertion_Source, "end Insertion_Sort;");
+
+      --  Selection Sort
+      AL (Selection_Source, "procedure Selection_Sort is");
+      AL (Selection_Source, "   Min, Tmp : Positive;");
+      AL (Selection_Source, "begin");
+      AL (Selection_Source, "   for I in 1..N-1 loop");
+      AL (Selection_Source, "      Min := I;");
+      AL (Selection_Source, "      for J in I+1..N loop");
+      AL (Selection_Source, "         if A(J) < A(Min) then");
+      AL (Selection_Source, "            Min := J;");
+      AL (Selection_Source, "         end if;");
+      AL (Selection_Source, "      end loop;");
+      AL (Selection_Source, "      Tmp := A(I);");
+      AL (Selection_Source, "      A(I) := A(Min);");
+      AL (Selection_Source, "      A(Min) := Tmp;");
+      AL (Selection_Source, "   end loop;");
+      AL (Selection_Source, "end Selection_Sort;");
+
+      --  Quick Sort
+      AL (Quick_Source, "procedure Quick_Sort(Lo,Hi) is");
+      AL (Quick_Source, "   Pivot, P : Integer;");
+      AL (Quick_Source, "begin");
+      AL (Quick_Source, "   if Lo < Hi then");
+      AL (Quick_Source, "      Pivot := A(Hi);");
+      AL (Quick_Source, "      P := Lo - 1;");
+      AL (Quick_Source, "      for J in Lo..Hi-1 loop");
+      AL (Quick_Source, "         if A(J) <= Pivot then");
+      AL (Quick_Source, "            P := P + 1;");
+      AL (Quick_Source, "            Swap A(P), A(J);");
+      AL (Quick_Source, "         end if;");
+      AL (Quick_Source, "      end loop;");
+      AL (Quick_Source, "      Swap A(P+1), A(Hi);");
+      AL (Quick_Source, "      Quick_Sort(Lo, P);");
+      AL (Quick_Source, "      Quick_Sort(P+2, Hi);");
+      AL (Quick_Source, "   end if;");
+      AL (Quick_Source, "end Quick_Sort;");
+
+      --  Merge Sort
+      AL (Merge_Source, "procedure Merge_Sort(Lo,Hi) is");
+      AL (Merge_Source, "   Mid : Integer;");
+      AL (Merge_Source, "begin");
+      AL (Merge_Source, "   if Lo < Hi then");
+      AL (Merge_Source, "      Mid := (Lo+Hi)/2;");
+      AL (Merge_Source, "      Merge_Sort(Lo, Mid);");
+      AL (Merge_Source, "      Merge_Sort(Mid+1, Hi);");
+      AL (Merge_Source, "      -- Merge halves:");
+      AL (Merge_Source, "      L := copy A(Lo..Mid);");
+      AL (Merge_Source, "      R := copy A(Mid+1..Hi);");
+      AL (Merge_Source, "      while L and R remain loop");
+      AL (Merge_Source, "         if L(i) <= R(j) then");
+      AL (Merge_Source, "            A(k) := L(i); i++;");
+      AL (Merge_Source, "         else");
+      AL (Merge_Source, "            A(k) := R(j); j++;");
+      AL (Merge_Source, "         end if;");
+      AL (Merge_Source, "      end loop;");
+      AL (Merge_Source, "      copy remaining;");
+      AL (Merge_Source, "   end if;");
+      AL (Merge_Source, "end Merge_Sort;");
+
+      --  Stalin Sort
+      AL (Stalin_Source, "procedure Stalin_Sort is");
+      AL (Stalin_Source, "   Max : Positive;");
+      AL (Stalin_Source, "begin");
+      AL (Stalin_Source, "   Max := A(1);");
+      AL (Stalin_Source, "   for I in 2..N loop");
+      AL (Stalin_Source, "      if A(I) >= Max then");
+      AL (Stalin_Source, "         Max := A(I);");
+      AL (Stalin_Source, "      else");
+      AL (Stalin_Source, "         -- To the gulag!");
+      AL (Stalin_Source, "         Delete A(I);");
+      AL (Stalin_Source, "      end if;");
+      AL (Stalin_Source, "   end loop;");
+      AL (Stalin_Source, "end Stalin_Sort;");
    end Init_Source;
 
    ---------------------------------------------------------------
@@ -375,12 +478,172 @@ procedure Sound_Of_Sorting is
       Steps.Append (Sort_Step_T'(Mark_All_Sorted, 0, 0, 0, 13));
    end Record_Bubble;
 
+   procedure Record_Insertion is
+      A   : Bar_Array_T := Bars;
+      Key : Positive;
+      J   : Natural;
+   begin
+      Steps.Clear;
+      for I in 2 .. Num_Bars loop
+         Key := A (I);
+         J := I - 1;
+         Steps.Append (Sort_Step_T'(Compare, I, 0, 0, 6));
+         while J >= 1 and then A (J) > Key loop
+            Steps.Append (Sort_Step_T'(Compare, J, J + 1, 0, 9));
+            Steps.Append (Sort_Step_T'(Set_Value, J + 1, J, A (J), 11));
+            A (J + 1) := A (J);
+            J := J - 1;
+         end loop;
+         Steps.Append (Sort_Step_T'(Set_Value, J + 1, 0, Key, 14));
+         A (J + 1) := Key;
+      end loop;
+      Steps.Append (Sort_Step_T'(Mark_All_Sorted, 0, 0, 0, 16));
+   end Record_Insertion;
+
+   procedure Record_Selection is
+      A    : Bar_Array_T := Bars;
+      Min  : Positive;
+      Tmp  : Positive;
+   begin
+      Steps.Clear;
+      for I in 1 .. Num_Bars - 1 loop
+         Min := I;
+         Steps.Append (Sort_Step_T'(Compare, I, 0, 0, 5));
+         for J in I + 1 .. Num_Bars loop
+            Steps.Append (Sort_Step_T'(Compare, J, Min, 0, 7));
+            if A (J) < A (Min) then
+               Min := J;
+            end if;
+         end loop;
+         if Min /= I then
+            Steps.Append (Sort_Step_T'(Swap, I, Min, 0, 11));
+            Tmp := A (I); A (I) := A (Min); A (Min) := Tmp;
+         end if;
+         Steps.Append (Sort_Step_T'(Mark_Sorted, I, 0, 0, 14));
+      end loop;
+      Steps.Append (Sort_Step_T'(Mark_Sorted, Num_Bars, 0, 0, 15));
+      Steps.Append (Sort_Step_T'(Mark_All_Sorted, 0, 0, 0, 15));
+   end Record_Selection;
+
+   procedure Record_Quick is
+      A : Bar_Array_T := Bars;
+
+      procedure QS (Lo, Hi : Natural) is
+         Pivot : Positive;
+         P     : Natural;
+         Tmp   : Positive;
+      begin
+         if Lo < Hi then
+            Pivot := A (Hi);
+            P := Lo - 1;
+            Steps.Append (Sort_Step_T'(Compare, Hi, 0, 0, 5));
+            for J in Lo .. Hi - 1 loop
+               Steps.Append (Sort_Step_T'(Compare, J, Hi, 0, 8));
+               if A (J) <= Pivot then
+                  P := P + 1;
+                  if P /= J then
+                     Steps.Append (Sort_Step_T'(Swap, P, J, 0, 10));
+                     Tmp := A (P); A (P) := A (J); A (J) := Tmp;
+                  end if;
+               end if;
+            end loop;
+            Steps.Append (Sort_Step_T'(Swap, P + 1, Hi, 0, 13));
+            Tmp := A (P + 1); A (P + 1) := A (Hi); A (Hi) := Tmp;
+            Steps.Append (Sort_Step_T'(Mark_Sorted, P + 1, 0, 0, 13));
+            QS (Lo, P);
+            QS (P + 2, Hi);
+         elsif Lo = Hi then
+            Steps.Append (Sort_Step_T'(Mark_Sorted, Lo, 0, 0, 4));
+         end if;
+      end QS;
+
+   begin
+      Steps.Clear;
+      QS (1, Num_Bars);
+      Steps.Append (Sort_Step_T'(Mark_All_Sorted, 0, 0, 0, 17));
+   end Record_Quick;
+
+   procedure Record_Merge is
+      A : Bar_Array_T := Bars;
+
+      procedure MS (Lo, Hi : Natural) is
+         Mid : Natural;
+         L   : Bar_Array_T;
+         R   : Bar_Array_T;
+         Li, Ri, K : Natural;
+         L_Len, R_Len : Natural;
+      begin
+         if Lo < Hi then
+            Mid := (Lo + Hi) / 2;
+            Steps.Append (Sort_Step_T'(Compare, Lo, Hi, 0, 5));
+            MS (Lo, Mid);
+            MS (Mid + 1, Hi);
+            --  Merge
+            L_Len := Mid - Lo + 1;
+            R_Len := Hi - Mid;
+            for I in 1 .. L_Len loop
+               L (I) := A (Lo + I - 1);
+            end loop;
+            for I in 1 .. R_Len loop
+               R (I) := A (Mid + I);
+            end loop;
+            Li := 1; Ri := 1; K := Lo;
+            while Li <= L_Len and then Ri <= R_Len loop
+               Steps.Append (Sort_Step_T'(Compare, K, 0, 0, 12));
+               if L (Li) <= R (Ri) then
+                  Steps.Append (Sort_Step_T'(Set_Value, K, 0, L (Li), 13));
+                  A (K) := L (Li); Li := Li + 1;
+               else
+                  Steps.Append (Sort_Step_T'(Set_Value, K, 0, R (Ri), 15));
+                  A (K) := R (Ri); Ri := Ri + 1;
+               end if;
+               K := K + 1;
+            end loop;
+            while Li <= L_Len loop
+               Steps.Append (Sort_Step_T'(Set_Value, K, 0, L (Li), 18));
+               A (K) := L (Li); Li := Li + 1; K := K + 1;
+            end loop;
+            while Ri <= R_Len loop
+               Steps.Append (Sort_Step_T'(Set_Value, K, 0, R (Ri), 18));
+               A (K) := R (Ri); Ri := Ri + 1; K := K + 1;
+            end loop;
+         end if;
+      end MS;
+
+   begin
+      Steps.Clear;
+      MS (1, Num_Bars);
+      Steps.Append (Sort_Step_T'(Mark_All_Sorted, 0, 0, 0, 20));
+   end Record_Merge;
+
+   procedure Record_Stalin is
+      A   : constant Bar_Array_T := Bars;
+      Max : Positive;
+   begin
+      Steps.Clear;
+      Max := A (1);
+      Steps.Append (Sort_Step_T'(Mark_Sorted, 1, 0, 0, 4));
+      for I in 2 .. Num_Bars loop
+         Steps.Append (Sort_Step_T'(Compare, I, I - 1, 0, 6));
+         if A (I) >= Max then
+            Max := A (I);
+            Steps.Append (Sort_Step_T'(Mark_Sorted, I, 0, 0, 7));
+         else
+            Steps.Append (Sort_Step_T'(Mark_Deleted, I, 0, 0, 10));
+         end if;
+      end loop;
+   end Record_Stalin;
+
    procedure Record_Steps is
    begin
       Steps.Clear;
       case Current_Algo is
-         when Bubble_Sort => Record_Bubble;
-         when others      => null;  --  not yet implemented
+         when Bubble_Sort    => Record_Bubble;
+         when Insertion_Sort => Record_Insertion;
+         when Selection_Sort => Record_Selection;
+         when Quick_Sort     => Record_Quick;
+         when Merge_Sort     => Record_Merge;
+         when Stalin_Sort    => Record_Stalin;
       end case;
    end Record_Steps;
 
@@ -394,7 +657,11 @@ procedure Sound_Of_Sorting is
    begin
       if Current_Step >= Natural (Steps.Length) then
          Is_Finished := True;
-         Bar_States  := (others => Sorted);
+         for I in 1 .. Num_Bars loop
+            if Bar_States (I) /= Deleted then
+               Bar_States (I) := Sorted;
+            end if;
+         end loop;
          Active_Line := 0;
          return;
       end if;
@@ -404,17 +671,23 @@ procedure Sound_Of_Sorting is
 
       --  Reset transient colours
       for I in 1 .. Num_Bars loop
-         if Bar_States (I) /= Sorted then
+         if Bar_States (I) /= Sorted
+            and then Bar_States (I) /= Deleted
+         then
             Bar_States (I) := Unsorted;
          end if;
       end loop;
 
       case S.Action is
          when Compare =>
-            if S.Index_A in 1 .. Num_Bars then
+            if S.Index_A in 1 .. Num_Bars
+               and then Bar_States (S.Index_A) /= Deleted
+            then
                Bar_States (S.Index_A) := Comparing;
             end if;
-            if S.Index_B in 1 .. Num_Bars then
+            if S.Index_B in 1 .. Num_Bars
+               and then Bar_States (S.Index_B) /= Deleted
+            then
                Bar_States (S.Index_B) := Comparing;
             end if;
 
@@ -446,8 +719,17 @@ procedure Sound_Of_Sorting is
             end if;
 
          when Mark_All_Sorted =>
-            Bar_States  := (others => Sorted);
+            for I in 1 .. Num_Bars loop
+               if Bar_States (I) /= Deleted then
+                  Bar_States (I) := Sorted;
+               end if;
+            end loop;
             Is_Finished := True;
+
+         when Mark_Deleted =>
+            if S.Index_A in 1 .. Num_Bars then
+               Bar_States (S.Index_A) := Deleted;
+            end if;
       end case;
 
       Current_Step := Current_Step + 1;
@@ -493,6 +775,65 @@ procedure Sound_Of_Sorting is
       end loop;
    end Render_Bars;
 
+   --  Legend: per-algorithm color descriptions
+   type Legend_Entry_T is record
+      Color : Color_t;
+      Label : Unbounded_String;
+   end record;
+
+   Max_Legend_Entries : constant := 5;
+   type Legend_Array_T is array (1 .. Max_Legend_Entries) of Legend_Entry_T;
+
+   type Legend_T is record
+      Entries : Legend_Array_T;
+      Count   : Natural := 0;
+   end record;
+
+   function Get_Legend return Legend_T is
+      L : Legend_T;
+
+      procedure Add (C : Color_t; S : String) is
+      begin
+         L.Count := L.Count + 1;
+         L.Entries (L.Count) := (Color => C,
+                                 Label => To_Unbounded_String (S));
+      end Add;
+   begin
+      case Current_Algo is
+         when Bubble_Sort =>
+            Add (Color_Bar_Normal, "Unsorted");
+            Add (Color_Bar_Cmp,    "Comparing");
+            Add (Color_Bar_Swap,   "Swapping");
+            Add (Color_Bar_Done,   "Sorted (final position)");
+         when Insertion_Sort =>
+            Add (Color_Bar_Normal, "Unsorted");
+            Add (Color_Bar_Cmp,    "Comparing with key");
+            Add (Color_Bar_Swap,   "Shifting / inserting");
+            Add (Color_Bar_Done,   "Sorted");
+         when Selection_Sort =>
+            Add (Color_Bar_Normal, "Unsorted");
+            Add (Color_Bar_Cmp,    "Scanning for minimum");
+            Add (Color_Bar_Swap,   "Swapping with minimum");
+            Add (Color_Bar_Done,   "Sorted (final position)");
+         when Quick_Sort =>
+            Add (Color_Bar_Normal, "Unsorted");
+            Add (Color_Bar_Cmp,    "Comparing with pivot");
+            Add (Color_Bar_Swap,   "Swapping (partition)");
+            Add (Color_Bar_Done,   "Sorted (pivot placed)");
+         when Merge_Sort =>
+            Add (Color_Bar_Normal, "Unsorted");
+            Add (Color_Bar_Cmp,    "Comparing during merge");
+            Add (Color_Bar_Swap,   "Writing merged value");
+            Add (Color_Bar_Done,   "Sorted");
+         when Stalin_Sort =>
+            Add (Color_Bar_Normal, "Unsorted");
+            Add (Color_Bar_Cmp,    "Comparing with max");
+            Add (Color_Bar_Done,   "Survived");
+            Add (Color_Bar_BG,     "Deleted (to the gulag!)");
+      end case;
+      return L;
+   end Get_Legend;
+
    procedure Render_Code is
       W   : Components.Widget_Component_T :=
          Components.Widget_Component_T (
@@ -500,10 +841,12 @@ procedure Sound_Of_Sorting is
                                IDs.To_CID ("WidgetComponent")));
       Buf  : Buffer_T renames W.Render_Buffer;
       Src  : constant Source_Code_T := Get_Source;
+      Leg  : constant Legend_T := Get_Legend;
       BG   : Color_t;
       FG   : Color_t;
       Line : Unbounded_String;
       Y    : TUI_Height;
+      Legend_Start_Row : Natural;
    begin
       --  Clear
       for X in TUI_Width'First .. Code_W loop
@@ -527,32 +870,6 @@ procedure Sound_Of_Sorting is
                 others     => False));
          end loop;
       end;
-
-      --  Show message if algorithm is not yet implemented
-      if Src.Count = 0 then
-         declare
-            Msg1 : constant String := "Not yet implemented.";
-            Msg2 : constant String := "Press [1] for Bubble Sort.";
-         begin
-            for C in 1 .. Msg1'Length loop
-               exit when C + 2 > Natural (Code_W);
-               Set_Buffer_Pixel (Buf, TUI_Width (C + 2), 5,
-                  (Char       => Msg1 (C),
-                   Char_Color => Yellow,
-                   Background_Color => Color_Code_BG,
-                   others     => <>));
-            end loop;
-            for C in 1 .. Msg2'Length loop
-               exit when C + 2 > Natural (Code_W);
-               Set_Buffer_Pixel (Buf, TUI_Width (C + 2), 7,
-                  (Char       => Msg2 (C),
-                   Char_Color => Gray,
-                   Background_Color => Color_Code_BG,
-                   others     => <>));
-            end loop;
-         end;
-         return;
-      end if;
 
       --  Source lines starting at row 3
       for L in 1 .. Src.Count loop
@@ -600,6 +917,57 @@ procedure Sound_Of_Sorting is
                 Background_Color => BG,
                 others     => <>));
          end loop;
+      end loop;
+
+      --  ============  LEGEND  ============
+      --  Placed 2 rows below the last source line
+      Legend_Start_Row := Src.Count + 2 + 2;
+
+      --  "Color Key:" header
+      if Legend_Start_Row <= Natural (Code_H) then
+         declare
+            Hdr : constant String := " Color Key:";
+         begin
+            for C in 1 .. Hdr'Length loop
+               exit when C > Natural (Code_W);
+               Set_Buffer_Pixel (Buf, TUI_Width (C),
+                  TUI_Height (Legend_Start_Row),
+                  (Char       => Hdr (C),
+                   Char_Color => Color_Code_Hdr,
+                   Background_Color => Color_Code_BG,
+                   Is_Bold    => True,
+                   others     => False));
+            end loop;
+         end;
+      end if;
+
+      --  One row per legend entry: colored swatch + label
+      for E in 1 .. Leg.Count loop
+         declare
+            Row : constant Natural := Legend_Start_Row + E;
+            Lbl : constant String  := To_String (Leg.Entries (E).Label);
+            Swatch_Color : constant Color_t := Leg.Entries (E).Color;
+         begin
+            exit when Row > Natural (Code_H);
+
+            --  Draw colored swatch in columns 2..3
+            for SX in 2 .. 3 loop
+               Set_Buffer_Pixel (Buf, TUI_Width (SX), TUI_Height (Row),
+                  (Char             => ' ',
+                   Background_Color => Swatch_Color,
+                   others           => <>));
+            end loop;
+
+            --  Draw label text starting at column 5
+            for C in 1 .. Lbl'Length loop
+               exit when C + 4 > Natural (Code_W);
+               Set_Buffer_Pixel (Buf, TUI_Width (C + 4), TUI_Height (Row),
+                  (Char       => Lbl (Lbl'First + C - 1),
+                   Char_Color => Color_Code_Txt,
+                   Background_Color => Color_Code_BG,
+                   others     => <>));
+            end loop;
+         end;
       end loop;
    end Render_Code;
 
@@ -655,7 +1023,7 @@ procedure Sound_Of_Sorting is
          & " | Delay: " & Img (Delay_MS) & "ms"
          & " | Bars: " & Img (Num_Bars);
       L2 : constant String :=
-         " [1-5] Algo  [SPC] Play/Pause  [N] Step"
+         " [1-6] Algo  [SPC] Play/Pause  [N] Step"
          & "  [+/-] Speed  [R] Reset  [ESC] Quit";
 
       procedure Write_Line (Row : TUI_Height; Text : String) is
@@ -756,6 +1124,7 @@ begin
                when '3' => Switch_Algo (Selection_Sort);
                when '4' => Switch_Algo (Quick_Sort);
                when '5' => Switch_Algo (Merge_Sort);
+               when '6' => Switch_Algo (Stalin_Sort);
 
                when ' ' =>
                   if Is_Finished then
