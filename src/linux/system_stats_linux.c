@@ -1,5 +1,5 @@
 /*******************************************************************************
- * system_stats_linux.c - Linux system statistics (with stubs)
+ * system_stats_linux.c - Linux system statistics
  ******************************************************************************/
 
 #include <stdio.h>
@@ -139,17 +139,17 @@ void get_memory_detailed(int *total_mb, int *used_mb, int *free_mb,
         return;
     }
 
-    *total_mb    = mem.total_kb / 1024;
-    *free_mb     = mem.free_kb / 1024;
-    *avail_mb    = mem.available_kb / 1024;
-    *buff_mb     = mem.buffers_kb / 1024;
-    *cached_mb   = mem.cached_kb / 1024;
-    *swap_total_mb = mem.swap_total_kb / 1024;
-    *swap_used_mb  = (mem.swap_total_kb - mem.swap_free_kb) / 1024;
+    *total_mb      = (int)(mem.total_kb     / 1024);
+    *free_mb       = (int)(mem.free_kb      / 1024);
+    *avail_mb      = (int)(mem.available_kb / 1024);
+    *buff_mb       = (int)(mem.buffers_kb   / 1024);
+    *cached_mb     = (int)(mem.cached_kb    / 1024);
+    *swap_total_mb = (int)(mem.swap_total_kb / 1024);
+    *swap_used_mb  = (int)((mem.swap_total_kb - mem.swap_free_kb) / 1024);
 
     unsigned long used_kb = mem.total_kb - mem.free_kb
                             - mem.buffers_kb - mem.cached_kb;
-    *used_mb = used_kb / 1024;
+    *used_mb = (int)(used_kb / 1024);
 }
 
 //==============================================================================
@@ -184,7 +184,6 @@ void get_disk_space_gb(const char *path, float *total_gb, float *used_gb) {
 }
 
 void get_disk_io(float *read_mb, float *write_mb) {
-    // TODO
     *read_mb = 0.0f;
     *write_mb = 0.0f;
 }
@@ -221,7 +220,32 @@ void get_load_average(char *buffer, int buf_size) {
 }
 
 //==============================================================================
-// PROCESS STRUCT + STUBS (if needed)
+// PROCESS DELTA CACHE
+//==============================================================================
+
+#define MAX_TRACKED_PROCS 512
+
+typedef struct {
+    int pid;
+    unsigned long prev_total_ticks;
+    unsigned long prev_uptime_ticks;
+} proc_cpu_cache_t;
+
+static proc_cpu_cache_t proc_cache[MAX_TRACKED_PROCS];
+static int proc_cache_count = 0;
+
+static proc_cpu_cache_t *find_or_create_cache(int pid) {
+    for (int i = 0; i < proc_cache_count; i++)
+        if (proc_cache[i].pid == pid) return &proc_cache[i];
+    if (proc_cache_count >= MAX_TRACKED_PROCS) return NULL;
+    proc_cache[proc_cache_count].pid = pid;
+    proc_cache[proc_cache_count].prev_total_ticks = 0;
+    proc_cache[proc_cache_count].prev_uptime_ticks = 0;
+    return &proc_cache[proc_cache_count++];
+}
+
+//==============================================================================
+// PROCESS INFORMATION
 //==============================================================================
 
 typedef struct {
@@ -234,10 +258,131 @@ typedef struct {
     unsigned long mem_kb;
 } process_info_t;
 
-/* Stubbed minimal implementation */
-process_info_t* get_process_list(int *count) {
-    *count = 0;
-    return NULL;
+static int is_number(const char *str) {
+    while (*str) {
+        if (!isdigit(*str)) return 0;
+        str++;
+    }
+    return 1;
+}
+
+static void get_process_info(int pid, process_info_t *info,
+                             unsigned long uptime_ticks, long hz) {
+    char path[256];
+    FILE *fp;
+
+    memset(info, 0, sizeof(process_info_t));
+    info->pid = pid;
+
+    snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+    fp = fopen(path, "r");
+    if (!fp) return;
+
+    unsigned long utime = 0, stime = 0;
+    long rss = 0;
+    char state = 'S';
+
+    fscanf(fp, "%*d (%255[^)]) %c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u "
+               "%lu %lu %*d %*d %*d %*d %*d %*d %*u %*u %ld",
+           info->name, &state, &utime, &stime, &rss);
+    fclose(fp);
+
+    info->mem_kb = (unsigned long)(rss * (sysconf(_SC_PAGESIZE) / 1024));
+
+    switch (state) {
+        case 'R': info->state = 0; break;
+        case 'S': case 'D': info->state = 1; break;
+        case 'T': info->state = 2; break;
+        case 'Z': info->state = 3; break;
+        default:  info->state = 4; break;
+    }
+
+    /* Delta-based CPU% */
+    unsigned long total_ticks = utime + stime;
+    proc_cpu_cache_t *cache = find_or_create_cache(pid);
+    if (cache && cache->prev_uptime_ticks > 0) {
+        unsigned long delta_proc   = total_ticks  - cache->prev_total_ticks;
+        unsigned long delta_uptime = uptime_ticks - cache->prev_uptime_ticks;
+        info->cpu_percent = (delta_uptime > 0)
+            ? ((float)delta_proc / (float)delta_uptime) * 100.0f
+            : 0.0f;
+    } else {
+        info->cpu_percent = 0.0f;
+    }
+    if (cache) {
+        cache->prev_total_ticks  = total_ticks;
+        cache->prev_uptime_ticks = uptime_ticks;
+    }
+
+    /* Memory % */
+    memory_stat_t mem;
+    if (get_memory_stats(&mem) == 0 && mem.total_kb > 0)
+        info->mem_percent = (float)info->mem_kb / (float)mem.total_kb * 100.0f;
+
+    /* Username */
+    snprintf(path, sizeof(path), "/proc/%d/status", pid);
+    fp = fopen(path, "r");
+    if (fp) {
+        char line[256];
+        int uid = 0;
+        while (fgets(line, sizeof(line), fp)) {
+            if (sscanf(line, "Uid:\t%d", &uid) == 1) {
+                struct passwd *pw = getpwuid(uid);
+                if (pw)
+                    strncpy(info->user, pw->pw_name, sizeof(info->user) - 1);
+                else
+                    snprintf(info->user, sizeof(info->user), "%d", uid);
+                break;
+            }
+        }
+        fclose(fp);
+    }
+}
+
+process_info_t *get_process_list(int *count) {
+    DIR *dir = opendir("/proc");
+    if (!dir) { *count = 0; return NULL; }
+
+    /* Snapshot uptime + hz once for the whole scan */
+    long hz = sysconf(_SC_CLK_TCK);
+    struct sysinfo si;
+    unsigned long uptime_ticks =
+        (sysinfo(&si) == 0) ? (unsigned long)(si.uptime * hz) : 0;
+
+    /* Count numeric /proc entries */
+    struct dirent *entry;
+    int max_procs = 0;
+    while ((entry = readdir(dir)) != NULL)
+        if (is_number(entry->d_name)) max_procs++;
+
+    if (max_procs == 0) { closedir(dir); *count = 0; return NULL; }
+
+    process_info_t *procs =
+        (process_info_t *)malloc(sizeof(process_info_t) * max_procs);
+    if (!procs) { closedir(dir); *count = 0; return NULL; }
+
+    rewinddir(dir);
+    int index = 0;
+    while ((entry = readdir(dir)) != NULL && index < max_procs) {
+        if (is_number(entry->d_name)) {
+            int pid = atoi(entry->d_name);
+            get_process_info(pid, &procs[index], uptime_ticks, hz);
+            if (procs[index].pid > 0) index++;
+        }
+    }
+    closedir(dir);
+
+    /* Sort by CPU descending */
+    for (int i = 0; i < index - 1; i++)
+        for (int j = 0; j < index - i - 1; j++)
+            if (procs[j].cpu_percent < procs[j + 1].cpu_percent) {
+                process_info_t tmp = procs[j];
+                procs[j] = procs[j + 1];
+                procs[j + 1] = tmp;
+            }
+
+    *count = index;
+    return procs;
 }
 
 int kill_process(int pid) {

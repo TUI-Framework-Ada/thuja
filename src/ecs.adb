@@ -1611,29 +1611,47 @@ package body ECS is
    --===========================================================================
    -- SYSTEM: Reset Backbuffer
    --===========================================================================
-   procedure ResetBackbufferSystem (Entity_List_PO : in out Entity_Components_PO) is
+   procedure ResetBackbufferSystem
+     (Entity_List_PO : in out Entity_Components_PO)
+   is
       Entity_List : Entity_Components_Ptr;
       CP          : Components_Ptr;
-      RI          : Render_Info_Component_T;
    begin
       Entity_List_PO.Claim_Writing (Entity_List);
       CP := Get_Entity_Components (Entity_List.all, To_EID ("render_info"));
       if CP /= null then
-         RI := Render_Info_Component_T (
-            Get_Component (CP.all, To_CID ("RenderInfo")));
-         for RX in TUI_Width'First .. RI.Terminal_Width loop
-            for RY in TUI_Height'First .. RI.Terminal_Height loop
-               Set_Buffer_Pixel (RI.Backbuffer, RX, RY,
-                  (Char             => Character'Val (1),
-                  Char_Color       => White,
-                  Background_Color => White,
-                  Is_Bold          => True,
-                  Is_Italic        => False,
-                  Is_Underline     => False,
-                  Is_Strikethrough => False));
+         declare
+            RI : Render_Info_Component_T renames
+              Render_Info_Component_T
+                (Get_Component_Ptr (CP, Render_Info_Component_T'Tag).all);
+         begin
+            for RX in TUI_Width'First .. RI.Terminal_Width loop
+               for RY in TUI_Height'First .. RI.Terminal_Height loop
+                  Set_Buffer_Pixel
+                    (RI.Buffers (0),
+                     RX,
+                     RY,
+                     (Char             => Character'Val (1),
+                      Char_Color       => White,
+                      Background_Color => White,
+                      Is_Bold          => True,
+                      Is_Italic        => False,
+                      Is_Underline     => False,
+                      Is_Strikethrough => False));
+                  Set_Buffer_Pixel
+                    (RI.Buffers (1),
+                     RX,
+                     RY,
+                     (Char             => Character'Val (1),
+                      Char_Color       => White,
+                      Background_Color => White,
+                      Is_Bold          => True,
+                      Is_Italic        => False,
+                      Is_Underline     => False,
+                      Is_Strikethrough => False));
+               end loop;
             end loop;
-         end loop;
-         Add_Component (CP.all, To_CID ("RenderInfo"), RI);
+         end;
       end if;
       Entity_List_PO.Release_Writing;
    end ResetBackbufferSystem;
