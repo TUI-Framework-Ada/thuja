@@ -797,8 +797,6 @@ begin
             else
                TabSwitchSystem (World, Next);
             end if;
-            Graphics.Clear_Screen;
-            ResetBackbufferSystem (World);
             Update_Chrome;
             Render;
 

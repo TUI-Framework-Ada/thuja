@@ -1024,6 +1024,7 @@ package body ECS is
             Updated_Pixels : array (Flat_Buffer_t) of PosPixel_t;
             All_Pixels_Length : Natural := 0;
             Updated_Pixels_Length : Natural := 0;
+            Batched_Pixels : SU.Unbounded_String := SU.To_Unbounded_String ("");
          begin
             RI.Drawing_FB.all.Start_Draw;
             Frontbuffer_Index := RI.Drawing_FB.all.Front;
@@ -1068,16 +1069,19 @@ package body ECS is
                end loop;
             end;
 
-            --  Draw updated pixels
+            --  Convert updated pixels to strings & concat to batched string
             declare
                Px : PosPixel_t;
             begin
                for Updated_Pixels_Index in 1 .. Updated_Pixels_Length loop
                   Px := Updated_Pixels (Flat_Buffer_t (Updated_Pixels_Index));
-                  Ada.Text_IO.Put (Move (Px.Y, Px.X));
-                  Ada.Wide_Wide_Text_IO.Put (+(Px.P));
+                  Batched_Pixels := SU."&" (Batched_Pixels, Move (Px.Y, Px.X));
+                  Batched_Pixels := SU."&" (Batched_Pixels, Ada.Characters.Conversions.To_String (+Px.P));
                end loop;
             end;
+
+            --  Draw updated pixels
+            Ada.Text_IO.Put (SU.To_String (Batched_Pixels));
 
             --  Update first-frame var (if needed)
             RI.First_Frame := False;
