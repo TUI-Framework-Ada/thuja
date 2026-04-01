@@ -1029,8 +1029,6 @@ package body ECS is
             begin
                for Updated_Pixels_Index in 1 .. Updated_Pixels_Length loop
                   Px := Updated_Pixels (Flat_Buffer_t (Updated_Pixels_Index));
-                  --Ada.Text_IO.Put (Move (Px.Y, Px.X));
-                  --Ada.Wide_Wide_Text_IO.Put (+(Px.P));
                   Batched_Pixels := SU."&" (Batched_Pixels, Move (Px.Y, Px.X));
                   Batched_Pixels := SU."&" (Batched_Pixels, Ada.Characters.Conversions.To_String (+Px.P));
                end loop;
