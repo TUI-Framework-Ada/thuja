@@ -1035,10 +1035,7 @@ package body ECS is
             end;
 
             --  Draw updated pixels
-            declare
-            begin
-               Ada.Text_IO.Put (SU.To_String (Batched_Pixels));
-            end;
+            Ada.Text_IO.Put (SU.To_String (Batched_Pixels));
 
             --  Update first-frame var (if needed)
             RI.First_Frame := False;
