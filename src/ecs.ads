@@ -3,6 +3,7 @@
 --==============================================================================
 
 with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Finalization;
 with Ada.Strings;
 with Ada.Strings.Unbounded.Hash;
 with Components; use Components;
@@ -27,14 +28,36 @@ package ECS is
    subtype Component_Map is Component_Map_Pkg.Map;
    type Component_Map_Ptr is access Component_Map;
 
+   protected type Components_PO is
+      entry Claim_Element;
+      entry Claim_List;
+      procedure Release_Element;
+      procedure Release_List;
+   private
+      Element_Using : Natural := 0;
+      List_Using : Boolean := False;
+   end Components_PO;
+   type Components_PO_Ptr is access all Components_PO;
+
    type Components is record
       Components_Map : Component_Map;
+      PO : aliased Components_PO;
    end record;
    type Components_Ptr is access all Components;
 
    --===========================================================================
    -- COMPONENT OPERATIONS
    --===========================================================================
+
+   type Component_Class_Ref (Data : access Component_T'Class)
+   is new Ada.Finalization.Controlled with record
+      Entity : Components_PO_Ptr;
+   end record
+     with Implicit_Dereference => Data;
+
+   procedure Initialize_Ref (Self : in out Component_Class_Ref); --  Stand-in for Ada.Finalization.Controlled.Initialize since I can't get it to run
+   overriding procedure Adjust (Self : in out Component_Class_ref);
+   overriding procedure Finalize (Self : in out Component_Class_Ref);
 
    procedure Add_Component (Self : in out Components;
                             Component : in Component_Id;
@@ -64,15 +87,15 @@ package ECS is
 
    function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Key : Component_Id)
-                               return Component_Class_Ptr;
+                               return Component_Class_Ref;
 
    function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Str : String)
-                               return Component_Class_Ptr;
+                               return Component_Class_Ref;
 
    function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Tag : in Ada.Tags.Tag)
-                               return Component_Class_Ptr;
+                               return Component_Class_Ref;
 
    function Get_Component_ID (Self : in Components;
                               Component_Tag : in Ada.Tags.Tag) return Component_Id;
@@ -136,9 +159,9 @@ package ECS is
      (Self : in Entity_Components; Required : Component_Tag_Vector.Vector)
       return Entity_ID_Vector.Vector;
 
-   function Make_Widget -- Comments are in the ADB naming and functionality. 
+   function Make_Widget -- Comments are in the ADB naming and functionality.
    (
-      World : in out Entity_Components_PO; -- 
+      World : in out Entity_Components_PO; --
       Name : in String;
       X : in TUI_Width; Y : in TUI_Height;
       W : in TUI_Width; H : in TUI_Height

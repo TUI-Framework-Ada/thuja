@@ -38,6 +38,47 @@ package body ECS is
    -- COMPONENT OPERATIONS
    --===========================================================================
 
+   protected body Components_PO is
+
+      entry Claim_Element
+        when not List_Using is
+      begin
+         Element_Using := Element_Using + 1;
+      end Claim_Element;
+
+      entry Claim_List
+        when (Element_Using = 0) and (not List_Using) is
+      begin
+         List_Using := True;
+      end Claim_List;
+
+      procedure Release_Element is
+      begin
+         Element_Using := Element_Using - 1;
+      end Release_Element;
+
+      procedure Release_List is
+      begin
+         List_Using := False;
+      end Release_List;
+
+   end Components_PO;
+
+   procedure Initialize_Ref (Self : in out Component_Class_Ref) is
+   begin
+      Self.Entity.Claim_Element;
+   end Initialize_Ref;
+
+   procedure Adjust (Self : in out Component_Class_Ref) is
+   begin
+      Self.Entity.Claim_Element;
+   end Adjust;
+
+   procedure Finalize (Self : in out Component_Class_Ref) is
+   begin
+      Self.Entity.Release_Element;
+   end Finalize;
+
    procedure Add_Component (Self : in out Components;
                             Component : in Component_Id;
                             Component_Struct : in Component_T'Class) is
@@ -132,22 +173,27 @@ package body ECS is
 
    function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Key : Component_Id)
-                               return Component_Class_Ptr is
+                               return Component_Class_Ref is
       Map : Component_Map renames Self.all.Components_Map;
+      Ref : Component_Class_Ref := Component_Class_Ref'(Ada.Finalization.Controlled with
+        Data => Map.Reference (Component_Key).Element,
+        Entity => Self.PO'Access
+      );
    begin
-      return Map.Reference (Component_Key).Element;
+      Initialize_Ref (Ref);
+      return Ref;
    end Get_Component_Ptr;
 
    function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Str : String)
-                               return Component_Class_Ptr is
+                               return Component_Class_Ref is
    begin
       return Get_Component_Ptr (Self, To_CID (Component_Str));
    end Get_Component_Ptr;
 
    function Get_Component_Ptr (Self : Components_Ptr;
                                      Component_Tag : Ada.Tags.Tag)
-                                     return Component_Class_Ptr is
+                                     return Component_Class_Ref is
    begin
       return Get_Component_Ptr (Self, Get_Component_ID (Self.all, Component_Tag));
    end Get_Component_Ptr;
@@ -239,7 +285,7 @@ package body ECS is
       x : TUI_Width; y : TUI_Height; -- x/y position of the widget
       W : TUI_Width; H : TUI_Height -- width/height of the widget
 
-      ) 
+      )
       return Components_Ptr is
 
       CP : constant Components_Ptr := Add_Entity (World, To_EID (Name)); -- Makes the widget an entity in the world and gets a pointer to its components
@@ -276,7 +322,7 @@ package body ECS is
                Component_List := Get_Entity_Components (Entity_List.all, EID);
                declare
                   Widget_C : Widget_Component_T renames Widget_Component_T (
-                     Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+                     Get_Component_Ptr (Component_List, Widget_Component_T'Tag).Data.all);
                begin
                   if Widget_C.Children.Contains (Id) then
                      Widget_C.Children.Delete (Widget_C.Children.Find_Index (Id));
@@ -383,7 +429,7 @@ package body ECS is
          RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
          declare
             RI : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
+              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).Data.all);
          begin
             if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width) or
               RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
@@ -415,7 +461,7 @@ package body ECS is
          Flex_Components := Get_Entity_Components (Entity_List, Flex_Entity_ID);
          declare
             Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
-              Get_Component_Ptr (Flex_Components, Flex_Layout_Component_T'Tag).all);
+              Get_Component_Ptr (Flex_Components, Flex_Layout_Component_T'Tag).Data.all);
          begin
             Flex_C := Flex_Layout_Component_T (
                Get_Component (Flex_Components.all, Flex_Layout_Component_T'Tag)
@@ -455,9 +501,9 @@ package body ECS is
          Parent_Comps := Get_Entity_Components (Entity_List.all, Parent_EID);
          declare
             Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
-              Get_Component_Ptr (Parent_Comps, Flex_Layout_Component_T'Tag).all);
+              Get_Component_Ptr (Parent_Comps, Flex_Layout_Component_T'Tag).Data.all);
             Parent_Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Parent_Comps, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Parent_Comps, Widget_Component_T'Tag).Data.all);
          begin
 
             Flex_C.Flex_Container.Width := Integer (Parent_Widget_C.Size_Width);
@@ -492,7 +538,7 @@ package body ECS is
                      if not Skip_Child then
                         declare
                            Child_Widget_C : Widget_Component_T renames Widget_Component_T (
-                             Get_Component_Ptr (Child_Comps, Widget_Component_T'Tag).all);
+                             Get_Component_Ptr (Child_Comps, Widget_Component_T'Tag).Data.all);
                         begin
 
                         Calc_X := Integer(Parent_Widget_C.Position_X) +
@@ -546,9 +592,9 @@ package body ECS is
          Component_List := Get_Entity_Components (Entity_List.all, EID);
          declare
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).Data.all);
             BGColor_C : Background_Color_Component_T renames Background_Color_Component_T (
-              Get_Component_Ptr (Component_List, Background_Color_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Background_Color_Component_T'Tag).Data.all);
          begin
             BGColor := BGColor_C.Background_Color;
 
@@ -603,10 +649,10 @@ package body ECS is
 
          declare
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).Data.all);
 
             Text_C : Text_Component_T renames Text_Component_T (
-              Get_Component_Ptr (Component_List, Text_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Text_Component_T'Tag).Data.all);
          begin
             Text := Text_C.Text;
 
@@ -719,9 +765,9 @@ package body ECS is
 
          declare
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Comp_Ptr, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Comp_Ptr, Widget_Component_T'Tag).Data.all);
             PB_C : Progress_Bar_Component_T renames Progress_Bar_Component_T (
-              Get_Component_Ptr (Comp_Ptr, Progress_Bar_Component_T'Tag).all);
+              Get_Component_Ptr (Comp_Ptr, Progress_Bar_Component_T'Tag).Data.all);
          begin
 
             Has_BG := Has_Component (Comp_Ptr.all, Background_Color_Component_T'Tag);
@@ -882,7 +928,7 @@ package body ECS is
                                                           );
             declare
                Child_Widget : Widget_Component_T renames Widget_Component_T (
-                  Get_Component_Ptr (Child_Component_List, Widget_Component_T'Tag).all);
+                  Get_Component_Ptr (Child_Component_List, Widget_Component_T'Tag).Data.all);
             begin
                RecursiveBufferCopy (Framebuffer, Parent, Child_Widget);
             end;
@@ -909,7 +955,7 @@ package body ECS is
          RI_Components := Get_Entity_Components (Entity_List.all, RI_Entity_ID);
          declare
             RenderInfo_C : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).all);
+              Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag).Data.all);
          begin
             Framebuffer_Index := RenderInfo_C.Drawing_FB.all.Back;
 
@@ -917,7 +963,7 @@ package body ECS is
                Root_Components := Get_Entity_Components (Entity_List.all, R_Entity_ID);
                declare
                   Root : Widget_Component_T renames Widget_Component_T (
-                    Get_Component_Ptr (Root_Components, Widget_Component_T'Tag).all);
+                    Get_Component_Ptr (Root_Components, Widget_Component_T'Tag).Data.all);
                begin
 
                   RecursiveBufferCopy (RenderInfo_C.Buffers (Framebuffer_Index), Root, Root);
@@ -972,7 +1018,7 @@ package body ECS is
             RI : Render_Info_Component_T renames
               Render_Info_Component_T
                 (Get_Component_Ptr
-                   (RI_Component_List, Render_Info_Component_T'Tag).all);
+                   (RI_Component_List, Render_Info_Component_T'Tag).Data.all);
             type Flat_Buffer_t is range 1 .. Positive (TUI_Width'Last) * Positive(TUI_Height'Last);
             All_Pixels : array (Flat_Buffer_t) of PosPixel_t;
             Updated_Pixels : array (Flat_Buffer_t) of PosPixel_t;
@@ -1064,7 +1110,7 @@ package body ECS is
 
          declare
             Render_Info : Render_Info_Component_T renames Render_Info_Component_T (
-              Get_Component_Ptr (Component_List, Render_Info_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Render_Info_Component_T'Tag).Data.all);
          begin
             Render_Info.Drawing_FB.all.Swap;
          end;
@@ -1112,9 +1158,9 @@ package body ECS is
          Component_List := Get_Entity_Components (Entity_List.all, EID);
          declare
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).Data.all);
             Sel_C : Selectable_Component_T renames Selectable_Component_T (
-              Get_Component_Ptr (Component_List, Selectable_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Selectable_Component_T'Tag).Data.all);
          begin
             if Widget_C.Is_Enabled and Count < Max_Selectables then
                Count := Count + 1;
@@ -1143,7 +1189,7 @@ package body ECS is
          Component_List := Get_Entity_Components (Entity_List.all, Selectables (I).EID);
          declare
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).Data.all);
          begin
             if Widget_C.Has_Focus then
                Current_Focus := I;
@@ -1171,7 +1217,7 @@ package body ECS is
             Component_List := Get_Entity_Components (Entity_List.all, Selectables (I).EID);
             declare
                Widget_C : Widget_Component_T renames Widget_Component_T (
-                 Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+                 Get_Component_Ptr (Component_List, Widget_Component_T'Tag).Data.all);
             begin
                Widget_C.Has_Focus := (I = Next_Focus);
             end;
@@ -1182,7 +1228,7 @@ package body ECS is
          if Has_Component (Component_List.all, Command_Set_Component_T'Tag) then
             declare
                Cmd_Set : Command_Set_Component_T renames Command_Set_Component_T (
-                 Get_Component_Ptr (Component_List, Command_Set_Component_T'Tag).all);
+                 Get_Component_Ptr (Component_List, Command_Set_Component_T'Tag).Data.all);
             begin
                Selection.Activate_Widget_Commands (Cmd_Set.Commands);
             end;
@@ -1220,7 +1266,7 @@ package body ECS is
 
       declare
          Widget : Widget_Component_T renames Widget_Component_T (
-            Get_Component_Ptr (Comps, Widget_Component_T'Tag).all);
+            Get_Component_Ptr (Comps, Widget_Component_T'Tag).Data.all);
       begin
          Widget.Position_X := New_X;
          Widget.Position_Y := New_Y;
@@ -1247,7 +1293,7 @@ package body ECS is
 
       declare
          Widget : Widget_Component_T renames Widget_Component_T (
-            Get_Component_Ptr (Comps, Widget_Component_T'Tag).all);
+            Get_Component_Ptr (Comps, Widget_Component_T'Tag).Data.all);
       begin
          New_X := Integer(Widget.Position_X) + Delta_X;
          New_Y := Integer(Widget.Position_Y) + Delta_Y;
@@ -1304,9 +1350,9 @@ package body ECS is
          declare
             --  Obtain views to the components
             Widget_C : Widget_Component_T renames Widget_Component_T (
-              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).Data.all);
             Calendar_C : Calendar_Component_T renames Calendar_Component_T (
-              Get_Component_Ptr (Component_List, Calendar_Component_T'Tag).all);
+              Get_Component_Ptr (Component_List, Calendar_Component_T'Tag).Data.all);
 
             Text_Width : constant Integer := Integer (Widget_C.Size_Width);
             Text_Height : constant Integer := Integer (Widget_C.Size_Height);
@@ -1629,7 +1675,7 @@ begin
          --  Get a direct live reference to the Tab_Manager component
          --  so any change we make to Mgr immediately changes the real data
          Mgr : Tab_Manager_Component_T renames Tab_Manager_Component_T (
-            Get_Component_Ptr (Manager_Comps, Tab_Manager_Component_T'Tag).all);
+            Get_Component_Ptr (Manager_Comps, Tab_Manager_Component_T'Tag).Data.all);
       begin
          --  STEP 1: Move the active tab number forward or backward
          if Direction = Next then
@@ -1653,7 +1699,7 @@ begin
             declare
                --  Direct live reference to root's widget component
                Root_W : Widget_Component_T renames Widget_Component_T (
-                  Get_Component_Ptr (Root_Comps, Widget_Component_T'Tag).all);
+                  Get_Component_Ptr (Root_Comps, Widget_Component_T'Tag).Data.all);
 
                --  Search filter for finding all tab page entities
                Page_Search : constant Component_Tag_Vector.Vector :=
@@ -1697,7 +1743,7 @@ begin
                   declare
                      --  Read this entity's Tab_Index to see which tab it belongs to
                      Page : Tab_Page_Component_T renames Tab_Page_Component_T (
-                        Get_Component_Ptr (Page_Comps, Tab_Page_Component_T'Tag).all);
+                        Get_Component_Ptr (Page_Comps, Tab_Page_Component_T'Tag).Data.all);
                   begin
                      --  Only add it if its tab number matches the one we just switched to
                      if Page.Tab_Index = Mgr.Active_Tab then
@@ -1730,13 +1776,13 @@ begin
       Manager_Comps := Get_Entity_Components (Entity_List.all, EID);
       declare
          Mgr : Tab_Manager_Component_T renames Tab_Manager_Component_T (
-            Get_Component_Ptr (Manager_Comps, Tab_Manager_Component_T'Tag).all);
+            Get_Component_Ptr (Manager_Comps, Tab_Manager_Component_T'Tag).Data.all);
       begin
          Root_Comps := Get_Entity_Components (Entity_List.all, To_EID ("root"));
          if Root_Comps /= null then
             declare
                Root_W : Widget_Component_T renames Widget_Component_T (
-                  Get_Component_Ptr (Root_Comps, Widget_Component_T'Tag).all);
+                  Get_Component_Ptr (Root_Comps, Widget_Component_T'Tag).Data.all);
                Page_Search : constant Component_Tag_Vector.Vector :=
                   Component_Tag_Vector.To_Vector (Tab_Page_Component_T'Tag, 1);
                Page_Entities : Entity_ID_Vector.Vector;
@@ -1764,7 +1810,7 @@ begin
                   Page_Comps := Get_Entity_Components (Entity_List.all, Page_EID);
                   declare
                      Page : Tab_Page_Component_T renames Tab_Page_Component_T (
-                        Get_Component_Ptr (Page_Comps, Tab_Page_Component_T'Tag).all);
+                        Get_Component_Ptr (Page_Comps, Tab_Page_Component_T'Tag).Data.all);
                   begin
                      if Page.Tab_Index = Mgr.Active_Tab then
                         Root_W.Children.Append (Page_EID);
