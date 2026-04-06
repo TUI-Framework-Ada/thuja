@@ -12,7 +12,7 @@ with Sort_Demo;
 with Ada.Strings.Unbounded;
 with Scroll;
 
-procedure Tab_Demo is
+procedure Thuja_Demo is
 
    package SU renames Ada.Strings.Unbounded;
 
@@ -1223,4 +1223,4 @@ begin
    Graphics.Clear_Screen;
    Graphics.Reset_Styling;
 
-end Tab_Demo;
+end Thuja_Demo;

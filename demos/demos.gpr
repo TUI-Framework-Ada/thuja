@@ -18,7 +18,7 @@ project Demos is
       -- "demos", 
       -- "presentation_2_demo", 
       -- "task_manager_demo", 
-      "tab_demo");
+      "thuja_demo");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches &
