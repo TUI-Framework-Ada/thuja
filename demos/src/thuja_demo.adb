@@ -3,62 +3,65 @@ with Graphics;       use Graphics;
 with ECS;            use ECS;
 with IDs;            use IDs;
 with Components;     use Components;
-with Flexbox;
 with Flex_Demo;
 with Text_Editor;
+with Console;
 use type Text_Editor.Editor_Mode_T;
 with htop;           use htop;
 with Sort_Demo;
-with Ada.Strings.Unbounded;
-with Scroll;
+--with Scroll;
+with Tab_Interface;  -- Defines the abstract tab interface (common API for all tabs)
+with Tab_HTop;       -- Implementation of the HTop-style monitoring tab
+with Tab_Editor;     -- Implementation of the text editor tab
+with Tab_Flex;       -- Implementation of the flexbox demo tab
 
 procedure Thuja_Demo is
 
-   package SU renames Ada.Strings.Unbounded;
 
+
+   -- Concrete tab instances declared locally within the main procedure.
+   HTop_Tab   : aliased Tab_HTop.Tab_T;
+   Editor_Tab : aliased Tab_Editor.Tab_T;
+   Flex_Tab   : aliased Tab_Flex.Tab_T;
+
+   -- Array of polymorphic tab pointers using the interface access type.
+   -- Unchecked_Access is used to bypass Ada accessibility checks.
+   -- Should be safe since all tab objects outlive the array usage.
+   type Tab_Array is array (0 .. 2) of Tab_Interface.Tab_Access;
+   Tabs : constant Tab_Array :=
+     [0 => HTop_Tab'Unchecked_Access,
+      1 => Editor_Tab'Unchecked_Access,
+      2 => Flex_Tab'Unchecked_Access];
+
+   -- Local type aliases for readability and consistency
    subtype String_t is String;
    subtype Boolean_t is Boolean;
    subtype Character_t is Character;
 
+   -- Terminal layout configuration constants
    Term_Width  : constant TUI_Width := 80;
    Term_Height : constant TUI_Height := 50;
    Content_Top : constant TUI_Height := 4;
 
+   -- ECS world instance holding all entities and components
    World : Entity_Components_PO;
 
-   Flex_Con_X : constant TUI_Width := 4;
-   Flex_Con_Y : constant TUI_Height := Content_Top + 3;
-
-   Max_Con_H : constant Natural :=
-     Natural (Term_Height) - Natural (Flex_Con_Y) - 2;
-
-   Scroll_Offset : Natural  := 0;
-
-   function Img (N : Natural) return String_t is
-      S : constant String_t := Natural'Image (N);
-   begin
-      return S (S'First + 1 .. S'Last);
-   end Img;
-
-   function Pad (S : String_t; Len : Natural) return String_t is
-      Result   : String_t (1 .. Len) := [others => ' '];
-      Copy_Len : constant Natural := Natural'Min (S'Length, Len);
-   begin
-      Result (1 .. Copy_Len) := S (S'First .. S'First + Copy_Len - 1);
-      return Result;
-   end Pad;
-
    ---------------------------------------------------------------------------
-   --  Chrome
+   --  Chrome (UI shell: help bar, tab bar, separator)
    ---------------------------------------------------------------------------
    procedure Create_Chrome is
       Discard : Components_Ptr;
    begin
+      -- Create top help bar widget
       Discard :=
         Make_Widget (World, "chrome_help", TUI_Width'First, 1, Term_Width, 1);
+
+      -- Create tab bar widget
       Discard :=
         Make_Widget
           (World, "chrome_tabbar", TUI_Width'First, 2, Term_Width, 1);
+
+      -- Create separator line widget
       Discard :=
         Make_Widget (World, "chrome_sep", TUI_Width'First, 3, Term_Width, 1);
    end Create_Chrome;
@@ -67,6 +70,7 @@ procedure Thuja_Demo is
       EL          : Entity_Components_Ptr;
       Current_Tab : constant Natural := Get_Active_Tab (World);
 
+      -- Color definitions for UI styling
       Help_BG         : constant Color_t :=
         (Red => 30, Green => 30, Blue => 50);
       Help_FG         : constant Color_t :=
@@ -78,10 +82,12 @@ procedure Thuja_Demo is
       Sep_FG          : constant Color_t :=
         (Red => 70, Green => 130, Blue => 180);
 
+      -- Labels for tab titles
       Labels : constant array (0 .. 3) of String_t (1 .. 14) :=
         ["    HTop      ", "  Text Editor ", "   Flexbox    ",
          " Sort Visual  "];
 
+      -- Dynamically generates help text depending on active tab/mode
       function Help_Text return String_t is
       begin
          if Current_Tab = 1 and then Text_Editor.Mode = Text_Editor.Insert then
@@ -90,7 +96,7 @@ procedure Thuja_Demo is
               & "                         ";
          elsif Current_Tab = 2 then
             return
-              " j: justify  a: align  +/-: width  H/h: height  |  [/]: tab  |  Esc: Quit";
+              " [ Prev  ] Next | j: justify  a: align  +/-: width  H/h: height  | Esc: Quit";
          elsif Current_Tab = 3 then
             return Sort_Demo.Help_Text;
          else
@@ -101,8 +107,10 @@ procedure Thuja_Demo is
       end Help_Text;
 
    begin
+      -- Lock ECS world for safe writing
       World.Claim_Writing (EL);
 
+      -- Update help bar content
       declare
          CP : constant Components_Ptr :=
            Get_Entity_Components (EL.all, To_EID ("chrome_help"));
@@ -115,6 +123,7 @@ procedure Thuja_Demo is
          Add_Component (CP.all, To_CID ("WidgetComponent"), W);
       end;
 
+      -- Update tab bar with active/inactive highlighting
       declare
          CP  : constant Components_Ptr :=
            Get_Entity_Components (EL.all, To_EID ("chrome_tabbar"));
@@ -143,6 +152,7 @@ procedure Thuja_Demo is
          Add_Component (CP.all, To_CID ("WidgetComponent"), W);
       end;
 
+      -- Draw separator line
       declare
          CP : constant Components_Ptr :=
            Get_Entity_Components (EL.all, To_EID ("chrome_sep"));
@@ -167,189 +177,9 @@ procedure Thuja_Demo is
          Add_Component (CP.all, To_CID ("WidgetComponent"), W);
       end;
 
+      -- Release ECS write lock
       World.Release_Writing;
    end Update_Chrome;
-
-   ---------------------------------------------------------------------------
-   --  Tab 0 — HTop
-   ---------------------------------------------------------------------------
-   BG_cpu      : constant Color_t := (Red => 10, Green => 20, Blue => 10);
-   BG_mem      : constant Color_t := (Red => 20, Green => 15, Blue => 5);
-   BG_disk     : constant Color_t := (Red => 5, Green => 15, Blue => 20);
-   BG_prochead : constant Color_t := (Red => 15, Green => 15, Blue => 30);
-   BG_procbody : constant Color_t := Blue;
-
-   procedure HTop_Add_Text (CP : Components_Ptr; Text : String_t; Color : Color_t; Bold : Boolean_t)
-   is
-      T : Text_Component_T;
-   begin
-      T.Text := SU.To_Unbounded_String (Text);
-      T.Text_Color := Color;
-      T.Offset_X := 1;
-      T.Offset_Y := 1;
-      T.Is_Bold := Bold;
-      Add_Component (CP.all, To_CID ("TextComponent"), T);
-   end HTop_Add_Text;
-
-   procedure Create_HTop_Entities is
-      CP  : Components_Ptr;
-      PB  : Progress_Bar_Component_T;
-      Tab : Tab_Page_Component_T;
-      Row : Natural := Natural (Content_Top);
-
-      BG_instr    : constant Color_t := (Red => 30, Green => 30, Blue => 50);
-   begin
-      Tab.Tab_Index := 0;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "instrlabel",
-           2,
-           TUI_Height (Row),
-           76,
-           1,
-           BG_instr);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      HTop_Add_Text (CP, "b: Backgrounds p: Processes", White, True);
-      Row := Row + 1;
-
-      for C in 0 .. Max_Cores - 1 loop
-         CP :=
-           Make_Widget_With_BG
-             (World,
-              "cpulabel" & Img (C),
-              2,
-              TUI_Height (Row),
-              10,
-              1,
-              BG_cpu);
-         Add_Component (CP.all, To_CID ("TabPage"), Tab);
-         HTop_Add_Text (CP, "CPU " & Img (C), White, True);
-
-         CP :=
-           Make_Widget_With_BG
-             (World,
-              "cpubar" & Img (C),
-              13,
-              TUI_Height (Row),
-              60,
-              1,
-              BG_cpu);
-         Add_Component (CP.all, To_CID ("TabPage"), Tab);
-         PB.Value := 0.0;
-         PB.Filled_Char := '=';
-         PB.Empty_Char := ' ';
-         PB.Filled_Color := Green;
-         PB.Empty_Color := Gray;
-         PB.Show_Percentage := True;
-         Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-         Row := Row + 1;
-      end loop;
-
-      Row := Row + 1;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "memlabel",
-           2,
-           TUI_Height (Row),
-           76,
-           1,
-           BG_mem);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      HTop_Add_Text (CP, "Memory:", White, True);
-      Row := Row + 1;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "rambar",
-           2,
-           TUI_Height (Row),
-           60,
-           1,
-           BG_mem);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      PB.Value := 0.0;
-      PB.Filled_Color := Yellow;
-      Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-      Row := Row + 1;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "swpbar",
-           2,
-           TUI_Height (Row),
-           60,
-           1,
-           BG_mem);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      PB.Value := 0.0;
-      PB.Filled_Color := Red;
-      Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-      Row := Row + 2;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "disklabel",
-           2,
-           TUI_Height (Row),
-           76,
-           1,
-           BG_disk);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      HTop_Add_Text (CP, "Disk:", White, True);
-      Row := Row + 1;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "diskbar",
-           2,
-           TUI_Height (Row),
-           60,
-           1,
-           BG_disk);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      PB.Value := 0.0;
-      PB.Filled_Color := Green;
-      Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-      Row := Row + 2;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "proc_header",
-           2,
-           TUI_Height (Row),
-           76,
-           1,
-           BG_prochead);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      HTop_Add_Text
-        (CP,
-         Pad ("PID", 7)
-         & Pad ("USER", 10)
-         & Pad ("CPU%", 6)
-         & Pad ("Mem%", 6)
-         & "S Command",
-         White,
-         True);
-      Row := Row + 1;
-
-      for R in 0 .. Num_Proc_Rows - 1 loop
-         CP :=
-           Make_Widget_With_BG
-             (World, "procList" & Img (R), 2, TUI_Height (Row), 76, 1, BG_procbody);
-         Add_Component (CP.all, To_CID ("TabPage"), Tab);
-         HTop_Add_Text (CP, "", White, False);
-         Row := Row + 1;
-      end loop;
-   end Create_HTop_Entities;
 
    procedure Toggle_HTop_Backgrounds is
       EL : Entity_Components_Ptr;
@@ -365,23 +195,23 @@ procedure Thuja_Demo is
 
       --  CPU labels & progress bars
       for C in 0 .. Max_Cores - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("cpulabel" & Img (C)));
+         CP := Get_Entity_Components (EL.all, To_EID ("cpulabel" & Tab_HTop.Img (C)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
                Remove_Component (CP.all, Background_Color_Component_T'Tag);
             else
-               Add_BG (CP, BG_cpu);
+               Add_BG (CP, Tab_HTop.BG_cpu);
             end if;
             CP.PO.Release_List;
          end if;
-         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Img (C)));
+         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Tab_HTop.Img (C)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
                Remove_Component (CP.all, Background_Color_Component_T'Tag);
             else
-               Add_BG (CP, BG_cpu);
+               Add_BG (CP, Tab_HTop.BG_cpu);
             end if;
             CP.PO.Release_List;
          end if;
@@ -394,7 +224,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, BG_mem);
+            Add_BG (CP, Tab_HTop.BG_mem);
          end if;
          CP.PO.Release_List;
       end if;
@@ -406,7 +236,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, BG_mem);
+            Add_BG (CP, Tab_HTop.BG_mem);
          end if;
          CP.PO.Release_List;
       end if;
@@ -418,7 +248,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, BG_mem);
+            Add_BG (CP, Tab_HTop.BG_mem);
          end if;
          CP.PO.Release_List;
       end if;
@@ -430,7 +260,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, BG_disk);
+            Add_BG (CP, Tab_HTop.BG_disk);
          end if;
          CP.PO.Release_List;
       end if;
@@ -442,7 +272,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, BG_disk);
+            Add_BG (CP, Tab_HTop.BG_disk);
          end if;
          CP.PO.Release_List;
       end if;
@@ -454,20 +284,20 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, BG_prochead);
+            Add_BG (CP, Tab_HTop.BG_prochead);
          end if;
          CP.PO.Release_List;
       end if;
 
       --  Process lines
       for R in 0 .. Num_Proc_Rows - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Img (R)));
+         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Tab_HTop.Img (R)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
                Remove_Component (CP.all, Background_Color_Component_T'Tag);
             else
-               Add_BG (CP, BG_procbody);
+               Add_BG (CP, Tab_HTop.BG_procbody);
             end if;
             CP.PO.Release_List;
          end if;
@@ -501,15 +331,15 @@ procedure Thuja_Demo is
               TUI_Height (Row),
               76,
               1,
-              BG_prochead);
+              Tab_HTop.BG_prochead);
          World.Claim_Writing (EL);
          Add_Component (CP.all, To_CID ("TabPage"), Tab);
-         HTop_Add_Text
+         Tab_HTop.Add_Text
            (CP,
-            Pad ("PID", 7)
-            & Pad ("USER", 10)
-            & Pad ("CPU%", 6)
-            & Pad ("Mem%", 6)
+            Tab_HTop.Pad ("PID", 7)
+            & Tab_HTop.Pad ("USER", 10)
+            & Tab_HTop.Pad ("CPU%", 6)
+            & Tab_HTop.Pad ("Mem%", 6)
             & "S Command",
             White,
             True);
@@ -517,19 +347,19 @@ procedure Thuja_Demo is
       Row := Row + 1;
 
       for R in 0 .. Num_Proc_Rows - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Img (R)));
+         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Tab_HTop.Img (R)));
          if CP /= null then
             World.Release_Writing;
-            Remove_Entity (World, To_EID ("procList" & Img (R)));
+            Remove_Entity (World, To_EID ("procList" & Tab_HTop.Img (R)));
             World.Claim_Writing (EL);
          else
             World.Release_Writing;
             CP :=
               Make_Widget_With_BG
-                (World, "procList" & Img (R), 2, TUI_Height (Row), 76, 1, BG_procbody);
+                (World, "procList" & Tab_HTop.Img (R), 2, TUI_Height (Row), 76, 1, Tab_HTop.BG_procbody);
             World.Claim_Writing (EL);
             Add_Component (CP.all, To_CID ("TabPage"), Tab);
-            HTop_Add_Text (CP, "", White, False);
+            Tab_HTop.Add_Text (CP, "", White, False);
             Row := Row + 1;
             end if;
       end loop;
@@ -537,484 +367,12 @@ procedure Thuja_Demo is
       World.Release_Writing;
    end Toggle_HTop_Processes;
 
-   procedure Update_HTop_Stats is
-      EL : Entity_Components_Ptr;
-      CP : Components_Ptr;
-      PB : Progress_Bar_Component_T;
-      T  : Text_Component_T;
-   begin
-      Refresh;
-      World.Claim_Writing (EL);
-
-      for C in 0 .. Num_Cores - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Img (C)));
-         if CP /= null then
-            PB :=
-              Progress_Bar_Component_T
-                (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-            declare
-               Usage : constant Float := CPU_Values (C);
-            begin
-               PB.Value := Usage;
-               PB.Filled_Color :=
-                 (if Usage < 0.33
-                  then Green
-                  elsif Usage < 0.66
-                  then Yellow
-                  else Red);
-            end;
-            Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-         end if;
-      end loop;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("memlabel"));
-      if CP /= null then
-         T :=
-           Text_Component_T (Get_Component (CP.all, To_CID ("TextComponent")));
-         T.Text := Mem_Label;
-         Add_Component (CP.all, To_CID ("TextComponent"), T);
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("rambar"));
-      if CP /= null then
-         PB :=
-           Progress_Bar_Component_T
-             (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-         PB.Value := Mem_Pct;
-         PB.Filled_Color :=
-           (if Mem_Pct < 0.5
-            then Green
-            elsif Mem_Pct < 0.75
-            then Yellow
-            else Red);
-         Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("swpbar"));
-      if CP /= null then
-         PB :=
-           Progress_Bar_Component_T
-             (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-         PB.Value := Swap_Pct;
-         PB.Filled_Color :=
-           (if Swap_Pct < 0.5
-            then Green
-            elsif Swap_Pct < 0.75
-            then Yellow
-            else Red);
-         Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("disklabel"));
-      if CP /= null then
-         T :=
-           Text_Component_T (Get_Component (CP.all, To_CID ("TextComponent")));
-         T.Text := Disk_Label;
-         Add_Component (CP.all, To_CID ("TextComponent"), T);
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("diskbar"));
-      if CP /= null then
-         PB :=
-           Progress_Bar_Component_T
-             (Get_Component (CP.all, To_CID ("ProgressBarComponent")));
-         PB.Value := Disk_Pct;
-         PB.Filled_Color :=
-           (if Disk_Pct < 0.5
-            then Green
-            elsif Disk_Pct < 0.75
-            then Yellow
-            else Red);
-         Add_Component (CP.all, To_CID ("ProgressBarComponent"), PB);
-      end if;
-
-      for R in 0 .. Num_Proc_Rows - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Img (R)));
-         if CP /= null then
-            T :=
-              Text_Component_T
-                (Get_Component (CP.all, To_CID ("TextComponent")));
-            T.Text := Proc_Rows (R).Text;
-            T.Text_Color :=
-              (if Proc_Rows (R).High_CPU
-               then Red
-               elsif Proc_Rows (R).Mid_CPU
-               then Gold
-               else White);
-            Add_Component (CP.all, To_CID ("TextComponent"), T);
-         end if;
-      end loop;
-
-      World.Release_Writing;
-   end Update_HTop_Stats;
-
    ---------------------------------------------------------------------------
-   --  Tab 1 — Text Editor
-   ---------------------------------------------------------------------------
-   procedure Create_Editor_Entities is
-      CP      : Components_Ptr;
-      T       : Text_Component_T;
-      Tab     : Tab_Page_Component_T;
-      Ed_H    : constant TUI_Height := Term_Height - Content_Top;
-      Ed_BG   : constant Color_t := (Red => 25, Green => 25, Blue => 25);
-      Stat_BG : constant Color_t := Blue;
-   begin
-      Tab.Tab_Index := 1;
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "ed_area",
-           TUI_Width'First,
-           Content_Top,
-           Term_Width,
-           Ed_H,
-           Ed_BG);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      T.Text :=
-        SU.To_Unbounded_String
-          (SU.To_String (Text_Editor.Build_Editor_Text (0, Natural (Ed_H))));
-      T.Text_Color := White;
-      T.Offset_X := 1;
-      T.Offset_Y := 1;
-      T.Is_Bold := False;
-      Add_Component (CP.all, To_CID ("TextComponent"), T);
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "ed_status",
-           TUI_Width'First,
-           Term_Height,
-           Term_Width,
-           1,
-           Stat_BG);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      T.Text :=
-        SU.To_Unbounded_String (SU.To_String (Text_Editor.Status_Text));
-      T.Text_Color := White;
-      T.Offset_X := 1;
-      T.Offset_Y := 1;
-      T.Is_Bold := False;
-      Add_Component (CP.all, To_CID ("TextComponent"), T);
-   end Create_Editor_Entities;
-
-   procedure Update_Editor_Display is
-      EL   : Entity_Components_Ptr;
-      CP   : Components_Ptr;
-      T    : Text_Component_T;
-      Ed_H : constant Natural := Natural (Term_Height - Content_Top);
-   begin
-      World.Claim_Writing (EL);
-
-      CP := Get_Entity_Components (EL.all, To_EID ("ed_area"));
-      if CP /= null then
-
-         Scroll.Update
-           (Current_Line  => Text_Editor.Current_Line,
-            Total_Lines   => Natural (Text_Editor.Lines.Length),
-            Visible_Rows  => Ed_H,
-            Scroll_Offset => Scroll_Offset);
-
-         T :=
-           Text_Component_T (Get_Component (CP.all, To_CID ("TextComponent")));
-         T.Text :=
-           SU.To_Unbounded_String
-             (SU.To_String (Text_Editor.Build_Editor_Text (Scroll_Offset, Ed_H)));
-         Add_Component (CP.all, To_CID ("TextComponent"), T);
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("ed_status"));
-      if CP /= null then
-         T :=
-           Text_Component_T (Get_Component (CP.all, To_CID ("TextComponent")));
-         T.Text :=
-           SU.To_Unbounded_String (SU.To_String (Text_Editor.Status_Text));
-         Add_Component (CP.all, To_CID ("TextComponent"), T);
-      end if;
-
-      World.Release_Writing;
-   end Update_Editor_Display;
-
-   ---------------------------------------------------------------------------
-   --  Tab 2 — Flexbox Demo
-   ---------------------------------------------------------------------------
-   procedure Create_Flex_Demo_Entities is
-      CP  : Components_Ptr;
-      Tab : Tab_Page_Component_T;
-      Txt : Text_Component_T;
-      Fl  : Flex_Layout_Component_T;
-
-      Dark_BG : constant Color_t := (Red => 20, Green => 20, Blue => 35);
-      Con_BG  : constant Color_t := (Red => 30, Green => 30, Blue => 50);
-      Child_H : constant Natural := Flex_Demo.Con_H / 2;
-
-      Child_Colors : constant array (1 .. Flex_Demo.Num_Items) of Color_t :=
-        [(Red => 70, Green => 130, Blue => 180),
-         (Red => 80, Green => 160, Blue => 80),
-         (Red => 180, Green => 120, Blue => 50),
-         (Red => 140, Green => 70, Blue => 160)];
-   begin
-      Tab.Tab_Index := 2;
-
-      CP :=
-        Make_Widget_With_BG
-          (World, "flex_hint", Flex_Con_X, Content_Top, 76, 1, Dark_BG);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      Txt.Text :=
-        SU.To_Unbounded_String
-          ("j: justify  a: align  +/-: width  H/h: height");
-      Txt.Text_Color := (Red => 180, Green => 200, Blue => 220);
-      Txt.Offset_X := 1;
-      Txt.Offset_Y := 1;
-      Txt.Is_Bold := False;
-      Add_Component (CP.all, To_CID ("TextComponent"), Txt);
-
-      CP :=
-        Make_Widget_With_BG
-          (World, "flex_status", Flex_Con_X, Content_Top + 1, 76, 1, Dark_BG);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      Txt.Text :=
-        SU.To_Unbounded_String
-          ("Justify: Flex_Start    Align: Flex_Start    Width: "
-           & Img (Flex_Demo.Con_W)
-           & "  Height: "
-           & Img (Flex_Demo.Con_H));
-      Txt.Text_Color := White;
-      Txt.Offset_X := 1;
-      Txt.Offset_Y := 1;
-      Txt.Is_Bold := False;
-      Add_Component (CP.all, To_CID ("TextComponent"), Txt);
-
-      CP :=
-        Make_Widget_With_BG
-          (World,
-           "flex_con",
-           Flex_Con_X,
-           Flex_Con_Y,
-           TUI_Width (Flex_Demo.Con_W),
-           TUI_Height (Flex_Demo.Con_H),
-           Con_BG);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-
-      for I in 1 .. Flex_Demo.Num_Items loop
-         declare
-            Child_CP : constant Components_Ptr :=
-              Make_Widget_With_BG
-                (World,
-                 Flex_Demo.Child_Names (I),
-                 Flex_Con_X,
-                 Flex_Con_Y,
-                 TUI_Width (Flex_Demo.Item_Basis),
-                 TUI_Height (Child_H),
-                 Child_Colors (I));
-         begin
-            Add_Component (Child_CP.all, To_CID ("TabPage"), Tab);
-            Txt.Text := SU.To_Unbounded_String (Img (I));
-            Txt.Text_Color := White;
-            Txt.Offset_X := TUI_Width (Flex_Demo.Item_Basis / 2);
-            Txt.Offset_Y := TUI_Height (Child_H / 2);
-            Txt.Is_Bold := True;
-            Add_Component (Child_CP.all, To_CID ("TextComponent"), Txt);
-         end;
-      end loop;
-
-      declare
-         Items_Ptr : constant Flexbox.Flex_Item_Array_Ptr :=
-           new Flexbox.Flex_Item_Array (1 .. Flex_Demo.Num_Items);
-      begin
-         for I in 1 .. Flex_Demo.Num_Items loop
-            Items_Ptr (I) :=
-              (Related_Entity => To_EID (Flex_Demo.Child_Names (I)),
-               Flex_Grow      => 0.0,
-               Flex_Shrink    => 1.0,
-               Flex_Basis     => Flex_Demo.Item_Basis,
-               Computed_Size  => Flex_Demo.Item_Basis,
-               Position_X     => 0,
-               Position_Y     => 0,
-               Cross_Size     => Child_H);
-         end loop;
-
-         Fl.Flex_Container :=
-           (Width      => Flex_Demo.Con_W,
-            Height     => Flex_Demo.Con_H,
-            Direction  => Flexbox.Row,
-            Justify    => Flex_Demo.Current_Justify,
-            Align      => Flex_Demo.Current_Align,
-            Items      => Items_Ptr,
-            Item_Count => Flex_Demo.Num_Items);
-         Fl.Is_Dirty := True;
-         Add_Component (CP.all, To_CID ("FlexLayoutComponent"), Fl);
-      end;
-
-      declare
-         Con_W : Widget_Component_T :=
-           Widget_Component_T
-             (Get_Component (CP.all, To_CID ("WidgetComponent")));
-      begin
-         for I in 1 .. Flex_Demo.Num_Items loop
-            Con_W.Children.Append (To_EID (Flex_Demo.Child_Names (I)));
-         end loop;
-         Add_Component (CP.all, To_CID ("WidgetComponent"), Con_W);
-      end;
-   end Create_Flex_Demo_Entities;
-
-   procedure Update_Flex_Demo is
-      EL : Entity_Components_Ptr;
-      CP : Components_Ptr;
-   begin
-      World.Claim_Writing (EL);
-
-      CP := Get_Entity_Components (EL.all, To_EID ("flex_con"));
-      if CP /= null then
-         declare
-            W  : Widget_Component_T :=
-              Widget_Component_T
-                (Get_Component (CP.all, To_CID ("WidgetComponent")));
-            Fl : Flex_Layout_Component_T :=
-              Flex_Layout_Component_T
-                (Get_Component (CP.all, To_CID ("FlexLayoutComponent")));
-         begin
-            W.Size_Width := TUI_Width (Flex_Demo.Con_W);
-            W.Size_Height := TUI_Height (Flex_Demo.Con_H);
-            Fl.Flex_Container.Width := Flex_Demo.Con_W;
-            Fl.Flex_Container.Height := Flex_Demo.Con_H;
-            Fl.Flex_Container.Justify := Flex_Demo.Current_Justify;
-            Fl.Flex_Container.Align := Flex_Demo.Current_Align;
-            Fl.Is_Dirty := True;
-            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-            Add_Component (CP.all, To_CID ("FlexLayoutComponent"), Fl);
-         end;
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("flex_status"));
-      if CP /= null then
-         declare
-            T : Text_Component_T :=
-              Text_Component_T
-                (Get_Component (CP.all, To_CID ("TextComponent")));
-         begin
-            T.Text :=
-              SU.To_Unbounded_String
-                ("Justify: "
-                 & Flex_Demo.Current_Justify_Name
-                 & "   Align: "
-                 & Flex_Demo.Current_Align_Name
-                 & "   Width: "
-                 & Img (Flex_Demo.Con_W)
-                 & "  Height: "
-                 & Img (Flex_Demo.Con_H));
-            Add_Component (CP.all, To_CID ("TextComponent"), T);
-         end;
-      end if;
-
-      World.Release_Writing;
-      FlexLayoutSystem (World);
-      FlexAlignTextSystem (World);
-   end Update_Flex_Demo;
-
-   ---------------------------------------------------------------------------
-   --  Tab 3 — Sound of Sorting
-   ---------------------------------------------------------------------------
-   Sort_Bar_H  : constant TUI_Height := Term_Height - Content_Top - 1;
-   Sort_Code_H : constant TUI_Height := Sort_Bar_H;
-   Sort_Stat_H : constant TUI_Height := 2;
-
-   procedure Create_Sort_Entities is
-      CP  : Components_Ptr;
-      Tab : Tab_Page_Component_T;
-   begin
-      Tab.Tab_Index := 3;
-
-      CP :=
-        Make_Widget
-          (World,
-           "sort_bars",
-           TUI_Width'First,
-           Content_Top,
-           TUI_Width (Sort_Demo.Bar_W),
-           Sort_Bar_H);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-
-      CP :=
-        Make_Widget
-          (World,
-           "sort_code",
-           TUI_Width (Sort_Demo.Bar_W + 1),
-           Content_Top,
-           TUI_Width (Sort_Demo.Code_W),
-           Sort_Code_H);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-
-      CP :=
-        Make_Widget
-          (World,
-           "sort_stat",
-           TUI_Width'First,
-           Term_Height - 1,
-           Term_Width,
-           Sort_Stat_H);
-      Add_Component (CP.all, To_CID ("TabPage"), Tab);
-   end Create_Sort_Entities;
-
-   procedure Update_Sort_Display is
-      EL : Entity_Components_Ptr;
-      CP : Components_Ptr;
-   begin
-      Sort_Demo.Tick;
-
-      World.Claim_Writing (EL);
-
-      CP := Get_Entity_Components (EL.all, To_EID ("sort_bars"));
-      if CP /= null then
-         declare
-            W : Widget_Component_T :=
-              Widget_Component_T
-                (Get_Component (CP.all, To_CID ("WidgetComponent")));
-         begin
-            Sort_Demo.Render_Bars
-              (W.Render_Buffer,
-               TUI_Width (Sort_Demo.Bar_W),
-               Sort_Bar_H);
-            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-         end;
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("sort_code"));
-      if CP /= null then
-         declare
-            W : Widget_Component_T :=
-              Widget_Component_T
-                (Get_Component (CP.all, To_CID ("WidgetComponent")));
-         begin
-            Sort_Demo.Render_Code
-              (W.Render_Buffer,
-               TUI_Width (Sort_Demo.Code_W),
-               Sort_Code_H);
-            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-         end;
-      end if;
-
-      CP := Get_Entity_Components (EL.all, To_EID ("sort_stat"));
-      if CP /= null then
-         declare
-            W : Widget_Component_T :=
-              Widget_Component_T
-                (Get_Component (CP.all, To_CID ("WidgetComponent")));
-         begin
-            Sort_Demo.Render_Status (W.Render_Buffer, Term_Width, Sort_Stat_H);
-            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
-         end;
-      end if;
-
-      World.Release_Writing;
-   end Update_Sort_Display;
-
-   ---------------------------------------------------------------------------
-   --  Render
+   --  Render pipeline (ECS systems)
    ---------------------------------------------------------------------------
    procedure Render is
    begin
+      -- Execute rendering systems in order
       Update_Chrome;
       WidgetBackgroundSystem (World);
       FlexAlignTextSystem (World);
@@ -1026,32 +384,42 @@ procedure Thuja_Demo is
    end Render;
 
    ---------------------------------------------------------------------------
-   --  Main
+   --  Main loop and application lifecycle
    ---------------------------------------------------------------------------
    Event   : Input_Event_t;
    Running : Boolean_t := True;
 
 begin
+   -- Initialize subsystems
    Text_Editor.Initialise;
    Sort_Demo.Initialise;
    Initialise;
 
+   -- Configure console for ANSI/VT rendering
+   Console.Enable_VT_Processing;
+   Console.Set_Cursor_Visible (False);
+   Graphics.Save_Cursor_Position;
    Graphics.Clear_Screen;
 
+   -- Initialize ECS world and UI chrome
    Initialize_World (World, Term_Width, Term_Height, Tab_Count => 4);
    Create_Chrome;
-   Create_HTop_Entities;
-   Create_Editor_Entities;
-   Create_Flex_Demo_Entities;
-   Create_Sort_Entities;
 
+   -- Initialize all tabs via polymorphic dispatch
+   for I in Tabs'Range loop
+      Tabs (I).Create_Entities (World, Content_Top, Term_Width, Term_Height);
+   end loop;
+
+   -- Initial render setup
    Update_Chrome;
    TabInitSystem (World);
    ResetBackbufferSystem (World);
    Render;
 
+   -- Start input system
    Input_Reader.Start;
 
+   -- Main event loop
    while Running loop
       ClearWidgetBufferSystem (World);
       loop
@@ -1059,6 +427,7 @@ begin
          exit when
            Event.Cmd = None and then Event.Char_Value = Character_t'Val (0);
 
+         -- Tab switching (disabled in insert mode)
          if (Event.Char_Value = '[' or else Event.Char_Value = ']')
            and then Text_Editor.Mode /= Text_Editor.Insert
          then
@@ -1067,8 +436,8 @@ begin
             else
                TabSwitchSystem (World, Next);
             end if;
-            Render;
 
+         -- HTop display controls
          elsif Get_Active_Tab (World) = 0 then
             case Event.Char_Value is
                when 'b'    =>
@@ -1090,6 +459,7 @@ begin
                   end if;
             end case;
 
+         -- Text editor tab logic
          elsif Get_Active_Tab (World) = 1 then
             if Text_Editor.Mode = Text_Editor.Insert then
                case Event.Cmd is
@@ -1123,31 +493,27 @@ begin
                end case;
             end if;
 
+         -- Flexbox demo controls
          elsif Get_Active_Tab (World) = 2 then
             case Event.Char_Value is
                when 'j'    =>
                   Flex_Demo.Next_Justify;
-                  Update_Flex_Demo;
 
                when 'a'    =>
                   Flex_Demo.Next_Align;
-                  Update_Flex_Demo;
 
                when '+'    =>
                   Flex_Demo.Grow (Natural (Term_Width) - 6);
-                  Update_Flex_Demo;
 
                when '-'    =>
                   Flex_Demo.Shrink;
-                  Update_Flex_Demo;
 
                when 'H'    =>
-                  Flex_Demo.Grow_Height (Max_Con_H);
-                  Update_Flex_Demo;
+                  Flex_Demo.Grow_Height
+                     (Natural (Term_Height) - Natural (Content_Top) - 5);
 
                when 'h'    =>
                   Flex_Demo.Shrink_Height;
-                  Update_Flex_Demo;
 
                when others =>
                   if Event.Cmd = Quit
@@ -1189,6 +555,7 @@ begin
                   end if;
             end case;
 
+         -- Global quit handling
          else
             if Event.Cmd = Quit or else Event.Char_Value = Character_t'Val (27)
             then
@@ -1198,28 +565,28 @@ begin
          end if;
       end loop;
 
-      if Get_Active_Tab (World) = 0 then
-         Update_HTop_Stats;
-      end if;
+      -- Update active tab and re-render
+      declare
+         Active : constant Natural := Get_Active_Tab (World);
+      begin
+         Tabs (Active).Update (World);
+      end;
 
-      if Get_Active_Tab (World) = 1 then
-         Update_Editor_Display;
-      end if;
-
-      if Get_Active_Tab (World) = 2 then
-         Update_Flex_Demo;
-      end if;
-
-      if Get_Active_Tab (World) = 3 then
-         Update_Sort_Display;
-      end if;
+      --  TODO: Merge into Tabs
+--      if Get_Active_Tab (World) = 3 then
+--         Update_Sort_Display;
+--      end if;
 
       Render;
 
       delay 0.05;
    end loop;
 
+   -- Shutdown and restore console state
    Input_Reader.Stop;
+
+   Console.Set_Cursor_Visible (True);
+   Graphics.Restore_Cursor_Position;
    Graphics.Clear_Screen;
    Graphics.Reset_Styling;
 
