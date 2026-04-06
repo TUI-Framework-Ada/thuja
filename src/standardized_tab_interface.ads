@@ -4,7 +4,7 @@ with Graphics; use Graphics;
 package Standardized_tab_interface is
 
    ----------------------------------------------------------------------------
-   --  Tab_Interface
+   --  Standardized_tab_interface
    --
    --  PURPOSE
    --  -------
@@ -13,6 +13,8 @@ package Standardized_tab_interface is
    --  at startup and an Update procedure called every frame when that tab
    --  is active. Thuja_Demo drives all tabs uniformly through this interface
    --  with no tab-specific logic in the main demo file.
+   --  NOTE: You can still create tab logic within demos but for demos with
+   --          many widgets it would be useful to utilize this feature.
    ----------------------------------------------------------------------------
 
    type Tab_T is abstract tagged null record;
