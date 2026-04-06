@@ -1,10 +1,10 @@
-with Tab_Interface;
+with standardized_tab_interface;
 with ECS;
 with Graphics; use Graphics;
 
-package Tab_HTop is
+package Thuja_demo_tab_flex is
 
-   type Tab_T is new Tab_Interface.Tab_T with null record;
+   type Tab_T is new standardized_tab_interface.Tab_T with null record;
 
    BG_cpu      : constant Color_t := (Red => 10, Green => 20, Blue => 10);
    BG_mem      : constant Color_t := (Red => 20, Green => 15, Blue => 5);
@@ -30,4 +30,4 @@ package Tab_HTop is
    procedure Update
      (Tab : in out Tab_T; World : in out ECS.Entity_Components_PO);
 
-end Tab_HTop;
+end Thuja_demo_tab_flex;

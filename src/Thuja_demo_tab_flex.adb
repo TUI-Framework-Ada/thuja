@@ -5,7 +5,7 @@ with Flex_Demo;
 with Flexbox;
 with Ada.Strings.Unbounded;
 
-package body Tab_Flex is
+package body Thuja_demo_tab_flex is
 
    package SU renames Ada.Strings.Unbounded;
 
@@ -200,4 +200,4 @@ package body Tab_Flex is
       ECS.FlexAlignTextSystem (World);
    end Update;
 
-end Tab_Flex;
+end Thuja_demo_tab_flex;

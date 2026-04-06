@@ -1,7 +1,7 @@
 with ECS;
 with Graphics; use Graphics;
 
-package Tab_Interface is
+package Standardized_tab_interface is
 
    ----------------------------------------------------------------------------
    --  Tab_Interface
@@ -32,4 +32,4 @@ package Tab_Interface is
      (Tab : in out Tab_T; World : in out ECS.Entity_Components_PO)
    is abstract;
 
-end Tab_Interface;
+end Standardized_tab_interface;

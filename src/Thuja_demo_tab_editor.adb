@@ -4,7 +4,7 @@ with ECS;        use ECS;
 with Text_Editor;
 with Ada.Strings.Unbounded;
 
-package body Tab_Editor is
+package body Thuja_demo_tab_editor is
 
    package SU renames Ada.Strings.Unbounded;
 
@@ -98,4 +98,4 @@ package body Tab_Editor is
       World.Release_Writing;
    end Update;
 
-end Tab_Editor;
+end Thuja_demo_tab_editor;

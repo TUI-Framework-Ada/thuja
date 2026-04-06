@@ -1,3 +1,4 @@
+with Ada.Wide_Wide_Text_IO;
 with Input_Handling; use Input_Handling;
 with Graphics;       use Graphics;
 with ECS;            use ECS;
@@ -9,25 +10,24 @@ with Console;
 use type Text_Editor.Editor_Mode_T;
 with htop;           use htop;
 with Sort_Demo;
---with Scroll;
-with Tab_Interface;  -- Defines the abstract tab interface (common API for all tabs)
-with Tab_HTop;       -- Implementation of the HTop-style monitoring tab
-with Tab_Editor;     -- Implementation of the text editor tab
-with Tab_Flex;       -- Implementation of the flexbox demo tab
+with standardized_tab_interface;    -- Defines the abstract tab interface (common API for all tabs)
+with Thuja_demo_tab_htop;           -- Implementation of the HTop-style monitoring tab
+with Thuja_demo_tab_editor;         -- Implementation of the text editor tab
+with Thuja_demo_tab_flex;           -- Implementation of the flexbox demo tab
 
 procedure Thuja_Demo is
 
 
 
    -- Concrete tab instances declared locally within the main procedure.
-   HTop_Tab   : aliased Tab_HTop.Tab_T;
-   Editor_Tab : aliased Tab_Editor.Tab_T;
-   Flex_Tab   : aliased Tab_Flex.Tab_T;
+   HTop_Tab    : aliased Thuja_demo_tab_htop.Tab_T;
+   Editor_Tab  : aliased Thuja_demo_tab_editor.Tab_T;
+   Flex_Tab    : aliased Thuja_demo_tab_flex.Tab_T;
 
    -- Array of polymorphic tab pointers using the interface access type.
    -- Unchecked_Access is used to bypass Ada accessibility checks.
    -- Should be safe since all tab objects outlive the array usage.
-   type Tab_Array is array (0 .. 2) of Tab_Interface.Tab_Access;
+   type Tab_Array is array (0 .. 2) of standardized_tab_interface.Tab_Access;
    Tabs : constant Tab_Array :=
      [0 => HTop_Tab'Unchecked_Access,
       1 => Editor_Tab'Unchecked_Access,
@@ -400,6 +400,7 @@ begin
    Console.Set_Cursor_Visible (False);
    Graphics.Save_Cursor_Position;
    Graphics.Clear_Screen;
+   Ada.Wide_Wide_Text_IO.Flush;
 
    -- Initialize ECS world and UI chrome
    Initialize_World (World, Term_Width, Term_Height, Tab_Count => 4);
@@ -589,5 +590,6 @@ begin
    Graphics.Restore_Cursor_Position;
    Graphics.Clear_Screen;
    Graphics.Reset_Styling;
+   Ada.Wide_Wide_Text_IO.Flush;
 
 end Thuja_Demo;

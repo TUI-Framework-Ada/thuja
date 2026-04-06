@@ -4,7 +4,7 @@ with htop;       use htop;
 with ECS;        use ECS;
 with Ada.Strings.Unbounded;
 
-package body Tab_HTop is
+package body Thuja_demo_tab_htop is
 
    package SU renames Ada.Strings.Unbounded;
 
@@ -47,8 +47,8 @@ package body Tab_HTop is
       Page_Tab : Tab_Page_Component_T;
       Row      : Natural := Natural (Content_Top);
 
-      Max_Con_H : constant Natural :=
-        Natural (Term_Height) - Natural (Content_Top) - 2;
+      -- Max_Con_H : constant Natural :=
+      --   Natural (Term_Height) - Natural (Content_Top) - 2;
 
    begin
       Page_Tab.Tab_Index := 0;
@@ -307,4 +307,4 @@ package body Tab_HTop is
       World.Release_Writing;
    end Update;
 
-end Tab_HTop;
+end Thuja_demo_tab_htop;
