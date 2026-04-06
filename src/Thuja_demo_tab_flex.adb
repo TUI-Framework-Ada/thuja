@@ -31,7 +31,7 @@ package body Thuja_demo_tab_flex is
       Con_BG     : constant Color_t := (Red => 30, Green => 30, Blue => 50);
       Child_H    : constant Natural := Flex_Demo.Con_H / 2;
       Flex_Con_X : constant TUI_Width := 4;
-      Flex_Con_Y : constant TUI_Height := Content_Top + 3;
+      Flex_Con_Y : constant TUI_Height := Content_Top + 2;
 
       Child_Colors : constant array (1 .. Flex_Demo.Num_Items) of Color_t :=
         [(Red => 70, Green => 130, Blue => 180),
@@ -43,20 +43,7 @@ package body Thuja_demo_tab_flex is
 
       CP :=
         Make_Widget_With_BG
-          (World, "flex_hint", Flex_Con_X, Content_Top, 76, 1, Dark_BG);
-      Add_Component (CP.all, To_CID ("TabPage"), Page);
-      Txt.Text :=
-        SU.To_Unbounded_String
-          ("j: justify  a: align  +/-: width  H/h: height");
-      Txt.Text_Color := (Red => 180, Green => 200, Blue => 220);
-      Txt.Offset_X := 1;
-      Txt.Offset_Y := 1;
-      Txt.Is_Bold := False;
-      Add_Component (CP.all, To_CID ("TextComponent"), Txt);
-
-      CP :=
-        Make_Widget_With_BG
-          (World, "flex_status", Flex_Con_X, Content_Top + 1, 76, 1, Dark_BG);
+          (World, "flex_status", Flex_Con_X, Content_Top, 76, 1, Dark_BG);
       Add_Component (CP.all, To_CID ("TabPage"), Page);
       Txt.Text :=
         SU.To_Unbounded_String
