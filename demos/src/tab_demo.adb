@@ -13,7 +13,6 @@ with Ada.Strings.Unbounded;
 procedure Tab_Demo is
 
    package SU renames Ada.Strings.Unbounded;
-   use type SU.Unbounded_String;
 
    subtype String_t is String;
    subtype Boolean_t is Boolean;
@@ -105,7 +104,7 @@ procedure Tab_Demo is
              (Get_Component (CP.all, To_CID ("WidgetComponent")));
       begin
          Fill_Row (W.Render_Buffer, 1, Help_BG);
-         Write_To_Buffer (W.Render_Buffer, 1, 1, Help_Text, Help_FG, Help_BG);
+         Write_To_Buffer (W.Render_Buffer, 1, 1, Help_Text, Help_FG, Help_BG, False);
          Add_Component (CP.all, To_CID ("WidgetComponent"), W);
       end;
 
@@ -130,7 +129,7 @@ procedure Tab_Demo is
                   else (Red => 140, Green => 150, Blue => 170));
             begin
                Write_To_Buffer
-                 (W.Render_Buffer, Col, 1, Lbl, FG, BG, Bold => Is_Act);
+                 (W.Render_Buffer, Col, 1, Lbl, FG, BG, False, Bold => Is_Act);
                Col := Col + TUI_Width (Lbl'Length) + 1;
             end;
          end loop;
@@ -149,13 +148,14 @@ procedure Tab_Demo is
               (W.Render_Buffer,
                X,
                1,
-               (Char             => '-',
-                Char_Color       => Sep_FG,
-                Background_Color => Black,
-                Is_Bold          => False,
-                Is_Italic        => False,
-                Is_Underline     => False,
-                Is_Strikethrough => False));
+               (Char                   => '-',
+                Char_Color             => Sep_FG,
+                Background_Color       => Black,
+                Background_Transparent => True,
+                Is_Bold                => False,
+                Is_Italic              => False,
+                Is_Underline           => False,
+                Is_Strikethrough       => False));
          end loop;
          Add_Component (CP.all, To_CID ("WidgetComponent"), W);
       end;
@@ -166,25 +166,46 @@ procedure Tab_Demo is
    ---------------------------------------------------------------------------
    --  Tab 0 — HTop
    ---------------------------------------------------------------------------
+   BG_cpu      : constant Color_t := (Red => 10, Green => 20, Blue => 10);
+   BG_mem      : constant Color_t := (Red => 20, Green => 15, Blue => 5);
+   BG_disk     : constant Color_t := (Red => 5, Green => 15, Blue => 20);
+   BG_prochead : constant Color_t := (Red => 15, Green => 15, Blue => 30);
+   BG_procbody : constant Color_t := Blue;
+
+   procedure HTop_Add_Text (CP : Components_Ptr; Text : String_t; Color : Color_t; Bold : Boolean_t)
+   is
+      T : Text_Component_T;
+   begin
+      T.Text := SU.To_Unbounded_String (Text);
+      T.Text_Color := Color;
+      T.Offset_X := 1;
+      T.Offset_Y := 1;
+      T.Is_Bold := Bold;
+      Add_Component (CP.all, To_CID ("TextComponent"), T);
+   end HTop_Add_Text;
+
    procedure Create_HTop_Entities is
       CP  : Components_Ptr;
-      T   : Text_Component_T;
       PB  : Progress_Bar_Component_T;
       Tab : Tab_Page_Component_T;
       Row : Natural := Natural (Content_Top);
 
-      procedure Add_Text (Text : String_t; Color : Color_t; Bold : Boolean_t)
-      is
-      begin
-         T.Text := SU.To_Unbounded_String (Text);
-         T.Text_Color := Color;
-         T.Offset_X := 1;
-         T.Offset_Y := 1;
-         T.Is_Bold := Bold;
-         Add_Component (CP.all, To_CID ("TextComponent"), T);
-      end Add_Text;
+      BG_instr    : constant Color_t := (Red => 30, Green => 30, Blue => 50);
    begin
       Tab.Tab_Index := 0;
+
+      CP :=
+        Make_Widget_With_BG
+          (World,
+           "instrlabel",
+           2,
+           TUI_Height (Row),
+           76,
+           1,
+           BG_instr);
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+      HTop_Add_Text (CP, "b: Backgrounds p: Processes", White, True);
+      Row := Row + 1;
 
       for C in 0 .. Max_Cores - 1 loop
          CP :=
@@ -195,9 +216,9 @@ procedure Tab_Demo is
               TUI_Height (Row),
               10,
               1,
-              (Red => 10, Green => 20, Blue => 10));
+              BG_cpu);
          Add_Component (CP.all, To_CID ("TabPage"), Tab);
-         Add_Text ("CPU " & Img (C), White, True);
+         HTop_Add_Text (CP, "CPU " & Img (C), White, True);
 
          CP :=
            Make_Widget_With_BG
@@ -207,7 +228,7 @@ procedure Tab_Demo is
               TUI_Height (Row),
               60,
               1,
-              (Red => 10, Green => 20, Blue => 10));
+              BG_cpu);
          Add_Component (CP.all, To_CID ("TabPage"), Tab);
          PB.Value := 0.0;
          PB.Filled_Char := '=';
@@ -229,9 +250,9 @@ procedure Tab_Demo is
            TUI_Height (Row),
            76,
            1,
-           (Red => 20, Green => 15, Blue => 5));
+           BG_mem);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      Add_Text ("Memory:", White, True);
+      HTop_Add_Text (CP, "Memory:", White, True);
       Row := Row + 1;
 
       CP :=
@@ -242,7 +263,7 @@ procedure Tab_Demo is
            TUI_Height (Row),
            60,
            1,
-           (Red => 20, Green => 15, Blue => 5));
+           BG_mem);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
       PB.Value := 0.0;
       PB.Filled_Color := Yellow;
@@ -257,7 +278,7 @@ procedure Tab_Demo is
            TUI_Height (Row),
            60,
            1,
-           (Red => 20, Green => 15, Blue => 5));
+           BG_mem);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
       PB.Value := 0.0;
       PB.Filled_Color := Red;
@@ -272,9 +293,9 @@ procedure Tab_Demo is
            TUI_Height (Row),
            76,
            1,
-           (Red => 5, Green => 15, Blue => 20));
+           BG_disk);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      Add_Text ("Disk:", White, True);
+      HTop_Add_Text (CP, "Disk:", White, True);
       Row := Row + 1;
 
       CP :=
@@ -285,7 +306,7 @@ procedure Tab_Demo is
            TUI_Height (Row),
            60,
            1,
-           (Red => 5, Green => 15, Blue => 20));
+           BG_disk);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
       PB.Value := 0.0;
       PB.Filled_Color := Green;
@@ -300,10 +321,11 @@ procedure Tab_Demo is
            TUI_Height (Row),
            76,
            1,
-           (Red => 15, Green => 15, Blue => 30));
+           BG_prochead);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
-      Add_Text
-        (Pad ("PID", 7)
+      HTop_Add_Text
+        (CP,
+         Pad ("PID", 7)
          & Pad ("USER", 10)
          & Pad ("CPU%", 6)
          & Pad ("Mem%", 6)
@@ -315,12 +337,198 @@ procedure Tab_Demo is
       for R in 0 .. Num_Proc_Rows - 1 loop
          CP :=
            Make_Widget_With_BG
-             (World, "procList" & Img (R), 2, TUI_Height (Row), 76, 1, Blue);
+             (World, "procList" & Img (R), 2, TUI_Height (Row), 76, 1, BG_procbody);
          Add_Component (CP.all, To_CID ("TabPage"), Tab);
-         Add_Text ("", White, False);
+         HTop_Add_Text (CP, "", White, False);
          Row := Row + 1;
       end loop;
    end Create_HTop_Entities;
+
+   procedure Toggle_HTop_Backgrounds is
+      EL : Entity_Components_Ptr;
+      CP : Components_Ptr;
+
+      procedure Add_BG (Entity : Components_Ptr; Color : Color_t) is
+         BG : constant Background_Color_Component_T := (Background_Color => Color);
+      begin
+         Add_Component (Entity.all, "Background_Color", BG);
+      end Add_BG;
+   begin
+      World.Claim_Reading (EL);
+
+      --  CPU labels & progress bars
+      for C in 0 .. Max_Cores - 1 loop
+         CP := Get_Entity_Components (EL.all, To_EID ("cpulabel" & Img (C)));
+         if CP /= null then
+            CP.PO.Claim_List;
+            if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+               Remove_Component (CP.all, Background_Color_Component_T'Tag);
+            else
+               Add_BG (CP, BG_cpu);
+            end if;
+            CP.PO.Release_List;
+         end if;
+         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Img (C)));
+         if CP /= null then
+            CP.PO.Claim_List;
+            if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+               Remove_Component (CP.all, Background_Color_Component_T'Tag);
+            else
+               Add_BG (CP, BG_cpu);
+            end if;
+            CP.PO.Release_List;
+         end if;
+      end loop;
+
+      --  Memory label
+      CP := Get_Entity_Components (EL.all, To_EID ("memlabel"));
+      if CP /= null then
+         CP.PO.Claim_List;
+         if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+            Remove_Component (CP.all, Background_Color_Component_T'Tag);
+         else
+            Add_BG (CP, BG_mem);
+         end if;
+         CP.PO.Release_List;
+      end if;
+
+      --  RAM progress bar
+      CP := Get_Entity_Components (EL.all, To_EID ("rambar"));
+      if CP /= null then
+         CP.PO.Claim_List;
+         if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+            Remove_Component (CP.all, Background_Color_Component_T'Tag);
+         else
+            Add_BG (CP, BG_mem);
+         end if;
+         CP.PO.Release_List;
+      end if;
+
+      --  Swap progress bar
+      CP := Get_Entity_Components (EL.all, To_EID ("swpbar"));
+      if CP /= null then
+         CP.PO.Claim_List;
+         if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+            Remove_Component (CP.all, Background_Color_Component_T'Tag);
+         else
+            Add_BG (CP, BG_mem);
+         end if;
+         CP.PO.Release_List;
+      end if;
+
+      --  Disk label
+      CP := Get_Entity_Components (EL.all, To_EID ("disklabel"));
+      if CP /= null then
+         CP.PO.Claim_List;
+         if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+            Remove_Component (CP.all, Background_Color_Component_T'Tag);
+         else
+            Add_BG (CP, BG_disk);
+         end if;
+         CP.PO.Release_List;
+      end if;
+
+      --  Disk progress bar
+      CP := Get_Entity_Components (EL.all, To_EID ("diskbar"));
+      if CP /= null then
+         CP.PO.Claim_List;
+         if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+            Remove_Component (CP.all, Background_Color_Component_T'Tag);
+         else
+            Add_BG (CP, BG_disk);
+         end if;
+         CP.PO.Release_List;
+      end if;
+
+      --  Processes header label
+      CP := Get_Entity_Components (EL.all, To_EID ("proc_header"));
+      if CP /= null then
+         CP.PO.Claim_List;
+         if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+            Remove_Component (CP.all, Background_Color_Component_T'Tag);
+         else
+            Add_BG (CP, BG_prochead);
+         end if;
+         CP.PO.Release_List;
+      end if;
+
+      --  Process lines
+      for R in 0 .. Num_Proc_Rows - 1 loop
+         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Img (R)));
+         if CP /= null then
+            CP.PO.Claim_List;
+            if Has_Component (CP.all, Background_Color_Component_T'Tag) then
+               Remove_Component (CP.all, Background_Color_Component_T'Tag);
+            else
+               Add_BG (CP, BG_procbody);
+            end if;
+            CP.PO.Release_List;
+         end if;
+      end loop;
+
+      World.Release_Reading;
+   end Toggle_HTop_Backgrounds;
+
+   procedure Toggle_HTop_Processes is
+      EL : Entity_Components_Ptr;
+      CP : Components_Ptr;
+      Tab : Tab_Page_Component_T;
+      --  The value of Row in Create_HTop_Entities just before proc_header
+      Row : Natural := 21;
+   begin
+      Tab.Tab_Index := 0;
+      World.Claim_Writing (EL);
+
+      CP := Get_Entity_Components (EL.all, To_EID ("proc_header"));
+      if CP /= null then
+         World.Release_Writing;
+         Remove_Entity (World, To_EID ("proc_header"));
+         World.Claim_Writing (EL);
+      else
+         World.Release_Writing;
+         CP :=
+           Make_Widget_With_BG
+             (World,
+              "proc_header",
+              2,
+              TUI_Height (Row),
+              76,
+              1,
+              BG_prochead);
+         World.Claim_Writing (EL);
+         Add_Component (CP.all, To_CID ("TabPage"), Tab);
+         HTop_Add_Text
+           (CP,
+            Pad ("PID", 7)
+            & Pad ("USER", 10)
+            & Pad ("CPU%", 6)
+            & Pad ("Mem%", 6)
+            & "S Command",
+            White,
+            True);
+      end if;
+      Row := Row + 1;
+
+      for R in 0 .. Num_Proc_Rows - 1 loop
+         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Img (R)));
+         if CP /= null then
+            World.Release_Writing;
+            Remove_Entity (World, To_EID ("procList" & Img (R)));
+            World.Claim_Writing (EL);
+         else
+            World.Release_Writing;
+            CP :=
+              Make_Widget_With_BG
+                (World, "procList" & Img (R), 2, TUI_Height (Row), 76, 1, BG_procbody);
+            World.Claim_Writing (EL);
+            Add_Component (CP.all, To_CID ("TabPage"), Tab);
+            HTop_Add_Text (CP, "", White, False);
+            Row := Row + 1;
+            end if;
+      end loop;
+
+      World.Release_Writing;
+   end Toggle_HTop_Processes;
 
    procedure Update_HTop_Stats is
       EL : Entity_Components_Ptr;
@@ -696,6 +904,8 @@ procedure Tab_Demo is
    ---------------------------------------------------------------------------
    procedure Render is
    begin
+      ClearWidgetBufferSystem (World);
+      Update_Chrome;
       WidgetBackgroundSystem (World);
       FlexAlignTextSystem (World);
       TextRenderSystem (World);
@@ -747,6 +957,27 @@ begin
             Update_Chrome;
             Render;
 
+         elsif Get_Active_Tab (World) = 0 then
+            case Event.Char_Value is
+               when 'b'    =>
+                  Toggle_HTop_Backgrounds;
+
+               when 'p'    =>
+                  Toggle_HTop_Processes;
+                  --  We don't need to switch the tab, just to refresh the new
+                  --    entities into the tab
+                  TabSwitchSystem (World, Prev);
+                  TabSwitchSystem (World, Next);
+
+               when others =>
+                  if Event.Cmd = Quit
+                    or else Event.Char_Value = Character_t'Val (27)
+                  then
+                     Running := False;
+                     exit;
+                  end if;
+            end case;
+
          elsif Get_Active_Tab (World) = 1 then
             if Text_Editor.Mode = Text_Editor.Insert then
                case Event.Cmd is
@@ -785,38 +1016,26 @@ begin
                when 'j'    =>
                   Flex_Demo.Next_Justify;
                   Update_Flex_Demo;
-                  Update_Chrome;
-                  Render;
 
                when 'a'    =>
                   Flex_Demo.Next_Align;
                   Update_Flex_Demo;
-                  Update_Chrome;
-                  Render;
 
                when '+'    =>
                   Flex_Demo.Grow (Natural (Term_Width) - 6);
                   Update_Flex_Demo;
-                  Update_Chrome;
-                  Render;
 
                when '-'    =>
                   Flex_Demo.Shrink;
                   Update_Flex_Demo;
-                  Update_Chrome;
-                  Render;
 
                when 'H'    =>
                   Flex_Demo.Grow_Height (Max_Con_H);
                   Update_Flex_Demo;
-                  Update_Chrome;
-                  Render;
 
                when 'h'    =>
                   Flex_Demo.Shrink_Height;
                   Update_Flex_Demo;
-                  Update_Chrome;
-                  Render;
 
                when others =>
                   if Event.Cmd = Quit
@@ -838,19 +1057,17 @@ begin
 
       if Get_Active_Tab (World) = 0 then
          Update_HTop_Stats;
-         Render;
       end if;
 
       if Get_Active_Tab (World) = 1 then
          Update_Editor_Display;
-         Update_Chrome;
-         Render;
       end if;
 
       if Get_Active_Tab (World) = 2 then
          Update_Flex_Demo;
-         Render;
       end if;
+
+      Render;
 
       delay 0.05;
    end loop;

@@ -178,12 +178,13 @@ package body Graphics is
 
       procedure Write_To_Buffer
    (Buf  : in out Buffer_T;
-      Col  : in     TUI_Width;
-      Row  : in     TUI_Height;
-      Text : in     String;
-      FG   : in     Color_t;
-      BG   : in     Color_t;
-      Bold : in     Boolean := False)
+      Col         : in     TUI_Width;
+      Row         : in     TUI_Height;
+      Text        : in     String;
+      FG          : in     Color_t;
+      BG          : in     Color_t;
+      Transparent : in     Boolean;
+      Bold        : in     Boolean := False)
    is
       X : TUI_Width := Col;
    begin
@@ -193,6 +194,7 @@ package body Graphics is
             (Char             => Text (I),
             Char_Color       => FG,
             Background_Color => BG,
+            Background_Transparent => Transparent,
             Is_Bold          => Bold,
             Is_Italic        => False,
             Is_Underline     => False,
@@ -212,6 +214,7 @@ package body Graphics is
             (Char             => ' ',
             Char_Color       => BG,
             Background_Color => BG,
+            Background_Transparent => False,
             Is_Bold          => False,
             Is_Italic        => False,
             Is_Underline     => False,

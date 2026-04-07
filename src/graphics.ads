@@ -47,13 +47,14 @@ package Graphics is
    function Trim (S : String) return String;
 
    type Pixel_t is record
-      Char             : Character := ' ';
-      Char_Color       : Color_t   := White;
-      Background_Color : Color_t   := Black;
-      Is_Bold          : Boolean   := False;
-      Is_Italic        : Boolean   := False;
-      Is_Underline     : Boolean   := False;
-      Is_Strikethrough : Boolean   := False;
+      Char                   : Character := ' ';
+      Char_Color             : Color_t   := White;
+      Background_Color       : Color_t   := Black;
+      Background_Transparent : Boolean   := False;
+      Is_Bold                : Boolean   := False;
+      Is_Italic              : Boolean   := False;
+      Is_Underline           : Boolean   := False;
+      Is_Strikethrough       : Boolean   := False;
    end record;
 
    function "+" (P : Pixel_t) return Wide_Wide_String;
@@ -134,12 +135,13 @@ package Graphics is
    --  Write a string of characters into a buffer at the given position
    procedure Write_To_Buffer
    (Buf  : in out Buffer_T;
-      Col  : in     TUI_Width;
-      Row  : in     TUI_Height;
-      Text : in     String;
-      FG   : in     Color_t;
-      BG   : in     Color_t;
-      Bold : in     Boolean := False);
+      Col         : in     TUI_Width;
+      Row         : in     TUI_Height;
+      Text        : in     String;
+      FG          : in     Color_t;
+      BG          : in     Color_t;
+      Transparent : in     Boolean;
+      Bold        : in     Boolean := False);
 
    --  Fill an entire row of a buffer with a solid background color
    procedure Fill_Row

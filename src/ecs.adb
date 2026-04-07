@@ -9,12 +9,10 @@ with Ada.Containers.Indefinite_Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Flexbox;  use Flexbox;
-with Graphics;
 with IDs;
 use type IDs.Component_Tag_Vector.Vector;
 with Ada.Text_IO;
 with Ada.Tags; use Ada.Tags;
-with Ada.Wide_Wide_Text_IO;
 with Selection;
 
 package body ECS is
@@ -110,7 +108,7 @@ package body ECS is
    procedure Remove_Component
      (Self : in out Components; Component_Tag : in Ada.Tags.Tag)
    is
-      Component : Component_Id := Get_Component_ID (Self, Component_Tag);
+      Component : constant Component_Id := Get_Component_ID (Self, Component_Tag);
    begin
       Remove_Component (Self, Component);
    end Remove_Component;
@@ -708,6 +706,50 @@ package body ECS is
    end FlexAlignTextSystem;
 
    --===========================================================================
+   -- SYSTEM: WIDGET RENDER-BUFFER CLEARING
+   --===========================================================================
+
+   procedure ClearWidgetBufferSystem (Entity_List_PO : in out Entity_Components_PO) is
+      Entity_List           : Entity_Components_Ptr;
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Component_Tag_Vector.To_Vector (Widget_Component_T'Tag, 1);
+      Matched_Entities      : Entity_ID_Vector.Vector;
+      Component_List        : Components_Ptr;
+   begin
+
+      Entity_List_PO.Claim_Reading (Entity_List);
+      Matched_Entities :=
+        Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
+
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
+
+         declare
+            Widget : Widget_Component_T renames
+              Widget_Component_T
+                (Get_Component_Ptr
+                   (Component_List, Widget_Component_T'Tag)
+                   .Data.all);
+            Default_Pixel : constant Pixel_t := (
+                                                 Background_Transparent => True,
+                                                 others => <>
+                                                );
+            Buffer : Buffer_T renames Widget.Render_Buffer;
+            W : TUI_Width renames Widget.Size_Width;
+            H : TUI_Height renames Widget.Size_Height;
+         begin
+            for X in TUI_Width'First .. W loop
+               for Y in TUI_Height'First .. H loop
+                  Set_Buffer_Pixel (Buffer, X, Y, Default_Pixel);
+               end loop;
+            end loop;
+         end;
+      end loop;
+
+      Entity_List_PO.Release_Reading;
+   end ClearWidgetBufferSystem;
+
+   --===========================================================================
    -- SYSTEM: WIDGET BACKGROUND RENDERING
    --===========================================================================
 
@@ -748,6 +790,7 @@ package body ECS is
                     Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
                   Px.Char := ' ';
                   Px.Background_Color := BGColor;
+                  Px.Background_Transparent := False;
                   Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
                end loop;
             end loop;
@@ -993,6 +1036,7 @@ package body ECS is
 
                if Has_BG then
                   Px.Background_Color := BG_C.Background_Color;
+                  Px.Background_Transparent := False;
                end if;
 
                if Pos_Index = 1 then
@@ -1054,6 +1098,7 @@ package body ECS is
                      Px.Char := ' ';
                      if Has_BG then
                         Px.Background_Color := BG_C.Background_Color;
+                        Px.Background_Transparent := False;
                      end if;
                      Set_Buffer_Pixel (Widget_C.Render_Buffer, X, Y, Px);
                   end loop;
@@ -1099,11 +1144,25 @@ package body ECS is
                   exit;
                end if;
 
-               Set_Buffer_Pixel
-                 (Framebuffer,
-                  Parent_X,
-                  Parent_Y,
-                  Get_Buffer_Pixel (Parent.Render_Buffer, Pos_W, Pos_H));
+               declare
+                  FB_BG : constant Color_t := Get_Buffer_Pixel (Framebuffer,
+                                                                Parent_X,
+                                                                Parent_Y
+                                                               ).Background_Color;
+                  Parent_Pixel : Pixel_t := Get_Buffer_Pixel (Parent.Render_Buffer,
+                                                              Pos_W,
+                                                              Pos_H);
+               begin
+                  Parent_Pixel.Background_Color :=
+                    (if Parent_Pixel.Background_Transparent
+                     then FB_BG
+                     else Parent_Pixel.Background_Color);
+                  Set_Buffer_Pixel
+                    (Framebuffer,
+                     Parent_X,
+                     Parent_Y,
+                     Parent_Pixel);
+               end;
             end loop;
          end loop;
 
@@ -1692,6 +1751,7 @@ package body ECS is
                           Combined_Text (Combined_Text_Index);
                         Current_Pixel.Char_Color := Graphics.White;
                         Current_Pixel.Background_Color := Graphics.Black;
+                        Current_Pixel.Background_Transparent := False;
                         Set_Buffer_Pixel
                           (Widget_C.Render_Buffer,
                            Buffer_X,
@@ -1723,6 +1783,7 @@ package body ECS is
                             (Widget_C.Render_Buffer, X, Selection_Y);
                         Current_Pixel.Char_Color := Graphics.Black;
                         Current_Pixel.Background_Color := Graphics.White;
+                        Current_Pixel.Background_Transparent := False;
                         Set_Buffer_Pixel
                           (Widget_C.Render_Buffer,
                            X,
@@ -1832,13 +1893,14 @@ package body ECS is
               (RI.Backbuffer,
                RX,
                RY,
-               (Char             => Character'Val (1),
-                Char_Color       => White,
-                Background_Color => White,
-                Is_Bold          => True,
-                Is_Italic        => False,
-                Is_Underline     => False,
-                Is_Strikethrough => False));
+               (Char                   => Character'Val (1),
+                Char_Color             => White,
+                Background_Color       => White,
+                Background_Transparent => False,
+                Is_Bold                => True,
+                Is_Italic              => False,
+                Is_Underline           => False,
+                Is_Strikethrough       => False));
          end loop;
       end loop;
       Add_Component (CP.all, To_CID ("RenderInfo"), RI);
@@ -1888,24 +1950,26 @@ package body ECS is
                     (RI.Buffers (0),
                      RX,
                      RY,
-                     (Char             => Character'Val (1),
-                      Char_Color       => White,
-                      Background_Color => White,
-                      Is_Bold          => True,
-                      Is_Italic        => False,
-                      Is_Underline     => False,
-                      Is_Strikethrough => False));
+                     (Char                   => Character'Val (1),
+                      Char_Color             => White,
+                      Background_Color       => White,
+                      Background_Transparent => False,
+                      Is_Bold                => True,
+                      Is_Italic              => False,
+                      Is_Underline           => False,
+                      Is_Strikethrough       => False));
                   Set_Buffer_Pixel
                     (RI.Buffers (1),
                      RX,
                      RY,
-                     (Char             => Character'Val (1),
-                      Char_Color       => White,
-                      Background_Color => White,
-                      Is_Bold          => True,
-                      Is_Italic        => False,
-                      Is_Underline     => False,
-                      Is_Strikethrough => False));
+                     (Char                   => Character'Val (1),
+                      Char_Color             => White,
+                      Background_Color       => White,
+                      Background_Transparent => False,
+                      Is_Bold                => True,
+                      Is_Italic              => False,
+                      Is_Underline           => False,
+                      Is_Strikethrough       => False));
                end loop;
             end loop;
          end;
