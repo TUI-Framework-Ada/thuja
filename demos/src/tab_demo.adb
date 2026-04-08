@@ -10,6 +10,7 @@ use type Text_Editor.Editor_Mode_T;
 with htop;           use htop;
 with Sort_Demo;
 with Ada.Strings.Unbounded;
+with Scroll;
 
 procedure Tab_Demo is
 
@@ -20,7 +21,7 @@ procedure Tab_Demo is
    subtype Character_t is Character;
 
    Term_Width  : constant TUI_Width := 80;
-   Term_Height : constant TUI_Height := 50;
+   Term_Height : constant TUI_Height := 24;
    Content_Top : constant TUI_Height := 4;
 
    World : Entity_Components_PO;
@@ -30,6 +31,8 @@ procedure Tab_Demo is
 
    Max_Con_H : constant Natural :=
      Natural (Term_Height) - Natural (Flex_Con_Y) - 2;
+
+   Scroll_Offset : Natural  := 0;
 
    function Img (N : Natural) return String_t is
       S : constant String_t := Natural'Image (N);
@@ -652,7 +655,7 @@ procedure Tab_Demo is
       CP      : Components_Ptr;
       T       : Text_Component_T;
       Tab     : Tab_Page_Component_T;
-      Ed_H    : constant TUI_Height := Term_Height - Content_Top - 1;
+      Ed_H    : constant TUI_Height := Term_Height - Content_Top;
       Ed_BG   : constant Color_t := (Red => 25, Green => 25, Blue => 25);
       Stat_BG : constant Color_t := Blue;
    begin
@@ -700,17 +703,24 @@ procedure Tab_Demo is
       EL   : Entity_Components_Ptr;
       CP   : Components_Ptr;
       T    : Text_Component_T;
-      Ed_H : constant Natural := Natural (Term_Height - Content_Top - 1);
+      Ed_H : constant Natural := Natural (Term_Height - Content_Top);
    begin
       World.Claim_Writing (EL);
 
       CP := Get_Entity_Components (EL.all, To_EID ("ed_area"));
       if CP /= null then
+
+         Scroll.Update
+           (Current_Line  => Text_Editor.Current_Line,
+            Total_Lines   => Natural (Text_Editor.Lines.Length),
+            Visible_Rows  => Ed_H,
+            Scroll_Offset => Scroll_Offset);
+
          T :=
            Text_Component_T (Get_Component (CP.all, To_CID ("TextComponent")));
          T.Text :=
            SU.To_Unbounded_String
-             (SU.To_String (Text_Editor.Build_Editor_Text (0, Ed_H)));
+             (SU.To_String (Text_Editor.Build_Editor_Text (Scroll_Offset, Ed_H)));
          Add_Component (CP.all, To_CID ("TextComponent"), T);
       end if;
 
