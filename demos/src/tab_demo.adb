@@ -1218,9 +1218,8 @@ begin
 
       if Get_Active_Tab (World) = 3 then
          Update_Sort_Display;
-         Update_Chrome;
-         Render;
       end if;
+
       Render;
 
       delay 0.05;
