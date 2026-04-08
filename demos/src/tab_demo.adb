@@ -8,6 +8,7 @@ with Flex_Demo;
 with Text_Editor;
 use type Text_Editor.Editor_Mode_T;
 with htop;           use htop;
+with Sort_Demo;
 with Ada.Strings.Unbounded;
 
 procedure Tab_Demo is
@@ -74,8 +75,9 @@ procedure Tab_Demo is
       Sep_FG          : constant Color_t :=
         (Red => 70, Green => 130, Blue => 180);
 
-      Labels : constant array (0 .. 2) of String_t (1 .. 14) :=
-        ["    HTop      ", "  Text Editor ", "   Flexbox    "];
+      Labels : constant array (0 .. 3) of String_t (1 .. 14) :=
+        ["    HTop      ", "  Text Editor ", "   Flexbox    ",
+         " Sort Visual  "];
 
       function Help_Text return String_t is
       begin
@@ -86,6 +88,8 @@ procedure Tab_Demo is
          elsif Current_Tab = 2 then
             return
               " j: justify  a: align  +/-: width  H/h: height  |  [/]: tab  |  Esc: Quit";
+         elsif Current_Tab = 3 then
+            return Sort_Demo.Help_Text;
          else
             return
               " [ Prev  ] Next  |  Esc: Quit"
@@ -117,7 +121,7 @@ procedure Tab_Demo is
          Col : TUI_Width := 2;
       begin
          Fill_Row (W.Render_Buffer, 1, Tab_BG_Inactive);
-         for D in 0 .. 2 loop
+         for D in 0 .. 3 loop
             declare
                Lbl    : constant String_t := Labels (D);
                Is_Act : constant Boolean_t := (D = Current_Tab);
@@ -900,6 +904,103 @@ procedure Tab_Demo is
    end Update_Flex_Demo;
 
    ---------------------------------------------------------------------------
+   --  Tab 3 — Sound of Sorting
+   ---------------------------------------------------------------------------
+   Sort_Bar_H  : constant TUI_Height := Term_Height - Content_Top - 2;
+   Sort_Code_H : constant TUI_Height := Sort_Bar_H;
+   Sort_Stat_H : constant TUI_Height := 2;
+
+   procedure Create_Sort_Entities is
+      CP  : Components_Ptr;
+      Tab : Tab_Page_Component_T;
+   begin
+      Tab.Tab_Index := 3;
+
+      CP :=
+        Make_Widget
+          (World,
+           "sort_bars",
+           TUI_Width'First,
+           Content_Top,
+           TUI_Width (Sort_Demo.Bar_W),
+           Sort_Bar_H);
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+
+      CP :=
+        Make_Widget
+          (World,
+           "sort_code",
+           TUI_Width (Sort_Demo.Bar_W + 1),
+           Content_Top,
+           TUI_Width (Sort_Demo.Code_W),
+           Sort_Code_H);
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+
+      CP :=
+        Make_Widget
+          (World,
+           "sort_stat",
+           TUI_Width'First,
+           Term_Height - 1,
+           Term_Width,
+           Sort_Stat_H);
+      Add_Component (CP.all, To_CID ("TabPage"), Tab);
+   end Create_Sort_Entities;
+
+   procedure Update_Sort_Display is
+      EL : Entity_Components_Ptr;
+      CP : Components_Ptr;
+   begin
+      Sort_Demo.Tick;
+
+      World.Claim_Writing (EL);
+
+      CP := Get_Entity_Components (EL.all, To_EID ("sort_bars"));
+      if CP /= null then
+         declare
+            W : Widget_Component_T :=
+              Widget_Component_T
+                (Get_Component (CP.all, To_CID ("WidgetComponent")));
+         begin
+            Sort_Demo.Render_Bars
+              (W.Render_Buffer,
+               TUI_Width (Sort_Demo.Bar_W),
+               Sort_Bar_H);
+            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+         end;
+      end if;
+
+      CP := Get_Entity_Components (EL.all, To_EID ("sort_code"));
+      if CP /= null then
+         declare
+            W : Widget_Component_T :=
+              Widget_Component_T
+                (Get_Component (CP.all, To_CID ("WidgetComponent")));
+         begin
+            Sort_Demo.Render_Code
+              (W.Render_Buffer,
+               TUI_Width (Sort_Demo.Code_W),
+               Sort_Code_H);
+            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+         end;
+      end if;
+
+      CP := Get_Entity_Components (EL.all, To_EID ("sort_stat"));
+      if CP /= null then
+         declare
+            W : Widget_Component_T :=
+              Widget_Component_T
+                (Get_Component (CP.all, To_CID ("WidgetComponent")));
+         begin
+            Sort_Demo.Render_Status (W.Render_Buffer, Term_Width, Sort_Stat_H);
+            Add_Component (CP.all, To_CID ("WidgetComponent"), W);
+         end;
+      end if;
+
+      World.Release_Writing;
+   end Update_Sort_Display;
+
+   ---------------------------------------------------------------------------
    --  Render
    ---------------------------------------------------------------------------
    procedure Render is
@@ -923,15 +1024,17 @@ procedure Tab_Demo is
 
 begin
    Text_Editor.Initialise;
+   Sort_Demo.Initialise;
    Initialise;
 
    Graphics.Clear_Screen;
 
-   Initialize_World (World, Term_Width, Term_Height, Tab_Count => 3);
+   Initialize_World (World, Term_Width, Term_Height, Tab_Count => 4);
    Create_Chrome;
    Create_HTop_Entities;
    Create_Editor_Entities;
    Create_Flex_Demo_Entities;
+   Create_Sort_Entities;
 
    Update_Chrome;
    TabInitSystem (World);
@@ -1046,6 +1149,52 @@ begin
                   end if;
             end case;
 
+         elsif Get_Active_Tab (World) = 3 then
+            case Event.Char_Value is
+               when '1' .. '6' =>
+                  Sort_Demo.Switch_Algo
+                    (Character_t'Pos (Event.Char_Value)
+                     - Character_t'Pos ('0'));
+                  Update_Sort_Display;
+                  Update_Chrome;
+                  Render;
+
+               when ' ' =>
+                  Sort_Demo.Toggle_Play;
+                  Update_Sort_Display;
+                  Update_Chrome;
+                  Render;
+
+               when 'n' | 'N' =>
+                  Sort_Demo.Step_Forward;
+                  Update_Sort_Display;
+                  Render;
+
+               when '+' | '=' =>
+                  Sort_Demo.Speed_Down;
+                  Update_Sort_Display;
+                  Render;
+
+               when '-' =>
+                  Sort_Demo.Speed_Up;
+                  Update_Sort_Display;
+                  Render;
+
+               when 'r' | 'R' =>
+                  Sort_Demo.Reset;
+                  Update_Sort_Display;
+                  Update_Chrome;
+                  Render;
+
+               when others =>
+                  if Event.Cmd = Quit
+                    or else Event.Char_Value = Character_t'Val (27)
+                  then
+                     Running := False;
+                     exit;
+                  end if;
+            end case;
+
          else
             if Event.Cmd = Quit or else Event.Char_Value = Character_t'Val (27)
             then
@@ -1065,6 +1214,10 @@ begin
 
       if Get_Active_Tab (World) = 2 then
          Update_Flex_Demo;
+      end if;
+
+      if Get_Active_Tab (World) = 3 then
+         Update_Sort_Display;
       end if;
 
       Render;
