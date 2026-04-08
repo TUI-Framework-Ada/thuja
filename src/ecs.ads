@@ -205,6 +205,7 @@ package ECS is
    procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure FlexLayoutSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure FlexAlignTextSystem (Entity_List_PO : in out Entity_Components_PO);
+   procedure ClearWidgetBufferSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure WidgetBackgroundSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure TextRenderSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure BufferCopySystem (Entity_List_PO : in out Entity_Components_PO);
