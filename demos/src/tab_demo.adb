@@ -941,7 +941,7 @@ procedure Tab_Demo is
           (World,
            "sort_stat",
            TUI_Width'First,
-           Term_Height - 1,
+           Term_Height - 2,
            Term_Width,
            Sort_Stat_H);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
@@ -1005,7 +1005,6 @@ procedure Tab_Demo is
    ---------------------------------------------------------------------------
    procedure Render is
    begin
-      ClearWidgetBufferSystem (World);
       Update_Chrome;
       WidgetBackgroundSystem (World);
       FlexAlignTextSystem (World);
@@ -1044,6 +1043,7 @@ begin
    Input_Reader.Start;
 
    while Running loop
+      ClearWidgetBufferSystem (World);
       loop
          Input_Buffer.Consume (Event);
          exit when
@@ -1057,7 +1057,6 @@ begin
             else
                TabSwitchSystem (World, Next);
             end if;
-            Update_Chrome;
             Render;
 
          elsif Get_Active_Tab (World) = 0 then
@@ -1155,38 +1154,23 @@ begin
                   Sort_Demo.Switch_Algo
                     (Character_t'Pos (Event.Char_Value)
                      - Character_t'Pos ('0'));
-                  Update_Sort_Display;
-                  Update_Chrome;
-                  Render;
 
-               when ' ' =>
+               when ' '        =>
                   Sort_Demo.Toggle_Play;
-                  Update_Sort_Display;
-                  Update_Chrome;
-                  Render;
 
-               when 'n' | 'N' =>
+               when 'n' | 'N'  =>
                   Sort_Demo.Step_Forward;
-                  Update_Sort_Display;
-                  Render;
 
-               when '+' | '=' =>
+               when '+' | '='  =>
                   Sort_Demo.Speed_Down;
-                  Update_Sort_Display;
-                  Render;
 
-               when '-' =>
+               when '-'        =>
                   Sort_Demo.Speed_Up;
-                  Update_Sort_Display;
-                  Render;
 
-               when 'r' | 'R' =>
+               when 'r' | 'R'  =>
                   Sort_Demo.Reset;
-                  Update_Sort_Display;
-                  Update_Chrome;
-                  Render;
 
-               when others =>
+               when others     =>
                   if Event.Cmd = Quit
                     or else Event.Char_Value = Character_t'Val (27)
                   then
