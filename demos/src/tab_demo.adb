@@ -21,7 +21,7 @@ procedure Tab_Demo is
    subtype Character_t is Character;
 
    Term_Width  : constant TUI_Width := 80;
-   Term_Height : constant TUI_Height := 24;
+   Term_Height : constant TUI_Height := 50;
    Content_Top : constant TUI_Height := 4;
 
    World : Entity_Components_PO;
@@ -916,7 +916,7 @@ procedure Tab_Demo is
    ---------------------------------------------------------------------------
    --  Tab 3 — Sound of Sorting
    ---------------------------------------------------------------------------
-   Sort_Bar_H  : constant TUI_Height := Term_Height - Content_Top - 2;
+   Sort_Bar_H  : constant TUI_Height := Term_Height - Content_Top - 1;
    Sort_Code_H : constant TUI_Height := Sort_Bar_H;
    Sort_Stat_H : constant TUI_Height := 2;
 
@@ -951,7 +951,7 @@ procedure Tab_Demo is
           (World,
            "sort_stat",
            TUI_Width'First,
-           Term_Height - 2,
+           Term_Height - 1,
            Term_Width,
            Sort_Stat_H);
       Add_Component (CP.all, To_CID ("TabPage"), Tab);
