@@ -14,6 +14,7 @@ with standardized_tab_interface;    -- Defines the abstract tab interface (commo
 with Thuja_demo_tab_htop;           -- Implementation of the HTop-style monitoring tab
 with Thuja_demo_tab_editor;         -- Implementation of the text editor tab
 with Thuja_demo_tab_flex;           -- Implementation of the flexbox demo tab
+with Thuja_demo_tab_sort;           -- Implementation of the sound of sorting demo tab
 
 procedure Thuja_Demo is
 
@@ -23,15 +24,17 @@ procedure Thuja_Demo is
    HTop_Tab    : aliased Thuja_demo_tab_htop.Tab_T;
    Editor_Tab  : aliased Thuja_demo_tab_editor.Tab_T;
    Flex_Tab    : aliased Thuja_demo_tab_flex.Tab_T;
+   Sort_Tab    : aliased Thuja_demo_tab_sort.Tab_T;
 
    -- Array of polymorphic tab pointers using the interface access type.
    -- Unchecked_Access is used to bypass Ada accessibility checks.
    -- Should be safe since all tab objects outlive the array usage.
-   type Tab_Array is array (0 .. 2) of standardized_tab_interface.Tab_Access;
+   type Tab_Array is array (0 .. 3) of standardized_tab_interface.Tab_Access;
    Tabs : constant Tab_Array :=
      [0 => HTop_Tab'Unchecked_Access,
       1 => Editor_Tab'Unchecked_Access,
-      2 => Flex_Tab'Unchecked_Access];
+      2 => Flex_Tab'Unchecked_Access,
+      3 => Sort_Tab'Unchecked_Access];
 
    -- Local type aliases for readability and consistency
    subtype String_t is String;
