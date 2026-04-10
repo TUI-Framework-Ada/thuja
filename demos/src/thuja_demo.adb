@@ -18,8 +18,6 @@ with Thuja_demo_tab_sort;           -- Implementation of the sound of sorting de
 
 procedure Thuja_Demo is
 
-
-
    -- Concrete tab instances declared locally within the main procedure.
    HTop_Tab    : aliased Thuja_demo_tab_htop.Tab_T;
    Editor_Tab  : aliased Thuja_demo_tab_editor.Tab_T;

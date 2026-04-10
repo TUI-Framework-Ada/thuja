@@ -24,7 +24,7 @@ package body Thuja_demo_tab_editor is
       Stat_BG : constant Color_t := Blue;
    begin
       Page.Tab_Index := 1;
-      Ed_H := Term_Height - Content_Top;
+      Ed_H := Term_Height - Content_Top - 1;
 
       CP :=
         Make_Widget_With_BG
@@ -50,7 +50,7 @@ package body Thuja_demo_tab_editor is
           (World,
            "ed_status",
            TUI_Width'First,
-           Term_Height,
+           Content_Top + Ed_H,
            Term_Width,
            1,
            Stat_BG);
