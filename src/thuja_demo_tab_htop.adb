@@ -42,7 +42,6 @@ package body Thuja_demo_tab_htop is
       Term_Height : in TUI_Height)
    is
       CP       : Components_Ptr;
-      T        : Text_Component_T;
       PB       : Progress_Bar_Component_T;
       Page_Tab : Tab_Page_Component_T;
       Row      : Natural := Natural (Content_Top);

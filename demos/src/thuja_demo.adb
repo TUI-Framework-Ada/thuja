@@ -195,23 +195,23 @@ procedure Thuja_Demo is
 
       --  CPU labels & progress bars
       for C in 0 .. Max_Cores - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("cpulabel" & Tab_HTop.Img (C)));
+         CP := Get_Entity_Components (EL.all, To_EID ("cpulabel" & Thuja_demo_tab_htop.Img (C)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
                Remove_Component (CP.all, Background_Color_Component_T'Tag);
             else
-               Add_BG (CP, Tab_HTop.BG_cpu);
+               Add_BG (CP, Thuja_demo_tab_htop.BG_cpu);
             end if;
             CP.PO.Release_List;
          end if;
-         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Tab_HTop.Img (C)));
+         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Thuja_demo_tab_htop.Img (C)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
                Remove_Component (CP.all, Background_Color_Component_T'Tag);
             else
-               Add_BG (CP, Tab_HTop.BG_cpu);
+               Add_BG (CP, Thuja_demo_tab_htop.BG_cpu);
             end if;
             CP.PO.Release_List;
          end if;
@@ -224,7 +224,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, Tab_HTop.BG_mem);
+            Add_BG (CP, Thuja_demo_tab_htop.BG_mem);
          end if;
          CP.PO.Release_List;
       end if;
@@ -236,7 +236,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, Tab_HTop.BG_mem);
+            Add_BG (CP, Thuja_demo_tab_htop.BG_mem);
          end if;
          CP.PO.Release_List;
       end if;
@@ -248,7 +248,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, Tab_HTop.BG_mem);
+            Add_BG (CP, Thuja_demo_tab_htop.BG_mem);
          end if;
          CP.PO.Release_List;
       end if;
@@ -260,7 +260,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, Tab_HTop.BG_disk);
+            Add_BG (CP, Thuja_demo_tab_htop.BG_disk);
          end if;
          CP.PO.Release_List;
       end if;
@@ -272,7 +272,7 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, Tab_HTop.BG_disk);
+            Add_BG (CP, Thuja_demo_tab_htop.BG_disk);
          end if;
          CP.PO.Release_List;
       end if;
@@ -284,20 +284,20 @@ procedure Thuja_Demo is
          if Has_Component (CP.all, Background_Color_Component_T'Tag) then
             Remove_Component (CP.all, Background_Color_Component_T'Tag);
          else
-            Add_BG (CP, Tab_HTop.BG_prochead);
+            Add_BG (CP, Thuja_demo_tab_htop.BG_prochead);
          end if;
          CP.PO.Release_List;
       end if;
 
       --  Process lines
       for R in 0 .. Num_Proc_Rows - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Tab_HTop.Img (R)));
+         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
                Remove_Component (CP.all, Background_Color_Component_T'Tag);
             else
-               Add_BG (CP, Tab_HTop.BG_procbody);
+               Add_BG (CP, Thuja_demo_tab_htop.BG_procbody);
             end if;
             CP.PO.Release_List;
          end if;
@@ -331,15 +331,15 @@ procedure Thuja_Demo is
               TUI_Height (Row),
               76,
               1,
-              Tab_HTop.BG_prochead);
+              Thuja_demo_tab_htop.BG_prochead);
          World.Claim_Writing (EL);
          Add_Component (CP.all, To_CID ("TabPage"), Tab);
-         Tab_HTop.Add_Text
+         Thuja_demo_tab_htop.Add_Text
            (CP,
-            Tab_HTop.Pad ("PID", 7)
-            & Tab_HTop.Pad ("USER", 10)
-            & Tab_HTop.Pad ("CPU%", 6)
-            & Tab_HTop.Pad ("Mem%", 6)
+            Thuja_demo_tab_htop.Pad ("PID", 7)
+            & Thuja_demo_tab_htop.Pad ("USER", 10)
+            & Thuja_demo_tab_htop.Pad ("CPU%", 6)
+            & Thuja_demo_tab_htop.Pad ("Mem%", 6)
             & "S Command",
             White,
             True);
@@ -347,19 +347,19 @@ procedure Thuja_Demo is
       Row := Row + 1;
 
       for R in 0 .. Num_Proc_Rows - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Tab_HTop.Img (R)));
+         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
          if CP /= null then
             World.Release_Writing;
-            Remove_Entity (World, To_EID ("procList" & Tab_HTop.Img (R)));
+            Remove_Entity (World, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
             World.Claim_Writing (EL);
          else
             World.Release_Writing;
             CP :=
               Make_Widget_With_BG
-                (World, "procList" & Tab_HTop.Img (R), 2, TUI_Height (Row), 76, 1, Tab_HTop.BG_procbody);
+                (World, "procList" & Thuja_demo_tab_htop.Img (R), 2, TUI_Height (Row), 76, 1, Thuja_demo_tab_htop.BG_procbody);
             World.Claim_Writing (EL);
             Add_Component (CP.all, To_CID ("TabPage"), Tab);
-            Tab_HTop.Add_Text (CP, "", White, False);
+            Thuja_demo_tab_htop.Add_Text (CP, "", White, False);
             Row := Row + 1;
             end if;
       end loop;
