@@ -6,6 +6,9 @@ package Thuja_demo_tab_editor is
 
    type Tab_T is new standardized_tab_interface.Tab_T with null record;
 
+   Scroll_Offset : Natural  := 0;
+   Ed_H    : TUI_Height;
+
    overriding
    procedure Create_Entities
      (Tab         : in out Tab_T;

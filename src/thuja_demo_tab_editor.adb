@@ -3,6 +3,7 @@ with IDs;        use IDs;
 with ECS;        use ECS;
 with Text_Editor;
 with Ada.Strings.Unbounded;
+with Scroll;
 
 package body Thuja_demo_tab_editor is
 
@@ -19,11 +20,11 @@ package body Thuja_demo_tab_editor is
       CP      : Components_Ptr;
       T       : Text_Component_T;
       Page    : Tab_Page_Component_T;
-      Ed_H    : constant TUI_Height := Term_Height - Content_Top - 1;
       Ed_BG   : constant Color_t := (Red => 25, Green => 25, Blue => 25);
       Stat_BG : constant Color_t := Blue;
    begin
       Page.Tab_Index := 1;
+      Ed_H := Term_Height - Content_Top;
 
       CP :=
         Make_Widget_With_BG
@@ -70,18 +71,22 @@ package body Thuja_demo_tab_editor is
       EL   : ECS.Entity_Components_Ptr;
       CP   : Components_Ptr;
       T    : Text_Component_T;
-      Ed_H : constant Natural := 43;
    begin
       World.Claim_Writing (EL);
 
       CP := ECS.Get_Entity_Components (EL.all, To_EID ("ed_area"));
       if CP /= null then
+         Scroll.Update
+           (Current_Line  => Text_Editor.Current_Line,
+            Total_Lines   => Natural (Text_Editor.Lines.Length),
+            Visible_Rows  => Positive (Ed_H),
+            Scroll_Offset => Scroll_Offset);
          T :=
            Text_Component_T
              (ECS.Get_Component (CP.all, To_CID ("TextComponent")));
          T.Text :=
            SU.To_Unbounded_String
-             (SU.To_String (Text_Editor.Build_Editor_Text (0, Ed_H)));
+             (SU.To_String (Text_Editor.Build_Editor_Text (Scroll_Offset, Natural( Ed_H))));
          Add_Component (CP.all, To_CID ("TextComponent"), T);
       end if;
 
