@@ -691,6 +691,11 @@ package body ECS is
                                    TUI_Height
                                      (Natural (Child_W.Size_Height) / 2));
 
+                           when Flex_End               =>
+                              Child_T.Offset_Y := TUI_Height'Max
+                                (TUI_Height'First,
+                                Child_W.Size_Height); -- Align to bottom edge
+
                            when Flex_Start | Stretch =>
                               --  Text sits at the top of the widget
                               Child_T.Offset_Y := TUI_Height'First;

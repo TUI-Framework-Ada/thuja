@@ -28,13 +28,12 @@ package Flex_Demo is
      ["flex_c_1", "flex_c_2", "flex_c_3", "flex_c_4"];
 
    --  All available justify and align values in cycle order
-   type Justify_Cycle is array (0 .. 2) of Flexbox.Justify_Content;
-   type Align_Cycle is array (0 .. 2) of Flexbox.Align_Items;
+   type Justify_Cycle is array (0 .. 3) of Flexbox.Justify_Content;
+   type Align_Cycle is array (0 .. 3) of Flexbox.Align_Items;
    All_Justifies : constant Justify_Cycle :=
-     [Flexbox.Flex_Start, Flexbox.Center, Flexbox.Space_Between];
+     [Flexbox.Flex_Start, Flexbox.Center, Flexbox.Space_Between, Flexbox.Flex_End];
    All_Aligns    : constant Align_Cycle :=
-     [Flexbox.Flex_Start, Flexbox.Center, Flexbox.Stretch];
-
+     [Flexbox.Flex_Start, Flexbox.Center, Flexbox.Stretch, Flexbox.Flex_End];
    --  Advance to the next justify value (wraps)
    procedure Next_Justify;
 
