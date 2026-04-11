@@ -66,7 +66,7 @@ package body Flexbox is
                   then Container.Height
                   else Container.Width);
 
-            when Flex_Start | Center =>
+            when Flex_Start | Center | Flex_End =>
                Container.Items (I).Cross_Size :=
                  (if Container.Direction = Row
                   then Container.Height / 2
@@ -93,6 +93,9 @@ package body Flexbox is
 
                when Flex_Start    =>
                   null;
+               
+               when Flex_End      =>
+                  Cursor := Free_Space;
             end case;
          end if;
 
@@ -106,6 +109,10 @@ package body Flexbox is
                   when Center               =>
                      Container.Items (I).Position_Y :=
                        (Container.Height - Container.Items (I).Cross_Size) / 2;
+
+                  when Flex_End               =>
+                     Container.Items (I).Position_Y :=
+                       Container.Height - Container.Items (I).Cross_Size; -- Align to bottom edge
                end case;
                Cursor := Cursor + Container.Items (I).Computed_Size + Gap;
             else
@@ -117,6 +124,10 @@ package body Flexbox is
                   when Center               =>
                      Container.Items (I).Position_X :=
                        (Container.Width - Container.Items (I).Cross_Size) / 2;
+                  
+                  when Flex_End               =>
+                     Container.Items (I).Position_X :=
+                       Container.Width - Container.Items (I).Cross_Size; -- Align to right edge
                end case;
                Cursor := Cursor + Container.Items (I).Computed_Size + Gap;
             end if;

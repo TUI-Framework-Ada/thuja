@@ -2,12 +2,12 @@ package body Flex_Demo is
 
    procedure Next_Justify is
    begin
-      Justify_Idx := (Justify_Idx + 1) mod 3;
+      Justify_Idx := (Justify_Idx + 1) mod 4;
    end Next_Justify;
 
    procedure Next_Align is
    begin
-      Align_Idx := (Align_Idx + 1) mod 3;
+      Align_Idx := (Align_Idx + 1) mod 4;
    end Next_Align;
 
    procedure Grow (Max_W : Natural) is
@@ -51,6 +51,9 @@ package body Flex_Demo is
 
          when Flexbox.Space_Between =>
             return "Space_Between";
+         
+         when Flexbox.Flex_End      =>
+            return "Flex_End     ";
       end case;
    end Current_Justify_Name;
 
@@ -65,6 +68,9 @@ package body Flex_Demo is
 
          when Flexbox.Stretch    =>
             return "Stretch   ";
+         
+         when Flexbox.Flex_End   =>
+            return "Flex_End  ";
       end case;
    end Current_Align_Name;
 

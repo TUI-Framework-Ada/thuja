@@ -8,9 +8,9 @@ package Flexbox is
    
    type Flex_Direction is (Row, Column);
    
-   type Justify_Content is (Flex_Start, Center, Space_Between);
+   type Justify_Content is (Flex_Start, Center, Space_Between, Flex_End);
    
-   type Align_Items is (Flex_Start, Center, Stretch);
+   type Align_Items is (Flex_Start, Center, Stretch, Flex_End);
 
    -------------------------------------------------------------------------
    -- Flex Item Record
