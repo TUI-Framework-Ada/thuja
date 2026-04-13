@@ -9,7 +9,17 @@ project Demos is
    -- Build a single demo main to avoid gprbuild selecting multiple mains
    -- which can cause "not a source of project" errors on some systems.
    -- Point to the source file explicitly to avoid any Source_Dirs resolution issues
-   for Main use ("thuja_demo");
+   for Main use (
+   -- "comprehensive_demo", 
+   -- "resize_and_movement_demo", 
+   -- "keyboard_widget", 
+   -- "tab_demo", 
+   -- "command_palette", 
+   -- "demos", 
+   -- "presentation_2_demo",
+   "text_editor_demo",
+   "sine_wave_demo",
+   "thuja_demo");
 
    package Compiler is
       for Default_Switches ("Ada") use Demos_Config.Ada_Compiler_Switches &
