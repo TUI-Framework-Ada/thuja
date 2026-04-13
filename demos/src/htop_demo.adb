@@ -98,8 +98,8 @@ procedure HTop_Demo is
       Render_Info_Entity := To_EID("RenderInfo");
       Comps := Add_Entity(Entity_System, Render_Info_Entity);
       
-      RI.Framebuffer_1 := Create_Buffer(80, 50);
-      RI.Framebuffer_2 := Create_Buffer(80, 50);
+      RI.Buffers (Framebuffer_Index_t'First) := Create_Buffer (80, 50);
+      RI.Buffers (Framebuffer_Index_t'Last) := Create_Buffer (80, 50);
       RI.Backbuffer := Create_Buffer(80, 50);
       RI.Drawing_FB := new Protected_DB;
       RI.Terminal_Width := 80;
@@ -695,8 +695,8 @@ procedure HTop_Demo is
          TextRenderSystem(Entity_System);
          ProgressBarRenderSystem(Entity_System);
          BufferCopySystem(Entity_System);
-         BufferDrawSystem(Entity_System);
          DoubleBufferFlagSystem(Entity_System);
+         BufferDrawSystem(Entity_System);
          Next_Update := Next_Update + Update_Interval;
          delay until Next_Update;
       end loop;

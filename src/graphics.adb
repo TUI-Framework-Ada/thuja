@@ -9,31 +9,78 @@ package body Graphics is
 
    use Ada.Characters.Conversions;
 
+   function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
+
+   function "+" (P : Pixel_t) return Wide_Wide_String is
+      RESET : constant String := CSI & "0m";
+      FG : constant String := CSI & "38;2;" &
+        Trim (P.Char_Color.Red'Image) & ";" &
+        Trim (P.Char_Color.Green'Image) & ";" &
+        Trim (P.Char_Color.Blue'Image) & "m";
+      BG : constant String := CSI & "48;2;" &
+        Trim (P.Background_Color.Red'Image) & ";" &
+        Trim (P.Background_Color.Green'Image) & ";" &
+        Trim (P.Background_Color.Blue'Image) & "m";
+      BOLD : constant String := CSI & "1m";
+      ITALIC : constant String := CSI & "3m";
+      UNDERLINE : constant String := CSI & "4m";
+      STRIKETHROUGH : constant String := CSI & "9m";
+
+      FORMAT : constant String :=
+        FG &
+        BG &
+        (if P.Is_Bold then BOLD else "") &
+        (if P.Is_Italic then ITALIC else "") &
+        (if P.Is_Underline then UNDERLINE else "") &
+        (if P.Is_Strikethrough then STRIKETHROUGH else "");
+   begin
+      return Ada.Characters.Conversions.To_Wide_Wide_String (
+         FORMAT & P.Char & RESET
+      );
+   end "+";
+
+   function "=" (A, B : Pixel_t) return Boolean is
+   begin
+      return
+        A.Char = B.Char and then (
+          (if A.Char = ' '
+           then A.Char_Color = B.Char_Color and
+             A.Is_Bold = B.Is_Bold and
+             A.Is_Italic = B.Is_Italic
+           else True) and
+          A.Background_Color = B.Background_Color and
+          A.Is_Underline = B.Is_Underline and
+          A.Is_Strikethrough = B.Is_Strikethrough
+        );
+   end "=";
+
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is
-      entry Wait (V : out Boolean)
-         when not Changing is
+      entry Swap
+        when not Drawing is
       begin
-         Changing := True;
-         V := Draw_From_1;
-      end Wait;
-
-      entry Post
-         when Changing is
-      begin
-         Changing := False;
-      end Post;
-
-      procedure Swap is
-      begin
-         Draw_From_1 := not Draw_From_1;
+         Framebuffer_Index := Framebuffer_Index + 1;
       end Swap;
 
-      entry Read (V : out Boolean)
-        when not Changing is
+      procedure Start_Draw is
       begin
-         V := Draw_From_1;
-      end Read;
+         Drawing := True;
+      end Start_Draw;
+
+      procedure End_Draw is
+      begin
+         Drawing := False;
+      end End_Draw;
+
+      function Front return Framebuffer_Index_t is
+      begin
+         return Framebuffer_Index;
+      end Front;
+
+      function Back return Framebuffer_Index_t is
+      begin
+         return Framebuffer_Index + 1;
+      end Back;
    end Protected_DB;
 
    --  Buffer_T Constructor - Allocates memory in the 2D pixel array, initializing record fields
@@ -128,5 +175,51 @@ package body Graphics is
       --  Reset all styling / attributes
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (CSI & "0m"));
    end Reset_Styling;
+
+      procedure Write_To_Buffer
+   (Buf  : in out Buffer_T;
+      Col         : in     TUI_Width;
+      Row         : in     TUI_Height;
+      Text        : in     String;
+      FG          : in     Color_t;
+      BG          : in     Color_t;
+      Transparent : in     Boolean;
+      Bold        : in     Boolean := False)
+   is
+      X : TUI_Width := Col;
+   begin
+      for I in Text'Range loop
+         exit when X > Buf.Width;
+         Set_Buffer_Pixel (Buf, X, Row,
+            (Char             => Text (I),
+            Char_Color       => FG,
+            Background_Color => BG,
+            Background_Transparent => Transparent,
+            Is_Bold          => Bold,
+            Is_Italic        => False,
+            Is_Underline     => False,
+            Is_Strikethrough => False));
+         X := X + 1;
+      end loop;
+   end Write_To_Buffer;
+
+   procedure Fill_Row
+   (Buf : in out Buffer_T;
+      Row : in     TUI_Height;
+      BG  : in     Color_t)
+   is
+   begin
+      for X in TUI_Width'First .. Buf.Width loop
+         Set_Buffer_Pixel (Buf, X, Row,
+            (Char             => ' ',
+            Char_Color       => BG,
+            Background_Color => BG,
+            Background_Transparent => False,
+            Is_Bold          => False,
+            Is_Italic        => False,
+            Is_Underline     => False,
+            Is_Strikethrough => False));
+      end loop;
+   end Fill_Row;
 
 end Graphics;

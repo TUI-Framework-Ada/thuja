@@ -106,6 +106,21 @@ package body System_Stats is
       return Total / Float(Num_Cores);
    end Get_CPU_Usage_Average;
 
+   procedure Get_All_CPU_Usages
+     (Usages : out CPU_Usage_Array; Count : out Natural)
+   is
+      Max_Cores   : constant := 128;
+      Usage_Array : array (1 .. Max_Cores) of aliased C.C_float;
+      Num_Cores   : C.int;
+   begin
+      Usages := [others => 0.0];
+      Num_Cores := C_Get_CPU_Usage (Usage_Array (1)'Access, Max_Cores);
+      Count := Natural (Num_Cores);
+      for I in 0 .. Count - 1 loop
+         Usages (I) := Float (Usage_Array (I + 1));
+      end loop;
+   end Get_All_CPU_Usages;
+
    function Get_Memory_Usage return Float is
    begin
       return Float(C_Get_Memory_Usage_Percent);

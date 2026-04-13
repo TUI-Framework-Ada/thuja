@@ -91,10 +91,15 @@ procedure Comprehensive_Demo is
       Terminal_Height     => 24,
       Prev_Terminal_Width => 80,
       Prev_Terminal_Height => 24,
-      Framebuffer_1       => (Width => 80, Height => 24, Data => new Pixel_Array),
-      Framebuffer_2       => (Width => 80, Height => 24, Data => new Pixel_Array),
+      --Framebuffer_1       => (Width => 80, Height => 24, Data => new Pixel_Array),
+      --Framebuffer_2       => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Buffers => [
+         (Width => 80, Height => 24, Data => new Pixel_Array),
+         (Width => 80, Height => 24, Data => new Pixel_Array)
+      ],
       Drawing_FB          => new Graphics.Protected_DB,
-      Backbuffer          => (Width => 80, Height => 24, Data => new Pixel_Array)
+      others              => <>
+      --Backbuffer          => (Width => 80, Height => 24, Data => new Pixel_Array)
    );
 
    --  Root Widget: Main container using Column layout
@@ -615,6 +620,10 @@ begin
 
    --  Stop render thread before applying manual screen updates
    Thread_Flag.Stop;
+   --  Claim RI entity to wait for any running rendering systems to finish
+   --  (via waiting for all threads using any component of the RI entity to finalize what they were using the components for)
+   C_RenderInfo.PO.Claim_List;
+   C_RenderInfo.PO.Release_List;
 
    Graphics.Clear_Screen;
    Ada.Text_IO.Put_Line ("==============================================");
