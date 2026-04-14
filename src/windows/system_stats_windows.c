@@ -268,3 +268,23 @@ int kill_process(int pid) {
 void free_process_list(process_info_t *list) {
     if (list) free(list);
 }
+
+//==============================================================================
+// TERMINAL SIZE
+//==============================================================================
+
+int get_terminal_width(void) {
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h != INVALID_HANDLE_VALUE && GetConsoleScreenBufferInfo(h, &csbi))
+        return (int)(csbi.srWindow.Right - csbi.srWindow.Left + 1);
+    return 80;
+}
+
+int get_terminal_height(void) {
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h != INVALID_HANDLE_VALUE && GetConsoleScreenBufferInfo(h, &csbi))
+        return (int)(csbi.srWindow.Bottom - csbi.srWindow.Top + 1);
+    return 50;
+}
