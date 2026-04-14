@@ -94,7 +94,7 @@ package body Graphics is
       --  Store dimensions in the record
       New_Buffer.Width := Width;
       New_Buffer.Height := Height;
-      New_Buffer.Data := new Pixel_Array;
+      New_Buffer.Data := new Pixel_Array (1 .. Width, 1 .. Height); --  Allocates memory for the pixel array based on dimensions
 
       return New_Buffer;
    end Create_Buffer;
@@ -106,6 +106,9 @@ package body Graphics is
                                P : in Pixel_t)
    is
    begin
+      if X > B.Width or else Y > B.Height then
+         return; -- Adds boundary
+      end if;
       --  Writes new pixel into buffer "P" being the value Pixel
       B.Data.all (X, Y) := P;
    end Set_Buffer_Pixel;
@@ -117,6 +120,9 @@ package body Graphics is
                               return Pixel_t
    is
    begin
+      if X > B.Width or else Y > B.Height then
+         return (others => <>); -- Adds boundary
+      end if;
       --  Returns value read from the array
       return B.Data.all (X, Y);
    end Get_Buffer_Pixel;

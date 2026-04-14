@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <pwd.h>
 #include <signal.h>
+#include <sys/ioctl.h>
 
 //==============================================================================
 // PLATFORM DETECTION
@@ -391,4 +392,56 @@ int kill_process(int pid) {
 
 void free_process_list(process_info_t *list) {
     if (list) free(list);
+}
+
+//==============================================================================
+// Linux TERMINAL SIZE using tput
+//==============================================================================
+/* int get_terminal_width(void)
+{
+    FILE *fp = popen("tput cols", "r");
+    if (fp) {
+        int cols = 0;
+        if (fscanf(fp, "%d", &cols) == 1 && cols > 0) {
+            pclose(fp);
+            return cols;
+        }
+        pclose(fp);
+    }
+    return 80;
+}
+
+int get_terminal_height(void)
+{
+    FILE *fp = popen("tput lines", "r");
+    if (fp) {
+        int lines = 0;
+        if (fscanf(fp, "%d", &lines) == 1 && lines > 0) {
+            pclose(fp);
+            return lines;
+        }
+        pclose(fp);
+    }
+    return 50;
+}
+    */
+
+//==============================================================================
+// Linux TERMINAL SIZE using ioctl 
+//==============================================================================
+
+int get_terminal_width(void)
+{
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0)
+        return (int)ws.ws_col;
+    return 80;
+}
+
+int get_terminal_height(void)
+{
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_row > 0)
+        return (int)ws.ws_row;
+    return 50;
 }

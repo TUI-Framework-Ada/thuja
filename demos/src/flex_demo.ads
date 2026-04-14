@@ -64,4 +64,7 @@ package Flex_Demo is
    --  The active Align_Items value for passing to ECS
    function Current_Align return Flexbox.Align_Items;
 
+   --  Set initial container size based on terminal dimensions
+   procedure Initialise (Width : Natural; Height : Natural);
+
 end Flex_Demo;

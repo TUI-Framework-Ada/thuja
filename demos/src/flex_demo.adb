@@ -1,5 +1,11 @@
 package body Flex_Demo is
 
+   procedure Initialise (Width : Natural; Height : Natural) is
+   begin
+      Con_W := Width - 10;
+      Con_H := Height / 3;
+   end Initialise;
+   
    procedure Next_Justify is
    begin
       Justify_Idx := (Justify_Idx + 1) mod 4;
