@@ -17,8 +17,8 @@ project Demos is
    -- "command_palette", 
    -- "demos", 
    -- "presentation_2_demo",
-   "text_editor_demo",
-   "sine_wave_demo",
+   --"text_editor_demo",
+   -- "sine_wave_demo",
    "thuja_demo");
 
    package Compiler is

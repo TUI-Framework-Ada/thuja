@@ -15,14 +15,15 @@ with Thuja_demo_tab_htop;           -- Implementation of the HTop-style monitori
 with Thuja_demo_tab_editor;         -- Implementation of the text editor tab
 with Thuja_demo_tab_flex;           -- Implementation of the flexbox demo tab
 with Thuja_demo_tab_sort;           -- Implementation of the sound of sorting demo tab
+with Terminal_Size;                 -- C bindings to get terminal size using tput/Win32 API
 
 procedure Thuja_Demo is
 
    -- Concrete tab instances declared locally within the main procedure.
-   HTop_Tab    : aliased Thuja_demo_tab_htop.Tab_T;
-   Editor_Tab  : aliased Thuja_demo_tab_editor.Tab_T;
-   Flex_Tab    : aliased Thuja_demo_tab_flex.Tab_T;
-   Sort_Tab    : aliased Thuja_demo_tab_sort.Tab_T;
+   HTop_Tab   : aliased Thuja_demo_tab_htop.Tab_T;
+   Editor_Tab : aliased Thuja_demo_tab_editor.Tab_T;
+   Flex_Tab   : aliased Thuja_demo_tab_flex.Tab_T;
+   Sort_Tab   : aliased Thuja_demo_tab_sort.Tab_T;
 
    -- Array of polymorphic tab pointers using the interface access type.
    -- Unchecked_Access is used to bypass Ada accessibility checks.
@@ -40,8 +41,8 @@ procedure Thuja_Demo is
    subtype Character_t is Character;
 
    -- Terminal layout configuration constants
-   Term_Width  : constant TUI_Width := 80;
-   Term_Height : constant TUI_Height := 50;
+   Term_Width  : constant TUI_Width := TUI_Width (Terminal_Size.Get_Width);
+   Term_Height : constant TUI_Height := TUI_Height (Terminal_Size.Get_Height);
    Content_Top : constant TUI_Height := 4;
 
    -- ECS world instance holding all entities and components
@@ -85,7 +86,9 @@ procedure Thuja_Demo is
 
       -- Labels for tab titles
       Labels : constant array (0 .. 3) of String_t (1 .. 14) :=
-        ["    HTop      ", "  Text Editor ", "   Flexbox    ",
+        ["    HTop      ",
+         "  Text Editor ",
+         "   Flexbox    ",
          " Sort Visual  "];
 
       -- Dynamically generates help text depending on active tab/mode
@@ -120,7 +123,8 @@ procedure Thuja_Demo is
              (Get_Component (CP.all, To_CID ("WidgetComponent")));
       begin
          Fill_Row (W.Render_Buffer, 1, Help_BG);
-         Write_To_Buffer (W.Render_Buffer, 1, 1, Help_Text, Help_FG, Help_BG, False);
+         Write_To_Buffer
+           (W.Render_Buffer, 1, 1, Help_Text, Help_FG, Help_BG, False);
          Add_Component (CP.all, To_CID ("WidgetComponent"), W);
       end;
 
@@ -187,7 +191,8 @@ procedure Thuja_Demo is
       CP : Components_Ptr;
 
       procedure Add_BG (Entity : Components_Ptr; Color : Color_t) is
-         BG : constant Background_Color_Component_T := (Background_Color => Color);
+         BG : constant Background_Color_Component_T :=
+           (Background_Color => Color);
       begin
          Add_Component (Entity.all, "Background_Color", BG);
       end Add_BG;
@@ -196,7 +201,9 @@ procedure Thuja_Demo is
 
       --  CPU labels & progress bars
       for C in 0 .. Max_Cores - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("cpulabel" & Thuja_demo_tab_htop.Img (C)));
+         CP :=
+           Get_Entity_Components
+             (EL.all, To_EID ("cpulabel" & Thuja_demo_tab_htop.Img (C)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
@@ -206,7 +213,9 @@ procedure Thuja_Demo is
             end if;
             CP.PO.Release_List;
          end if;
-         CP := Get_Entity_Components (EL.all, To_EID ("cpubar" & Thuja_demo_tab_htop.Img (C)));
+         CP :=
+           Get_Entity_Components
+             (EL.all, To_EID ("cpubar" & Thuja_demo_tab_htop.Img (C)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
@@ -292,7 +301,9 @@ procedure Thuja_Demo is
 
       --  Process lines
       for R in 0 .. Num_Proc_Rows - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
+         CP :=
+           Get_Entity_Components
+             (EL.all, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
          if CP /= null then
             CP.PO.Claim_List;
             if Has_Component (CP.all, Background_Color_Component_T'Tag) then
@@ -308,8 +319,8 @@ procedure Thuja_Demo is
    end Toggle_HTop_Backgrounds;
 
    procedure Toggle_HTop_Processes is
-      EL : Entity_Components_Ptr;
-      CP : Components_Ptr;
+      EL  : Entity_Components_Ptr;
+      CP  : Components_Ptr;
       Tab : Tab_Page_Component_T;
       --  The value of Row in Create_HTop_Entities just before proc_header
       Row : Natural := 21;
@@ -348,21 +359,30 @@ procedure Thuja_Demo is
       Row := Row + 1;
 
       for R in 0 .. Num_Proc_Rows - 1 loop
-         CP := Get_Entity_Components (EL.all, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
+         CP :=
+           Get_Entity_Components
+             (EL.all, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
          if CP /= null then
             World.Release_Writing;
-            Remove_Entity (World, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
+            Remove_Entity
+              (World, To_EID ("procList" & Thuja_demo_tab_htop.Img (R)));
             World.Claim_Writing (EL);
          else
             World.Release_Writing;
             CP :=
               Make_Widget_With_BG
-                (World, "procList" & Thuja_demo_tab_htop.Img (R), 2, TUI_Height (Row), 76, 1, Thuja_demo_tab_htop.BG_procbody);
+                (World,
+                 "procList" & Thuja_demo_tab_htop.Img (R),
+                 2,
+                 TUI_Height (Row),
+                 76,
+                 1,
+                 Thuja_demo_tab_htop.BG_procbody);
             World.Claim_Writing (EL);
             Add_Component (CP.all, To_CID ("TabPage"), Tab);
             Thuja_demo_tab_htop.Add_Text (CP, "", White, False);
             Row := Row + 1;
-            end if;
+         end if;
       end loop;
 
       World.Release_Writing;
@@ -395,6 +415,7 @@ begin
    Text_Editor.Initialise;
    Sort_Demo.Initialise;
    Initialise;
+   Flex_Demo.Initialise (Natural (Term_Width), Natural (Term_Height));
 
    -- Configure console for ANSI/VT rendering
    Console.Enable_VT_Processing;

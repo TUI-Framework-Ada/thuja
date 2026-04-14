@@ -21,6 +21,7 @@
     #include <ctype.h>
     #include <pwd.h>
     #include <signal.h>
+    #include <sys/ioctl.h>
 #endif
 
 //==============================================================================
@@ -619,4 +620,42 @@ int kill_process(int pid) {
 
 void free_process_list(process_info_t *list) {
     if (list) free(list);
+}
+
+//==============================================================================
+// TERMINAL SIZE WINDOWS
+//==============================================================================
+
+int get_terminal_width(void)
+{
+#if IS_WINDOWS
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h != INVALID_HANDLE_VALUE &&
+        GetConsoleScreenBufferInfo(h, &csbi))
+        return (int)(csbi.srWindow.Right - csbi.srWindow.Left + 1);
+    return 80;
+#else
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0)
+        return (int)ws.ws_col;
+    return 80;
+#endif
+}
+
+int get_terminal_height(void)
+{
+#if IS_WINDOWS
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h != INVALID_HANDLE_VALUE &&
+        GetConsoleScreenBufferInfo(h, &csbi))
+        return (int)(csbi.srWindow.Bottom - csbi.srWindow.Top + 1);
+    return 50;
+#else
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_row > 0)
+        return (int)ws.ws_row;
+    return 50;
+#endif
 }
