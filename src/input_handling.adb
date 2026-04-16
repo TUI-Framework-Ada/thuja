@@ -1,42 +1,7 @@
 with Ada.Text_IO;
-with Interfaces.C; use Interfaces.C;
-with System;
+with Console_Input_Mode;
 
 package body Input_Handling is
-
-   --  Win32 types needed for enabling VT input processing
-   type HANDLE is new System.Address;
-   type BOOL   is new int;
-   type DWORD  is new unsigned;
-
-   INVALID_HANDLE_VALUE : constant HANDLE := HANDLE (System.Null_Address);
-   STD_INPUT_HANDLE     : constant DWORD  := 4294967286; -- (DWORD)(-10)
-
-   ENABLE_VIRTUAL_TERMINAL_INPUT : constant DWORD := 16#0200#;
-
-   function GetStdHandle (nStdHandle : DWORD) return HANDLE
-     with Import, Convention => Stdcall, External_Name => "GetStdHandle";
-
-   function GetConsoleMode (hConsoleHandle : HANDLE; lpMode : access DWORD) return BOOL
-     with Import, Convention => Stdcall, External_Name => "GetConsoleMode";
-
-   function SetConsoleMode (hConsoleHandle : HANDLE; dwMode : DWORD) return BOOL
-     with Import, Convention => Stdcall, External_Name => "SetConsoleMode";
-
-   --  Enable VT input sequences on the Windows console stdin handle.
-   --  This causes Alt+key to arrive as ESC followed by the key character,
-   --  which is the encoding our Parse_Input state machine expects.
-   procedure Enable_VT_Input is
-      H    : constant HANDLE := GetStdHandle (STD_INPUT_HANDLE);
-      Mode : aliased DWORD;
-      Res  : BOOL;
-      pragma Warnings (Off, Res);
-   begin
-      if H /= INVALID_HANDLE_VALUE then
-         Res := GetConsoleMode (H, Mode'Access);
-         Res := SetConsoleMode (H, Mode or ENABLE_VIRTUAL_TERMINAL_INPUT);
-      end if;
-   end Enable_VT_Input;
 
    --  Add a new event to the back of the buffer (FIFO queue)
    procedure Enqueue (Buffer : in out Event_Buffer_t; Event : in Input_Event_t) is
@@ -175,7 +140,7 @@ package body Input_Handling is
       loop
          select
             accept Start do
-               Enable_VT_Input;
+               Console_Input_Mode.Enable_VT_Input;
                Running := True;
             end Start;
 
