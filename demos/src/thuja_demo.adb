@@ -142,7 +142,7 @@ procedure Thuja_Demo is
          Col : TUI_Width := 2;
       begin
          Fill_Row (W.Render_Buffer, 1, Tab_BG_Inactive);
-         for D in 0 .. 3 loop
+         for D in 0 .. 4 loop
             declare
                Lbl    : constant String_t := Labels (D);
                Is_Act : constant Boolean_t := (D = Current_Tab);

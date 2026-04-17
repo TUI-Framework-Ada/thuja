@@ -3,7 +3,6 @@ with Ada.Numerics.Elementary_Functions; use Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Unbounded;             use Ada.Strings.Unbounded;
 with Components;                        use Components;
 with ECS;                               use ECS;
-with Graphics;                          use Graphics;
 with IDs;                               use IDs;
 
 package body Thuja_demo_tab_sine is
@@ -15,7 +14,7 @@ package body Thuja_demo_tab_sine is
    function Float_To_String (F : Float) return String is
       Rounded  : constant Integer := Integer (F * 10.0);
       Int_Part : constant Integer := Rounded / 10;
-      Dec_Part : constant Integer := abs (Rounded mod 10);
+      Dec_Part : constant Integer := (Rounded mod 10);
    begin
       return
         Integer'Image (Int_Part) (2 .. Integer'Image (Int_Part)'Last)
