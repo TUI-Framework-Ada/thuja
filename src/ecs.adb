@@ -14,6 +14,8 @@ use type IDs.Component_Tag_Vector.Vector;
 with Ada.Text_IO;
 with Ada.Tags; use Ada.Tags;
 with Selection;
+-- Prevents any unwanted heap memory when we redraw.
+with Ada.Unchecked_Deallocation;
 
 package body ECS is
 
@@ -450,16 +452,19 @@ package body ECS is
    --===========================================================================
 
    procedure TerminalResizeSystem
-     (Entity_List_PO : in out Entity_Components_PO)
+     (Entity_List_PO : in out Entity_Components_PO;
+      New_Width      : in TUI_Width;
+      New_Height     : in TUI_Height)
    is
+      procedure Free_Pixel_Array is new
+        Ada.Unchecked_Deallocation (Pixel_Array, Pixel_Array_Ptr);
+
       Entity_List           : Entity_Components_Ptr;
       Search_Component_Tags : Component_Tag_Vector.Vector;
       Matched_Entities      : Entity_ID_Vector.Vector;
-
-      RI_Components : Components_Ptr;
+      RI_Components         : Components_Ptr;
    begin
-      Entity_List_PO.Claim_Reading (Entity_List);
-
+      Entity_List_PO.Claim_Writing (Entity_List);
       Search_Component_Tags.Append (Render_Info_Component_T'Tag);
       Matched_Entities :=
         Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
@@ -473,17 +478,49 @@ package body ECS is
                 (Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag)
                    .Data.all);
          begin
-            if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width)
-              or RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
+            if RI.Terminal_Width /= New_Width
+              or else RI.Terminal_Height /= New_Height
             then
-               Mark_All_Flex_Dirty (Entity_List.all);
+               RI.Terminal_Width := New_Width;
+               RI.Terminal_Height := New_Height;
+               RI.Prev_Terminal_Width := Natural (New_Width);
+               RI.Prev_Terminal_Height := Natural (New_Height);
 
-               RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
-               RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
+               -- Free old buffer pixel arrays before reallocating
+               declare
+                  Old_0 : Pixel_Array_Ptr := RI.Buffers (0).Data;
+                  Old_1 : Pixel_Array_Ptr := RI.Buffers (1).Data;
+               begin
+                  Free_Pixel_Array (Old_0);
+                  Free_Pixel_Array (Old_1);
+               end;
+
+               RI.Buffers (0) := Create_Buffer (New_Width, New_Height);
+               RI.Buffers (1) := Create_Buffer (New_Width, New_Height);
+
+               Mark_All_Flex_Dirty (Entity_List.all);
             end if;
          end;
       end loop;
-      Entity_List_PO.Release_Reading;
+
+      declare
+         Root_CP : constant Components_Ptr :=
+           Get_Entity_Components (Entity_List.all, To_EID ("root"));
+      begin
+         if Root_CP /= null then
+            declare
+               RW : Widget_Component_T renames
+                 Widget_Component_T
+                   (Get_Component_Ptr (Root_CP, Widget_Component_T'Tag)
+                      .Data.all);
+            begin
+               RW.Size_Width := New_Width;
+               RW.Size_Height := New_Height;
+            end;
+         end if;
+      end;
+
+      Entity_List_PO.Release_Writing;
    end TerminalResizeSystem;
 
    --===========================================================================

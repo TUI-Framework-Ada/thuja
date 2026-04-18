@@ -54,7 +54,10 @@ package body Thuja_demo_tab_sort is
 
    overriding
    procedure Update
-     (Tab : in out Tab_T; World : in out ECS.Entity_Components_PO)
+     (Tab         : in out Tab_T;
+      World       : in out ECS.Entity_Components_PO;
+      Term_Width  : in TUI_Width;
+      Term_Height : in TUI_Height)
    is
       EL : Entity_Components_Ptr;
       CP : Components_Ptr;

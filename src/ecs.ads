@@ -202,7 +202,7 @@ package ECS is
    --===========================================================================
    type Tab_Direction is (Next, Prev);
 
-   procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO);
+   procedure TerminalResizeSystem (Entity_List_PO : in out Entity_Components_PO; New_Width : in TUI_Width; New_Height : in TUI_Height);
    procedure FlexLayoutSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure FlexAlignTextSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure ClearWidgetBufferSystem (Entity_List_PO : in out Entity_Components_PO);
@@ -216,10 +216,8 @@ package ECS is
    function Get_Active_Tab (Entity_List_PO : in out Entity_Components_PO) return Natural;
    procedure SelectionSystem(Entity_List_PO : in out Entity_Components_PO; Tab_Pressed : in Boolean);
    procedure TabInitSystem (Entity_List_PO : in out Entity_Components_PO);
-   procedure TabSwitchSystem
-     (Entity_List_PO : in out Entity_Components_PO;
-      Direction      : in Tab_Direction);
-
+   procedure TabSwitchSystem(Entity_List_PO : in out Entity_Components_PO; Direction : in Tab_Direction);
+   
    --===========================================================================
    -- HELPER PROCEDURES
    --===========================================================================

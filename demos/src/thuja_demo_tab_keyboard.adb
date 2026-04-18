@@ -1095,9 +1095,12 @@ package body Thuja_demo_tab_keyboard is
 
    overriding
    procedure Update
-     (Tab : in out Tab_T; World : in out ECS.Entity_Components_PO)
+     (Tab         : in out Tab_T;
+      World       : in out ECS.Entity_Components_PO;
+      Term_Width  : in TUI_Width;
+      Term_Height : in TUI_Height)
    is
-      pragma Unreferenced (Tab, World);
+      pragma Unreferenced (Tab, World, Term_Width, Term_Height);
    begin
       --  All visual state is updated synchronously from Handle_Event;
       --  the per-frame hook has nothing additional to do.
