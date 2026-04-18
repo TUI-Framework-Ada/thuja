@@ -1,16 +1,23 @@
-with Ada.Wide_Wide_Text_IO;   --  Wide character text output, required for flushing terminal output
-with Components;              --  Component type definitions (Widget, Background, Text, etc.)
-with Console;                 --  Terminal setup: VT-Processing, cursor visibility
-with ECS;                     --  Entity Component System: Add_Entity, Add_Component, all systems
-with Graphics;                --  Color definitions, pixel types, cursor and screen operations
-with Ada.Strings.Unbounded;   --  Unbounded_String type used for widget text content
-use Ada.Strings.Unbounded;    --  Makes To_Unbounded_String and string operations directly visible
-use Graphics;                 --  Makes color names (Blue, Red, Green etc.) directly visible
-with IDs;                     --  Entity and component ID types: To_EID, To_CID
-with Flexbox;                 --  Flexbox layout types: Column/Row direction, Flex_Start, Stretch, Flex_Item_Array
+with Ada.Wide_Wide_Text_IO;            --  Wide character text output, required for flushing terminal output
+with Components;                       --  Component type definitions (Widget, Background, Text, etc.)
+with Console;                          --  Terminal setup: VT-Processing, cursor visibility
+with ECS;                              --  Entity Component System: Add_Entity, Add_Component, all systems
+with Graphics;                         --  Color definitions, pixel types, cursor and screen operations
+with Ada.Strings.Unbounded;            --  Unbounded_String type used for widget text content
+use Ada.Strings.Unbounded;             --  Makes To_Unbounded_String and string operations directly visible
+use Graphics;                          --  Makes color names (Blue, Red, Green etc.) directly visible
+with IDs;                              --  Entity and component ID types: To_EID, To_CID
+with Flexbox;                          --  Flexbox layout types: Column/Row direction, Flex_Start, Stretch, Flex_Item_Array
 use type IDs.Entity_ID_Vector.Vector;  --  Enables & operator for building Children vectors
---  Uncomment the line below to enable input handling
---  with Input_Handling;  --  Keyboard input: Input_Reader task, Input_Buffer, Input_Event_t, Command_t
+--  with Terminal_Size;                --  C bindings to read initial terminal dimensions (Get_Width, Get_Height)
+--  with Input_Handling;               --  Keyboard input: Input_Reader task, Input_Buffer, Input_Event_t, Command_t
+
+--  ============================================================
+--  TABS: Required imports (uncomment when using tab interface)
+--  ============================================================
+--  with standardized_tab_interface;    --  Defines the abstract Tab_T interface and Tab_Access type
+--  with Example_demo_tab_tool1;        --  This tool would need standardized_tab_interface
+--  with example_demo_tab_tool2;        --  Same applies to this tool
 
 procedure Example_Demo is
 
@@ -52,6 +59,9 @@ procedure Example_Demo is
    --  6. Add your updated logic inside the MAIN LOOP
    --  7. Call the appropriate ECS systems each frame in order
    --  8. Uncomment input handling if your demo requires keyboard input
+   --
+   --  See also the TABS section below for how to add multi-tab support
+   --  using the standardized_tab_interface.
    ------------------------------------------------------------------------------
 
    --  Number of frames to run before the demo exits automatically.
@@ -75,22 +85,28 @@ procedure Example_Demo is
    -- Naming convention: prefix with E_ to distinguish
    -- entity IDs from component pointers (C_ prefix).
    --------------------------------------------------------
-   E_RenderInfo   : constant IDs.Entity_Id := IDs.To_EID ("RenderInfo");
-   E_Root         : constant IDs.Entity_Id := IDs.To_EID ("Root");
-   E_Header       : constant IDs.Entity_Id := IDs.To_EID ("Header");
-   E_Row          : constant IDs.Entity_Id := IDs.To_EID ("Row");
-   E_Left         : constant IDs.Entity_Id := IDs.To_EID ("Left");
-   E_Right        : constant IDs.Entity_Id := IDs.To_EID ("Right");
+   E_RenderInfo : constant IDs.Entity_Id := IDs.To_EID ("RenderInfo");
+   E_Root       : constant IDs.Entity_Id := IDs.To_EID ("Root");
+   E_Header     : constant IDs.Entity_Id := IDs.To_EID ("Header");
+   E_Row        : constant IDs.Entity_Id := IDs.To_EID ("Row");
+   E_Left       : constant IDs.Entity_Id := IDs.To_EID ("Left");
+   E_Right      : constant IDs.Entity_Id := IDs.To_EID ("Right");
 
    --  Register entities with the ECS. Add_Entity returns a Components_Ptr
    --  which is used later to attach component data to the entity.
    --  Every entity must be registered before components can be added to it.
-   C_RenderInfo   : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_RenderInfo);
-   C_Root         : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Root);
-   C_Header       : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Header);
-   C_Row          : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Row);
-   C_Left         : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Left);
-   C_Right        : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Right);
+   C_RenderInfo : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_RenderInfo);
+   C_Root       : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_Root);
+   C_Header     : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_Header);
+   C_Row        : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_Row);
+   C_Left       : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_Left);
+   C_Right      : constant ECS.Components_Ptr :=
+     ECS.Add_Entity (Entities_PO, E_Right);
 
    --------------------------------------------------------
    -- COMPONENT DEFINITIONS
@@ -113,24 +129,26 @@ procedure Example_Demo is
    --  Tells the renderer the terminal dimensions and
    --  provides two framebuffers for double buffering.
    --  Always create this with your actual terminal size.
-   Comp_RenderInfo : constant Components.Render_Info_Component_T := (
-      Terminal_Width       => 80,
+   Comp_RenderInfo : constant Components.Render_Info_Component_T :=
+     (Terminal_Width       => 80,
       Terminal_Height      => 24,
       Prev_Terminal_Width  => 80,
       Prev_Terminal_Height => 24,
-      Framebuffer_1        => (Width => 80, Height => 24, Data => new Pixel_Array),
-      Framebuffer_2        => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_1        =>
+        (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_2        =>
+        (Width => 80, Height => 24, Data => new Pixel_Array),
       Drawing_FB           => new Graphics.Protected_DB,
-      Backbuffer           => (Width => 80, Height => 24, Data => new Pixel_Array)
-   );
+      Backbuffer           =>
+        (Width => 80, Height => 24, Data => new Pixel_Array));
 
    --  Root Widget: the invisible full-screen container.
    --  Position_X/Y should always be 1,1 for the root.
    --  Size_Width/Height should match your terminal size.
    --  Children lists which entities are direct flex children
    --  of this widget — the order here determines layout order.
-   Comp_Root_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_Root_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 24,
@@ -138,53 +156,50 @@ procedure Example_Demo is
       Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
    --  Root_Widget_Component_T is a marker component that tells
    --  FlexLayoutSystem this is the top of the widget tree.
    --  Every demo must have exactly one entity with this component.
-   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (null record);
+   Comp_Root_Marker : constant Components.Root_Widget_Component_T :=
+     (null record);
 
    --  Root Flex Layout: Column direction stacks children top to bottom.
    --  Item_Count must match the number of entries in Items.
    --  Header has Flex_Grow 0.0 so it stays at its Flex_Basis height.
    --  Row has Flex_Grow 1.0 so it expands to fill all remaining space.
-   Comp_Root_Flex : constant Components.Flex_Layout_Component_T := (
-      Flex_Container => (
-         Width      => 80,
+   Comp_Root_Flex : constant Components.Flex_Layout_Component_T :=
+     (Flex_Container =>
+        (Width      => 80,
          Height     => 24,
          Direction  => Flexbox.Column,
          Justify    => Flexbox.Flex_Start,
          Align      => Flexbox.Stretch,
          Item_Count => 2,
-         Items      => new Flexbox.Flex_Item_Array'(
-            --  Header: fixed at 3 rows tall, does not grow or shrink
-            1 => (
-               Related_Entity => E_Header,
-               Flex_Basis     => 3,
-               Flex_Grow      => 0.0,
-               Flex_Shrink    => 0.0,
-               Computed_Size  => 3,
-               Cross_Size     => 80,
-               Position_X     => 0,
-               Position_Y     => 0
-            ),
-            --  Row container: grows to fill all space below the header
-            2 => (
-               Related_Entity => E_Row,
-               Flex_Basis     => 0,
-               Flex_Grow      => 1.0,
-               Flex_Shrink    => 0.0,
-               Computed_Size  => 21,
-               Cross_Size     => 80,
-               Position_X     => 0,
-               Position_Y     => 0
-            )
-         )
-      ),
-      Is_Dirty => True
-   );
+         Items      =>
+           new Flexbox.Flex_Item_Array'
+             (
+              --  Header: fixed at 3 rows tall, does not grow or shrink
+              1 =>
+                (Related_Entity => E_Header,
+                 Flex_Basis     => 3,
+                 Flex_Grow      => 0.0,
+                 Flex_Shrink    => 0.0,
+                 Computed_Size  => 3,
+                 Cross_Size     => 80,
+                 Position_X     => 0,
+                 Position_Y     => 0),
+              --  Row container: grows to fill all space below the header
+              2 =>
+                (Related_Entity => E_Row,
+                 Flex_Basis     => 0,
+                 Flex_Grow      => 1.0,
+                 Flex_Shrink    => 0.0,
+                 Computed_Size  => 21,
+                 Cross_Size     => 80,
+                 Position_X     => 0,
+                 Position_Y     => 0))),
+      Is_Dirty       => True);
 
    --------------------------------------------------------
    -- HEADER WIDGET
@@ -192,8 +207,8 @@ procedure Example_Demo is
    -- Uses Flex positioning so FlexLayoutSystem controls
    -- its position and size automatically each frame.
    --------------------------------------------------------
-   Comp_Header_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_Header_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 3,
@@ -201,35 +216,32 @@ procedure Example_Demo is
       Render_Buffer => (Width => 80, Height => 3, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
    --  Background_Color_Component_T fills the widget with a solid color.
    --  Available colors are defined in the Graphics package.
-   Comp_Header_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Blue
-   );
+   Comp_Header_BG : constant Components.Background_Color_Component_T :=
+     (Background_Color => Graphics.Blue);
 
    --  Text_Component_T renders a string inside the widget.
    --  Offset_X/Y are relative to the widget's own top-left corner.
    --  Use Is_Bold, Is_Italic, Is_Underline to style the text.
-   Comp_Header_Text : constant Components.Text_Component_T := (
-      Text             => To_Unbounded_String ("  Thuja Framework | Example Demo"),
+   Comp_Header_Text : constant Components.Text_Component_T :=
+     (Text             =>
+        To_Unbounded_String ("  Thuja Framework | Example Demo"),
       Text_Color       => Graphics.White,
       Offset_X         => 1,
       Offset_Y         => 2,
       Is_Bold          => True,
       Is_Italic        => False,
       Is_Underline     => False,
-      Is_Strikethrough => False
-   );
+      Is_Strikethrough => False);
 
    --  Position_Mode_Component_T tells the layout system how to
    --  position this widget. Flex means FlexLayoutSystem controls
    --  it. Absolute means you control Position_X/Y manually.
-   Comp_Header_PositionMode : constant Components.Position_Mode_Component_T := (
-      Mode => Components.Flex
-   );
+   Comp_Header_PositionMode : constant Components.Position_Mode_Component_T :=
+     (Mode => Components.Flex);
 
    --------------------------------------------------------
    -- ROW CONTAINER WIDGET
@@ -238,8 +250,8 @@ procedure Example_Demo is
    -- It has no background color or text — its only job is
    -- to arrange its children horizontally.
    --------------------------------------------------------
-   Comp_Row_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_Row_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 4,
       Size_Width    => 80,
       Size_Height   => 21,
@@ -247,59 +259,55 @@ procedure Example_Demo is
       Render_Buffer => (Width => 80, Height => 21, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
-   Comp_Row_Marker : constant Components.Root_Widget_Component_T := (null record);
+   Comp_Row_Marker : constant Components.Root_Widget_Component_T :=
+     (null record);
 
    --  Row flex layout: Row direction places children left to right.
    --  Both children have Flex_Grow 0.5 so they share the width equally.
-   Comp_Row_Flex : constant Components.Flex_Layout_Component_T := (
-      Flex_Container => (
-         Width      => 80,
+   Comp_Row_Flex : constant Components.Flex_Layout_Component_T :=
+     (Flex_Container =>
+        (Width      => 80,
          Height     => 21,
          Direction  => Flexbox.Row,
          Justify    => Flexbox.Flex_Start,
          Align      => Flexbox.Stretch,
          Item_Count => 2,
-         Items      => new Flexbox.Flex_Item_Array'(
-            --  Left widget: grows to fill left half of the row
-            1 => (
-               Related_Entity => E_Left,
-               Flex_Basis     => 0,
-               Flex_Grow      => 0.5,
-               Flex_Shrink    => 0.0,
-               Computed_Size  => 40,
-               Cross_Size     => 21,
-               Position_X     => 0,
-               Position_Y     => 0
-            ),
-            --  Right widget: grows to fill right half of the row
-            2 => (
-               Related_Entity => E_Right,
-               Flex_Basis     => 0,
-               Flex_Grow      => 0.5,
-               Flex_Shrink    => 0.0,
-               Computed_Size  => 40,
-               Cross_Size     => 21,
-               Position_X     => 0,
-               Position_Y     => 0
-            )
-         )
-      ),
-      Is_Dirty => True
-   );
+         Items      =>
+           new Flexbox.Flex_Item_Array'
+             (
+              --  Left widget: grows to fill left half of the row
+              1 =>
+                (Related_Entity => E_Left,
+                 Flex_Basis     => 0,
+                 Flex_Grow      => 0.5,
+                 Flex_Shrink    => 0.0,
+                 Computed_Size  => 40,
+                 Cross_Size     => 21,
+                 Position_X     => 0,
+                 Position_Y     => 0),
+              --  Right widget: grows to fill right half of the row
+              2 =>
+                (Related_Entity => E_Right,
+                 Flex_Basis     => 0,
+                 Flex_Grow      => 0.5,
+                 Flex_Shrink    => 0.0,
+                 Computed_Size  => 40,
+                 Cross_Size     => 21,
+                 Position_X     => 0,
+                 Position_Y     => 0))),
+      Is_Dirty       => True);
 
-   Comp_Row_PositionMode : constant Components.Position_Mode_Component_T := (
-      Mode => Components.Flex
-   );
+   Comp_Row_PositionMode : constant Components.Position_Mode_Component_T :=
+     (Mode => Components.Flex);
 
    --------------------------------------------------------
    -- LEFT WIDGET
    -- Green background, sits in the left half of the row.
    --------------------------------------------------------
-   Comp_Left_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 1,
+   Comp_Left_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 1,
       Position_Y    => 4,
       Size_Width    => 40,
       Size_Height   => 21,
@@ -307,34 +315,30 @@ procedure Example_Demo is
       Render_Buffer => (Width => 40, Height => 21, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
-   Comp_Left_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Green
-   );
+   Comp_Left_BG : constant Components.Background_Color_Component_T :=
+     (Background_Color => Graphics.Green);
 
-   Comp_Left_Text : constant Components.Text_Component_T := (
-      Text             => To_Unbounded_String ("  Left Widget"),
+   Comp_Left_Text : constant Components.Text_Component_T :=
+     (Text             => To_Unbounded_String ("  Left Widget"),
       Text_Color       => Graphics.Black,
       Offset_X         => 1,
       Offset_Y         => 2,
       Is_Bold          => False,
       Is_Italic        => False,
       Is_Underline     => False,
-      Is_Strikethrough => False
-   );
+      Is_Strikethrough => False);
 
-   Comp_Left_PositionMode : constant Components.Position_Mode_Component_T := (
-      Mode => Components.Flex
-   );
+   Comp_Left_PositionMode : constant Components.Position_Mode_Component_T :=
+     (Mode => Components.Flex);
 
    --------------------------------------------------------
    -- RIGHT WIDGET
    -- Red background, sits in the right half of the row.
    --------------------------------------------------------
-   Comp_Right_Widget : constant Components.Widget_Component_T := (
-      Position_X    => 41,
+   Comp_Right_Widget : constant Components.Widget_Component_T :=
+     (Position_X    => 41,
       Position_Y    => 4,
       Size_Width    => 40,
       Size_Height   => 21,
@@ -342,27 +346,23 @@ procedure Example_Demo is
       Render_Buffer => (Width => 40, Height => 21, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
-      Is_Enabled    => True
-   );
+      Is_Enabled    => True);
 
-   Comp_Right_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Red
-   );
+   Comp_Right_BG : constant Components.Background_Color_Component_T :=
+     (Background_Color => Graphics.Red);
 
-   Comp_Right_Text : constant Components.Text_Component_T := (
-      Text             => To_Unbounded_String ("  Right Widget"),
+   Comp_Right_Text : constant Components.Text_Component_T :=
+     (Text             => To_Unbounded_String ("  Right Widget"),
       Text_Color       => Graphics.White,
       Offset_X         => 1,
       Offset_Y         => 2,
       Is_Bold          => False,
       Is_Italic        => False,
       Is_Underline     => False,
-      Is_Strikethrough => False
-   );
+      Is_Strikethrough => False);
 
-   Comp_Right_PositionMode : constant Components.Position_Mode_Component_T := (
-      Mode => Components.Flex
-   );
+   Comp_Right_PositionMode : constant Components.Position_Mode_Component_T :=
+     (Mode => Components.Flex);
 
    --------------------------------------------------------
    -- INPUT HANDLING STATE
@@ -371,6 +371,197 @@ procedure Example_Demo is
    -- when the user presses ESC.
    --------------------------------------------------------
    -- Should_Quit : Boolean := False;
+
+   -- ============================================================
+   -- TABS: STANDARDIZED TAB INTERFACE
+   --
+   -- PURPOSE
+   -- -------
+   -- The standardized_tab_interface package provides a uniform
+   -- polymorphic API for building multi-tab TUI applications.
+   -- Each tab is an independent unit responsible for:
+   --   • Creating its own ECS entities (Create_Entities)
+   --   • Updating its own state each frame (Update)
+   --
+   -- This decouples the main procedure from tab-specific logic:
+   -- the main loop only needs to call Tabs (Active).Update (World)
+   -- rather than knowing anything about what each tab does.
+   --
+   -- HOW IT WORKS
+   -- ------------
+   -- 1. Each tab is a tagged type derived from Tab_T (the abstract
+   --    interface declared in standardized_tab_interface).
+   --
+   -- 2. Tab_T requires two primitive operations to be overridden:
+   --      • Create_Entities — called once at startup. Responsible
+   --        for registering all ECS entities and components that
+   --        belong to this tab. Receives the ECS World, the Y
+   --        offset where content begins (below the chrome/tab bar),
+   --        and the terminal width and height.
+   --      • Update — called once per frame while this tab is active.
+   --        Responsible for reading state, updating component data,
+   --        and writing changes back to the ECS World.
+   --
+   -- 3. Tab instances are declared as aliased local variables so
+   --    their addresses can be taken safely (see Unchecked_Access note
+   --    below). They must outlive the Tab_Array that references them.
+   --
+   -- 4. A Tab_Array of Tab_Access pointers groups all tabs together.
+   --    The array index corresponds to the tab's position in the UI
+   --    (0 = leftmost tab). The ECS Get_Active_Tab function returns
+   --    the currently selected index so the main loop can dispatch
+   --    to the right tab without a case statement.
+   --
+   -- TAB SWITCHING
+   -- -------------
+   -- TabSwitchSystem (World, Prev) and TabSwitchSystem (World, Next)
+   -- cycle through tabs. The ECS internally hides/shows entities
+   -- that were registered under each tab's Tab_Page_Component_T.
+   -- The chrome (tab bar, help bar, separator) is always visible
+   -- and rendered independently of which tab is active.
+   -- Alternatively you can see the files "thuja_demo","standardize_tab_interface",
+   -- & "thuja_demo_tab_editor.adb/.ads"
+   --
+   -- LAYOUT CONVENTION
+   -- -----------------
+   -- The chrome occupies rows 1–3 of the terminal:
+   --   Row 1 — help/hint bar
+   --   Row 2 — tab bar (one label per tab)
+   --   Row 3 — separator line
+   -- Content_Top is therefore 4, meaning all tab entities should
+   -- start their Y positions at row 4 or below.
+   --
+   -- USAGE EXAMPLE (uncomment all lines marked [TAB] to activate)
+   -- -------------------------------------------------------------
+   --
+   -- Step 1: Add with-clauses at the top of the file (already shown
+   --         above in the TABS: Required imports block).
+   --
+   -- Step 2: Declare terminal size constants. These are needed by
+   --         both the chrome and the tab Create_Entities calls.
+   --         Replace the hardcoded 80/24 elsewhere in this file
+   --         with Term_Width / Term_Height for a fully dynamic layout.
+   --
+   --   [TAB]   Term_Width  : constant TUI_Width  :=
+   --   [TAB]     TUI_Width  (Terminal_Size.Get_Width);
+   --   [TAB]   Term_Height : constant TUI_Height :=
+   --   [TAB]     TUI_Height (Terminal_Size.Get_Height);
+   --   [TAB]   Content_Top : constant TUI_Height := 4;
+   --             --  Rows 1-3 are consumed by the chrome (help bar,
+   --             --  tab bar, separator). Tab content begins at row 4.
+   --
+   -- Step 3: Declare one aliased instance per concrete tab type.
+   --         'aliased' is required so that 'Unchecked_Access can be
+   --         taken in Step 4. Each Tab_T subtype lives in its own
+   --         child package (one file per tab).
+   --
+   --   [TAB]   My_First_Tab  : aliased Thuja_demo_tab_htop.Tab_T;
+   --   [TAB]   My_Second_Tab : aliased Thuja_demo_tab_editor.Tab_T;
+   --   [TAB]   My_Third_Tab  : aliased Thuja_demo_tab_flex.Tab_T;
+   --   [TAB]   My_Fourth_Tab : aliased Thuja_demo_tab_sort.Tab_T;
+   --
+   -- Step 4: Build a Tab_Array of Tab_Access pointers.
+   --         Unchecked_Access bypasses Ada's accessibility level
+   --         checks. This is safe here because all Tab_T objects
+   --         (declared above) outlive the Tab_Array.
+   --         Array indices must be contiguous starting from 0.
+   --
+   --   [TAB]   type Tab_Array is
+   --   [TAB]     array (0 .. 3) of standardized_tab_interface.Tab_Access;
+   --   [TAB]   Tabs : constant Tab_Array :=
+   --   [TAB]     [0 => My_First_Tab'Unchecked_Access,
+   --   [TAB]      1 => My_Second_Tab'Unchecked_Access,
+   --   [TAB]      2 => My_Third_Tab'Unchecked_Access,
+   --   [TAB]      3 => My_Fourth_Tab'Unchecked_Access];
+   --
+   -- Step 5: In the begin block, initialize the ECS World with the
+   --         correct tab count, then call Create_Entities on each tab
+   --         via the polymorphic Tabs array. This replaces the manual
+   --         entity registration shown in the non-tabbed example.
+   --
+   --   [TAB]   Initialize_World (World, Term_Width, Term_Height,
+   --   [TAB]                     Tab_Count => 4);
+   --   [TAB]   for I in Tabs'Range loop
+   --   [TAB]      Tabs (I).Create_Entities
+   --   [TAB]        (World, Content_Top, Term_Width, Term_Height);
+   --   [TAB]   end loop;
+   --
+   --         After Create_Entities, prime the tab system so the first
+   --         tab's entities start in the visible state:
+   --
+   --   [TAB]   TabInitSystem (World);
+   --   [TAB]   ResetBackbufferSystem (World);
+   --
+   -- Step 6: In the main loop, dispatch Update to the active tab only.
+   --         Get_Active_Tab returns the 0-based index of whichever tab
+   --         is currently selected. No case statement needed.
+   --
+   --   [TAB]   declare
+   --   [TAB]      Active : constant Natural := Get_Active_Tab (World);
+   --   [TAB]   begin
+   --   [TAB]      Tabs (Active).Update (World);
+   --   [TAB]   end;
+   --
+   -- Step 7: Handle tab switching in the input processing block.
+   --         '[' moves to the previous tab, ']' to the next.
+   --         Guard against switching while in a mode that captures
+   --         all keystrokes (e.g. a text editor's insert mode).
+   --
+   --   [TAB]   if Event.Char_Value = '['  then
+   --   [TAB]      TabSwitchSystem (World, Prev);
+   --   [TAB]   elsif Event.Char_Value = ']' then
+   --   [TAB]      TabSwitchSystem (World, Next);
+   --   [TAB]   end if;
+   --
+   -- CREATING YOUR OWN TAB
+   -- ---------------------
+   -- To add a new tab, create a package that:
+   --   1. Withs standardized_tab_interface.
+   --   2. Declares a tagged type extending Tab_T:
+   --
+   --        type Tab_T is new standardized_tab_interface.Tab_T with null record;
+   --
+   --   3. Overrides both primitive operations:
+   --
+   --        overriding procedure Create_Entities
+   --          (Self        : in out Tab_T;
+   --           World       : in out ECS.Entity_Components_PO;
+   --           Content_Top : TUI_Height;
+   --           Width       : TUI_Width;
+   --           Height      : TUI_Height);
+   --
+   --        overriding procedure Update
+   --          (Self  : in out Tab_T;
+   --           World : in out ECS.Entity_Components_PO);
+   --
+   --   4. In Create_Entities, register widgets using Make_Widget or
+   --      Make_Widget_With_BG and attach a Tab_Page_Component_T so
+   --      the ECS tab visibility system knows which tab owns them:
+   --
+   --        declare
+   --           Tab : Tab_Page_Component_T;
+   --        begin
+   --           Tab.Tab_Index := <your tab's index in the Tab_Array>;
+   --           CP := Make_Widget (World, "my_widget", ...);
+   --           Add_Component (CP.all, To_CID ("TabPage"), Tab);
+   --        end;
+   --
+   --   5. In Update, claim a write lock, modify component data as
+   --      needed for this frame, then release the lock:
+   --
+   --        World.Claim_Writing (EL);
+   --        --  ... read/write component data ...
+   --        World.Release_Writing;
+   --
+   -- NOTE ON Unchecked_Access
+   -- ------------------------
+   -- Ada's accessibility rules normally prevent taking the address of
+   -- a local variable when the access type lives at a wider scope.
+   -- Unchecked_Access bypasses this check. It is safe in this pattern
+   -- because the Tab_T objects are declared in the same declarative
+   -- region as the Tab_Array — they are constructed before the array
+   -- is built and destroyed after it goes out of scope.
+   -- ============================================================
 
 begin
 
@@ -408,38 +599,56 @@ begin
    Entities_PO.Claim_Writing (Entities_Ptr);
 
    --  RenderInfo entity: always register this first
-   ECS.Add_Component (C_RenderInfo.all, IDs.To_CID ("RenderInfo"),              Comp_RenderInfo);
+   ECS.Add_Component
+     (C_RenderInfo.all, IDs.To_CID ("RenderInfo"), Comp_RenderInfo);
 
    --  Root entity: needs WidgetComponent, RootWidget marker and FlexLayoutComponent
-   ECS.Add_Component (C_Root.all, IDs.To_CID ("WidgetComponent"),               Comp_Root_Widget);
-   ECS.Add_Component (C_Root.all, IDs.To_CID ("RootWidget"),                    Comp_Root_Marker);
-   ECS.Add_Component (C_Root.all, IDs.To_CID ("FlexLayoutComponent"),           Comp_Root_Flex);
+   ECS.Add_Component
+     (C_Root.all, IDs.To_CID ("WidgetComponent"), Comp_Root_Widget);
+   ECS.Add_Component (C_Root.all, IDs.To_CID ("RootWidget"), Comp_Root_Marker);
+   ECS.Add_Component
+     (C_Root.all, IDs.To_CID ("FlexLayoutComponent"), Comp_Root_Flex);
 
    --  Header entity: widget + background + text + position mode
-   ECS.Add_Component (C_Header.all, IDs.To_CID ("WidgetComponent"),             Comp_Header_Widget);
-   ECS.Add_Component (C_Header.all, IDs.To_CID ("BackgroundColorComponent"),    Comp_Header_BG);
-   ECS.Add_Component (C_Header.all, IDs.To_CID ("TextComponent"),               Comp_Header_Text);
-   ECS.Add_Component (C_Header.all, IDs.To_CID ("PositionMode"),                Comp_Header_PositionMode);
+   ECS.Add_Component
+     (C_Header.all, IDs.To_CID ("WidgetComponent"), Comp_Header_Widget);
+   ECS.Add_Component
+     (C_Header.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Header_BG);
+   ECS.Add_Component
+     (C_Header.all, IDs.To_CID ("TextComponent"), Comp_Header_Text);
+   ECS.Add_Component
+     (C_Header.all, IDs.To_CID ("PositionMode"), Comp_Header_PositionMode);
 
    --  Row container entity: widget + RootWidget marker + flex layout + position mode
    --  Note: the RootWidget marker is used here too because the row container
    --  acts as a nested flex root for its own children.
-   ECS.Add_Component (C_Row.all, IDs.To_CID ("WidgetComponent"),                Comp_Row_Widget);
-   ECS.Add_Component (C_Row.all, IDs.To_CID ("RootWidget"),                     Comp_Row_Marker);
-   ECS.Add_Component (C_Row.all, IDs.To_CID ("FlexLayoutComponent"),            Comp_Row_Flex);
-   ECS.Add_Component (C_Row.all, IDs.To_CID ("PositionMode"),                   Comp_Row_PositionMode);
+   ECS.Add_Component
+     (C_Row.all, IDs.To_CID ("WidgetComponent"), Comp_Row_Widget);
+   ECS.Add_Component (C_Row.all, IDs.To_CID ("RootWidget"), Comp_Row_Marker);
+   ECS.Add_Component
+     (C_Row.all, IDs.To_CID ("FlexLayoutComponent"), Comp_Row_Flex);
+   ECS.Add_Component
+     (C_Row.all, IDs.To_CID ("PositionMode"), Comp_Row_PositionMode);
 
    --  Left widget entity: widget + background + text + position mode
-   ECS.Add_Component (C_Left.all, IDs.To_CID ("WidgetComponent"),               Comp_Left_Widget);
-   ECS.Add_Component (C_Left.all, IDs.To_CID ("BackgroundColorComponent"),      Comp_Left_BG);
-   ECS.Add_Component (C_Left.all, IDs.To_CID ("TextComponent"),                 Comp_Left_Text);
-   ECS.Add_Component (C_Left.all, IDs.To_CID ("PositionMode"),                  Comp_Left_PositionMode);
+   ECS.Add_Component
+     (C_Left.all, IDs.To_CID ("WidgetComponent"), Comp_Left_Widget);
+   ECS.Add_Component
+     (C_Left.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Left_BG);
+   ECS.Add_Component
+     (C_Left.all, IDs.To_CID ("TextComponent"), Comp_Left_Text);
+   ECS.Add_Component
+     (C_Left.all, IDs.To_CID ("PositionMode"), Comp_Left_PositionMode);
 
    --  Right widget entity: widget + background + text + position mode
-   ECS.Add_Component (C_Right.all, IDs.To_CID ("WidgetComponent"),              Comp_Right_Widget);
-   ECS.Add_Component (C_Right.all, IDs.To_CID ("BackgroundColorComponent"),     Comp_Right_BG);
-   ECS.Add_Component (C_Right.all, IDs.To_CID ("TextComponent"),                Comp_Right_Text);
-   ECS.Add_Component (C_Right.all, IDs.To_CID ("PositionMode"),                 Comp_Right_PositionMode);
+   ECS.Add_Component
+     (C_Right.all, IDs.To_CID ("WidgetComponent"), Comp_Right_Widget);
+   ECS.Add_Component
+     (C_Right.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Right_BG);
+   ECS.Add_Component
+     (C_Right.all, IDs.To_CID ("TextComponent"), Comp_Right_Text);
+   ECS.Add_Component
+     (C_Right.all, IDs.To_CID ("PositionMode"), Comp_Right_PositionMode);
 
    Entities_PO.Release_Writing;
 
@@ -468,6 +677,9 @@ begin
    -- If you need to update component data each frame (e.g.
    -- changing text or colors based on input), do it between
    -- step 2 and step 3 inside a Claim_Writing block.
+   --
+   -- When using tabs, insert the active tab's Update call
+   -- between steps 2 and 3 as well (see [TAB] Step 6 above).
    --------------------------------------------------------
    -- If you wish to utilize the Loop_Count above use this loop
    -- condition instead below instead of just the 'loop'
@@ -493,6 +705,17 @@ begin
       --           case Event.Cmd is
       --              when Input_Handling.Quit =>
       --                 Should_Quit := True;
+      --
+      --              --  [TAB] Tab switching: '[' goes left, ']' goes right.
+      --              --  Guard this with any mode checks your tabs require
+      --              --  (e.g. do not switch tabs while in Insert mode).
+      --              --  when Input_Handling.Others =>
+      --              --     if Event.Char_Value = '[' then
+      --              --        TabSwitchSystem (World, Prev);
+      --              --     elsif Event.Char_Value = ']' then
+      --              --        TabSwitchSystem (World, Next);
+      --              --     end if;
+      --
       --              when others =>
       --                 null; --  Handle other keys here
       --           end case;
@@ -515,6 +738,15 @@ begin
       --   ECS.Add_Component (C_Left.all,
       --      IDs.To_CID ("TextComponent"), Comp_Left_Text);
       --   Entities_PO.Release_Writing;
+      --
+      -- [TAB] When using tabs, dispatch Update to the active tab here
+      --       instead of (or in addition to) manual component updates:
+      --
+      --   declare
+      --      Active : constant Natural := Get_Active_Tab (World);
+      --   begin
+      --      Tabs (Active).Update (World);
+      --   end;
       --------------------------------------------------------
 
       --  SYSTEM 1: Detect if the terminal has been resized
