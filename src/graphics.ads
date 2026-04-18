@@ -62,7 +62,7 @@ package Graphics is
 
    --  Maximum resolution for the display (Change later)
    type TUI_Width is new Integer range 1 .. 220;
-   type TUI_Height is new Integer range 1 .. 60; --Larger Range for size detection 
+   type TUI_Height is new Integer range 1 .. 100; --Larger Range for size detection 
 
    --  Defines two-dimensional array of type Pixel that holds the pixels
    type Pixel_Array is array (TUI_Width range <> , TUI_Height range <>) of Pixel_t;

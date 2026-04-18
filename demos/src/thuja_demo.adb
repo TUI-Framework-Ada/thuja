@@ -44,8 +44,8 @@ procedure Thuja_Demo is
    subtype Character_t is Character;
 
    -- Terminal layout configuration constants
-   Term_Width  : constant TUI_Width := TUI_Width (Terminal_Size.Get_Width);
-   Term_Height : constant TUI_Height := TUI_Height (Terminal_Size.Get_Height);
+   Term_Width  :  TUI_Width := TUI_Width (Terminal_Size.Get_Width);
+   Term_Height :  TUI_Height := TUI_Height (Terminal_Size.Get_Height);
    Content_Top : constant TUI_Height := 4;
 
    -- ECS world instance holding all entities and components
@@ -322,6 +322,43 @@ procedure Thuja_Demo is
       World.Release_Reading;
    end Toggle_HTop_Backgrounds;
 
+   procedure Resize_Chrome is
+      EL : Entity_Components_Ptr;
+   begin
+      World.Claim_Writing (EL);
+      declare
+         CP : constant Components_Ptr :=
+           Get_Entity_Components (EL.all, To_EID ("chrome_help"));
+         W  : Widget_Component_T renames
+           Widget_Component_T
+             (Get_Component_Ptr (CP, Widget_Component_T'Tag).Data.all);
+      begin
+         W.Size_Width := Term_Width;
+         W.Render_Buffer := Create_Buffer (Term_Width, 1);
+      end;
+      declare
+         CP : constant Components_Ptr :=
+           Get_Entity_Components (EL.all, To_EID ("chrome_tabbar"));
+         W  : Widget_Component_T renames
+           Widget_Component_T
+             (Get_Component_Ptr (CP, Widget_Component_T'Tag).Data.all);
+      begin
+         W.Size_Width := Term_Width;
+         W.Render_Buffer := Create_Buffer (Term_Width, 1);
+      end;
+      declare
+         CP : constant Components_Ptr :=
+           Get_Entity_Components (EL.all, To_EID ("chrome_sep"));
+         W  : Widget_Component_T renames
+           Widget_Component_T
+             (Get_Component_Ptr (CP, Widget_Component_T'Tag).Data.all);
+      begin
+         W.Size_Width := Term_Width;
+         W.Render_Buffer := Create_Buffer (Term_Width, 1);
+      end;
+      World.Release_Writing;
+   end Resize_Chrome;
+
    procedure Toggle_HTop_Processes is
       EL  : Entity_Components_Ptr;
       CP  : Components_Ptr;
@@ -448,6 +485,21 @@ begin
 
    -- Main event loop
    while Running loop
+
+   -- Poll for terminal resize each frame
+      declare
+         New_W : constant TUI_Width := TUI_Width (Terminal_Size.Get_Width);
+         New_H : constant TUI_Height := TUI_Height (Terminal_Size.Get_Height);
+      begin
+         if New_W /= Term_Width or else New_H /= Term_Height then
+            Term_Width := New_W;
+            Term_Height := New_H;
+            TerminalResizeSystem (World, New_W, New_H);
+            Resize_Chrome;
+            ResetBackbufferSystem (World);
+         end if;
+      end;
+
       ClearWidgetBufferSystem (World);
       loop
          Input_Buffer.Consume (Event);
@@ -605,7 +657,7 @@ begin
       declare
          Active : constant Natural := Get_Active_Tab (World);
       begin
-         Tabs (Active).Update (World);
+         Tabs (Active).Update (World, Term_Width, Term_Height);
       end;
 
       --  TODO: Merge into Tabs
