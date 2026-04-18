@@ -182,15 +182,20 @@ package body ECS is
       return Component_Class_Ref
    is
       Map : Component_Map renames Self.all.Components_Map;
-      Ref : Component_Class_Ref :=
-        Component_Class_Ref'
-          (Ada.Finalization.Controlled
-           with
-             Data   => Map.Reference (Component_Key).Element,
-             Entity => Self.PO'Access);
    begin
-      Initialize_Ref (Ref);
-      return Ref;
+      Self.PO.Claim_Element;
+      declare
+         Ref : Component_Class_Ref :=
+           Component_Class_Ref'
+             (Ada.Finalization.Controlled
+             with
+              Data   => Map.Reference (Component_Key).Element,
+              Entity => Self.PO'Access);
+      begin
+         Initialize_Ref (Ref);
+         Self.PO.Release_Element;
+         return Ref;
+      end;
    end Get_Component_Ptr;
 
    function Get_Component_Ptr
@@ -203,9 +208,12 @@ package body ECS is
    function Get_Component_Ptr
      (Self : Components_Ptr; Component_Tag : Ada.Tags.Tag)
       return Component_Class_Ref is
+      CID : Component_Id;
    begin
-      return
-        Get_Component_Ptr (Self, Get_Component_ID (Self.all, Component_Tag));
+      Self.PO.Claim_Element;
+      CID := Get_Component_ID (Self.all, Component_Tag);
+      Self.PO.Release_Element;
+      return Get_Component_Ptr (Self, CID);
    end Get_Component_Ptr;
 
    function Has_Component
@@ -310,7 +318,9 @@ package body ECS is
       WC.Has_Focus := False;
       WC.Render_Buffer := Create_Buffer (W, H);
 
+      CP.PO.Claim_List;
       Add_Component (CP.all, To_CID ("WidgetComponent"), WC);
+      CP.PO.Release_List;
 
       return CP;
    end Make_Widget;
@@ -324,11 +334,11 @@ package body ECS is
          Entity_List.Delete (Id);
 
          declare
-            Search_Component_IDs : Component_ID_Vector.Vector;
+            Search_Component_IDs : Component_Tag_Vector.Vector;
             Matched_Entities     : Entity_ID_Vector.Vector;
             Component_List       : Components_Ptr;
          begin
-            Search_Component_IDs.Append (To_CID ("WidgetComponent"));
+            Search_Component_IDs.Append (Widget_Component_T'Tag);
             Matched_Entities :=
               Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
             for EID of Matched_Entities loop
@@ -368,21 +378,26 @@ package body ECS is
       Result          : Entity_ID_Vector.Vector;
       Checking_Entity : Entity_Id;
       Matching        : Boolean;
+      Component       : Components_Ptr;
    begin
       for Entity_Cursor in Self.Iterate loop
          Matching := True;
          Checking_Entity := Entity_Map.Key (Entity_Cursor);
 
          for Component_Cursor in Required.Iterate loop
+            Component := Entity_Map.Element (Self, Checking_Entity);
+            Component.PO.Claim_Element;
             if not (Has_Component
-                      (Entity_Map.Element (Self, Checking_Entity).all,
+                      (Component.all,
                        Component_ID_Vector.Element
                          (Required,
                           Component_ID_Vector.To_Index (Component_Cursor))))
             then
                Matching := False;
+               Component.PO.Release_Element;
                exit;
             end if;
+            Component.PO.Release_Element;
          end loop;
 
          if Matching then
@@ -400,21 +415,26 @@ package body ECS is
       Result          : Entity_ID_Vector.Vector;
       Checking_Entity : Entity_Id;
       Matching        : Boolean;
+      Component       : Components_Ptr;
    begin
       for Entity_Cursor in Self.Iterate loop
          Matching := True;
          Checking_Entity := Entity_Map.Key (Entity_Cursor);
 
          for Component_Cursor in Required.Iterate loop
+            Component := Entity_Map.Element (Self, Checking_Entity);
+            Component.PO.Claim_Element;
             if not (Has_Component
-                      (Entity_Map.Element (Self, Checking_Entity).all,
+                      (Component.all,
                        Component_Tag_Vector.Element
                          (Required,
                           Component_Tag_Vector.To_Index (Component_Cursor))))
             then
                Matching := False;
+               Component.PO.Release_Element;
                exit;
             end if;
+            Component.PO.Release_Element;
          end loop;
 
          if Matching then
@@ -555,6 +575,10 @@ package body ECS is
                   Child_Comps :=
                     Get_Entity_Components (Entity_List.all, Child_Id);
 
+                  if Child_Comps /= null then
+                     Child_Comps.PO.Claim_Element;
+                  end if;
+
                   if Child_Comps /= null
                     and then
                       Has_Component (Child_Comps.all, Widget_Component_T'Tag)
@@ -622,6 +646,10 @@ package body ECS is
                         end;
                      end if;
                   end if;
+
+                  if Child_Comps /= null then
+                     Child_Comps.PO.Release_Element;
+                  end if;
                end loop;
             end if;
          end;
@@ -664,6 +692,10 @@ package body ECS is
                   Child_Comps :=
                     Get_Entity_Components (Entity_List.all, Child_Id);
 
+                  if Child_Comps /= null then
+                     Child_Comps.PO.Claim_Element;
+                  end if;
+
                   if Child_Comps /= null
                     and then
                       Has_Component (Child_Comps.all, Text_Component_T'Tag)
@@ -701,6 +733,10 @@ package body ECS is
                               Child_T.Offset_Y := TUI_Height'First;
                         end case;
                      end;
+                  end if;
+
+                  if Child_Comps /= null then
+                     Child_Comps.PO.Release_Element;
                   end if;
                end loop;
             end if;
@@ -800,6 +836,7 @@ package body ECS is
                end loop;
             end loop;
 
+            Component_List.PO.Claim_Element;
             if Widget_C.Has_Focus
               and then
                 Has_Component (Component_List.all, Selectable_Component_T'Tag)
@@ -814,6 +851,7 @@ package body ECS is
                   TUI_Height'First,
                   Px);
             end if;
+            Component_List.PO.Release_Element;
          end;
       end loop;
 
@@ -985,8 +1023,10 @@ package body ECS is
                    .Data.all);
          begin
 
+            Comp_Ptr.PO.Claim_Element;
             Has_BG :=
               Has_Component (Comp_Ptr.all, Background_Color_Component_T'Tag);
+            Comp_Ptr.PO.Release_Element;
             if Has_BG then
                BG_C :=
                  Background_Color_Component_T
@@ -1494,6 +1534,7 @@ package body ECS is
          Component_List :=
            Get_Entity_Components
              (Entity_List.all, Selectables (Next_Focus).EID);
+         Component_List.PO.Claim_Element;
          if Has_Component (Component_List.all, Command_Set_Component_T'Tag)
          then
             declare
@@ -1508,6 +1549,7 @@ package body ECS is
          else
             Selection.Deactivate_Widget_Commands;
          end if;
+         Component_List.PO.Release_Element;
       end;
 
       Entity_List_PO.Release_Reading;
@@ -1530,12 +1572,17 @@ package body ECS is
       if Comps = null then
          return;
       end if;
+      Comps.PO.Claim_Element;
       if not Has_Component (Comps.all, Widget_Component_T'Tag) then
+         Comps.PO.Release_Element;
          return;
       end if;
+      Comps.PO.Release_Element;
 
       Pos_Mode.Mode := Absolute;
+      Comps.PO.Claim_List;
       Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
+      Comps.PO.Release_List;
 
       declare
          Widget : Widget_Component_T renames
@@ -1561,9 +1608,12 @@ package body ECS is
       if Comps = null then
          return;
       end if;
+      Comps.PO.Claim_Element;
       if not Has_Component (Comps.all, Widget_Component_T'Tag) then
+         Comps.PO.Release_Element;
          return;
       end if;
+      Comps.PO.Release_Element;
 
       declare
          Widget : Widget_Component_T renames
@@ -1853,15 +1903,17 @@ package body ECS is
    begin
       Entity_List_PO.Claim_Reading (Entity_List);
       CP := Get_Entity_Components (Entity_List.all, To_EID ("root"));
-      if CP /= null
-        and then Has_Component (CP.all, Tab_Manager_Component_T'Tag)
-      then
-         Result :=
-           Tab_Manager_Component_T
-             (Get_Component (CP.all, Tab_Manager_Component_T'Tag))
-             .Active_Tab;
-      else
-         Result := 0;
+      if CP /= null then
+         CP.PO.Claim_Element;
+         if Has_Component (CP.all, Tab_Manager_Component_T'Tag) then
+            Result :=
+              Tab_Manager_Component_T
+                (Get_Component (CP.all, Tab_Manager_Component_T'Tag))
+                .Active_Tab;
+         else
+            Result := 0;
+         end if;
+         CP.PO.Release_Element;
       end if;
       Entity_List_PO.Release_Reading;
       return Result;
@@ -1908,7 +1960,9 @@ package body ECS is
                 Is_Strikethrough       => False));
          end loop;
       end loop;
+      CP.PO.Claim_List;
       Add_Component (CP.all, To_CID ("RenderInfo"), RI);
+      CP.PO.Release_List;
 
       CP := Add_Entity (World, To_EID ("root"));
       RW.Position_X := TUI_Width'First;
@@ -1916,10 +1970,12 @@ package body ECS is
       RW.Size_Width := Width;
       RW.Size_Height := Height;
       RW.Render_Buffer := Create_Buffer (Width, Height);
+      CP.PO.Claim_List;
       Add_Component (CP.all, To_CID ("WidgetComponent"), RW);
       Add_Component (CP.all, To_CID ("RootWidget"), Root_Marker);
       Root_BG.Background_Color := Black;
       Add_Component (CP.all, To_CID ("BackgroundColorComponent"), Root_BG);
+      CP.PO.Release_List;
 
       if Tab_Count > 0 then
          declare
@@ -1927,7 +1983,9 @@ package body ECS is
          begin
             TM.Active_Tab := 0;
             TM.Tab_Count := Tab_Count;
+            CP.PO.Claim_List;
             Add_Component (CP.all, To_CID ("TabManager"), TM);
+            CP.PO.Release_List;
          end;
       end if;
    end Initialize_World;
@@ -2043,20 +2101,22 @@ package body ECS is
                         EC      : constant Components_Ptr :=
                           Get_Entity_Components (Entity_List.all, All_EID);
                      begin
-                        if EC /= null
-                          and then
-                            Has_Component (EC.all, Widget_Component_T'Tag)
-                          and then
-                            not Has_Component
-                                  (EC.all, Tab_Page_Component_T'Tag)
-                          and then
-                            not Has_Component
-                                  (EC.all, Root_Widget_Component_T'Tag)
-                          and then
-                            not Has_Component
-                                  (EC.all, Render_Info_Component_T'Tag)
-                        then
-                           Root_W.Children.Append (All_EID);
+                        if EC /= null then
+                           EC.PO.Claim_Element;
+                           if Has_Component (EC.all, Widget_Component_T'Tag)
+                             and then
+                               not Has_Component
+                                 (EC.all, Tab_Page_Component_T'Tag)
+                             and then
+                               not Has_Component
+                                 (EC.all, Root_Widget_Component_T'Tag)
+                             and then
+                               not Has_Component
+                                 (EC.all, Render_Info_Component_T'Tag)
+                           then
+                              Root_W.Children.Append (All_EID);
+                           end if;
+                           EC.PO.Release_Element;
                         end if;
                      end;
                   end loop;
@@ -2130,20 +2190,22 @@ package body ECS is
                         EC      : constant Components_Ptr :=
                           Get_Entity_Components (Entity_List.all, All_EID);
                      begin
-                        if EC /= null
-                          and then
-                            Has_Component (EC.all, Widget_Component_T'Tag)
-                          and then
-                            not Has_Component
-                                  (EC.all, Tab_Page_Component_T'Tag)
-                          and then
-                            not Has_Component
-                                  (EC.all, Root_Widget_Component_T'Tag)
-                          and then
-                            not Has_Component
-                                  (EC.all, Render_Info_Component_T'Tag)
-                        then
-                           Root_W.Children.Append (All_EID);
+                        if EC /= null then
+                           EC.PO.Claim_Element;
+                           if Has_Component (EC.all, Widget_Component_T'Tag)
+                             and then
+                               not Has_Component
+                                 (EC.all, Tab_Page_Component_T'Tag)
+                             and then
+                               not Has_Component
+                                 (EC.all, Root_Widget_Component_T'Tag)
+                             and then
+                               not Has_Component
+                                 (EC.all, Render_Info_Component_T'Tag)
+                           then
+                              Root_W.Children.Append (All_EID);
+                           end if;
+                           EC.PO.Release_Element;
                         end if;
                      end;
                   end loop;
@@ -2188,7 +2250,9 @@ package body ECS is
       BG_C : Background_Color_Component_T;
    begin
       BG_C.Background_Color := BG;
+      CP.PO.Claim_List;
       Add_Component (CP.all, To_CID ("BackgroundColorComponent"), BG_C);
+      CP.PO.Release_List;
       return CP;
    end Make_Widget_With_BG;
 

@@ -94,8 +94,8 @@ procedure Comprehensive_Demo is
       --Framebuffer_1       => (Width => 80, Height => 24, Data => new Pixel_Array),
       --Framebuffer_2       => (Width => 80, Height => 24, Data => new Pixel_Array),
       Buffers => [
-         (Width => 80, Height => 24, Data => new Pixel_Array),
-         (Width => 80, Height => 24, Data => new Pixel_Array)
+         Graphics.Create_Buffer (80, 24),
+         Graphics.Create_Buffer (80, 24)
       ],
       Drawing_FB          => new Graphics.Protected_DB,
       others              => <>
@@ -109,7 +109,7 @@ procedure Comprehensive_Demo is
       Size_Width    => 80,
       Size_Height   => 24,
       Children      => IDs.Entity_ID_Vector.To_Vector (E_Header, 1) & E_ProgressBar & E_Sidebar & E_Content & E_MovingDot,
-      Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Render_Buffer => Graphics.Create_Buffer (80, 24),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -183,7 +183,7 @@ procedure Comprehensive_Demo is
       Size_Width    => 80,
       Size_Height   => 3,
       Children      => IDs.Entity_ID_Vector.Empty_Vector,
-      Render_Buffer => (Width => 80, Height => 3, Data => new Pixel_Array),
+      Render_Buffer => Graphics.Create_Buffer (80, 3),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -215,7 +215,7 @@ procedure Comprehensive_Demo is
       Size_Width    => 80,
       Size_Height   => 1,
       Children      => IDs.Entity_ID_Vector.Empty_Vector,
-      Render_Buffer => (Width => 80, Height => 1, Data => new Pixel_Array),
+      Render_Buffer => Graphics.Create_Buffer (80, 1),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -246,7 +246,7 @@ procedure Comprehensive_Demo is
    Comp_Sidebar_Flex : constant Components.Flex_Layout_Component_T := (
       Flex_Container => (
          Width      => 40,
-         Height     => 10,
+         Height     => 20,
          Direction  => Flexbox.Row,
          Justify    => Flexbox.Flex_Start,
          Align      => Flexbox.Flex_Start,
@@ -258,7 +258,7 @@ procedure Comprehensive_Demo is
                Flex_Basis     => 10,
                Flex_Grow      => 1.0,
                Flex_Shrink    => 1.0,
-               Computed_Size  => 10,
+               Computed_Size  => 20,
                Cross_Size     => 40,
                Position_X     => 0,
                Position_Y     => 0
@@ -272,9 +272,9 @@ procedure Comprehensive_Demo is
       Position_X    => 1,
       Position_Y    => 5,
       Size_Width    => 20,
-      Size_Height   => 10,
+      Size_Height   => 20,
       Children      => IDs.Entity_ID_Vector.To_Vector (E_Calendar, 1),
-      Render_Buffer => (Width => 20, Height => 10, Data => new Pixel_Array),
+      Render_Buffer => Graphics.Create_Buffer (20, 20),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -306,7 +306,7 @@ procedure Comprehensive_Demo is
       Size_Width    => 20,
       Size_Height   => 10,
       Children      => IDs.Entity_ID_Vector.Empty_Vector,
-      Render_Buffer => (Width => 20, Height => 10, Data => new Pixel_Array),
+      Render_Buffer => Graphics.Create_Buffer (20, 10),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -334,7 +334,7 @@ procedure Comprehensive_Demo is
       Size_Width    => 60,
       Size_Height   => 10,
       Children      => IDs.Entity_ID_Vector.Empty_Vector,
-      Render_Buffer => (Width => 60, Height => 10, Data => new Pixel_Array),
+      Render_Buffer => Graphics.Create_Buffer (60, 10),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -366,7 +366,7 @@ procedure Comprehensive_Demo is
       Size_Width    => 1,
       Size_Height   => 1,
       Children      => IDs.Entity_ID_Vector.Empty_Vector,
-      Render_Buffer => (Width => 1, Height => 1, Data => new Pixel_Array),
+      Render_Buffer => Graphics.Create_Buffer (1, 1),
       Has_Focus     => True,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -608,6 +608,7 @@ begin
          end;
 
          --  SYSTEM 3-7: Rendering pipeline
+         ECS.ClearWidgetBufferSystem (Entities_PO);
          ECS.WidgetBackgroundSystem (Entities_PO);
          ECS.CalendarDisplaySystem (Entities_PO); --  New, renders a calendar / date
          ECS.TextRenderSystem (Entities_PO);
