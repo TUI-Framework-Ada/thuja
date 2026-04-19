@@ -486,7 +486,10 @@ package body ECS is
                RI.Prev_Terminal_Width := Natural (New_Width);
                RI.Prev_Terminal_Height := Natural (New_Height);
 
-               -- Free old buffer pixel arrays before reallocating
+               --  Upgrade to list lock before deallocating/reallocating buffers.
+               --  Claim_List waits for all Claim_Element holders to release,
+               --  preventing any concurrent reader from accessing freed memory.
+               RI_Components.PO.Claim_List; -- Updated
                declare
                   Old_0 : Pixel_Array_Ptr := RI.Buffers (0).Data;
                   Old_1 : Pixel_Array_Ptr := RI.Buffers (1).Data;
@@ -494,9 +497,9 @@ package body ECS is
                   Free_Pixel_Array (Old_0);
                   Free_Pixel_Array (Old_1);
                end;
-
                RI.Buffers (0) := Create_Buffer (New_Width, New_Height);
                RI.Buffers (1) := Create_Buffer (New_Width, New_Height);
+               RI_Components.PO.Release_List; -- Updated
 
                Mark_All_Flex_Dirty (Entity_List.all);
             end if;
