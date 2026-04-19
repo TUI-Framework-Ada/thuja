@@ -4,13 +4,13 @@ project Thuja is
    for Library_Name use "Thuja";
    for Library_Version use Project'Library_Name & ".so." & Thuja_Config.Crate_Version;
 
-   Src_Dirs := ("src/", "config/");
+   Src_Dirs := ("src/core/", "src/systems/", "src/ui/", "src/apps/", "src/stats/","config/");
 
    case Thuja_Config.Alire_Host_OS is
       when "windows" =>
-         Src_Dirs := Src_Dirs & ("src/windows");
+         Src_Dirs := Src_Dirs & ("src/platform/windows");
       when "linux" =>
-         Src_Dirs := Src_Dirs & ("src/linux");
+         Src_Dirs := Src_Dirs & ("src/platform/linux");
       when others =>
          null;
    end case;
