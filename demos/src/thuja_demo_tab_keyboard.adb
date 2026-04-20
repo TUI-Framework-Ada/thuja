@@ -22,7 +22,7 @@ package body Thuja_demo_tab_keyboard is
 
    subtype String_t is String;
 
-   Tab_Index : constant Natural := 4;
+   Tab_Index : constant Natural := 5;
 
    --  Layout constants.  The keyboard widget reserves a 72-column slab
    --  starting at Left_Margin; rows are offset from Content_Top so the

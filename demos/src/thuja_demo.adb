@@ -15,6 +15,7 @@ with Thuja_demo_tab_htop;           -- Implementation of the HTop-style monitori
 with Thuja_demo_tab_editor;         -- Implementation of the text editor tab
 with Thuja_demo_tab_flex;           -- Implementation of the flexbox demo tab
 with Thuja_demo_tab_sort;           -- Implementation of the sound of sorting demo tab
+with Thuja_demo_tab_sine;           -- Implementation of the sine wave simulation demo tab
 with Thuja_demo_tab_keyboard;       -- Implementation of the keyboard / Ctrl-shortcut demo tab
 with Terminal_Size;                 -- C bindings to get terminal size using tput/Win32 API
 
@@ -25,18 +26,20 @@ procedure Thuja_Demo is
    Editor_Tab   : aliased Thuja_demo_tab_editor.Tab_T;
    Flex_Tab     : aliased Thuja_demo_tab_flex.Tab_T;
    Sort_Tab     : aliased Thuja_demo_tab_sort.Tab_T;
+   Sine_Tab     : aliased Thuja_demo_tab_sine.Tab_T;
    Keyboard_Tab : aliased Thuja_demo_tab_keyboard.Tab_T;
 
    -- Array of polymorphic tab pointers using the interface access type.
    -- Unchecked_Access is used to bypass Ada accessibility checks.
    -- Should be safe since all tab objects outlive the array usage.
-   type Tab_Array is array (0 .. 4) of standardized_tab_interface.Tab_Access;
+   type Tab_Array is array (0 .. 5) of standardized_tab_interface.Tab_Access;
    Tabs : constant Tab_Array :=
      [0 => HTop_Tab'Unchecked_Access,
       1 => Editor_Tab'Unchecked_Access,
       2 => Flex_Tab'Unchecked_Access,
       3 => Sort_Tab'Unchecked_Access,
-      4 => Keyboard_Tab'Unchecked_Access];
+      4 => Sine_Tab'Unchecked_Access,
+      5 => Keyboard_Tab'Unchecked_Access];
 
    -- Local type aliases for readability and consistency
    subtype String_t is String;
@@ -44,8 +47,12 @@ procedure Thuja_Demo is
    subtype Character_t is Character;
 
    -- Terminal layout configuration constants
-   Term_Width  : constant TUI_Width := TUI_Width (Terminal_Size.Get_Width);
-   Term_Height : constant TUI_Height := TUI_Height (Terminal_Size.Get_Height);
+   Term_Width  : constant TUI_Width :=
+     TUI_Width
+       (Natural'Min (Terminal_Size.Get_Width, Natural (TUI_Width'Last)));
+   Term_Height : constant TUI_Height :=
+     TUI_Height
+       (Natural'Min (Terminal_Size.Get_Height, Natural (TUI_Height'Last)));
    Content_Top : constant TUI_Height := 4;
 
    -- ECS world instance holding all entities and components
@@ -88,11 +95,12 @@ procedure Thuja_Demo is
         (Red => 70, Green => 130, Blue => 180);
 
       -- Labels for tab titles
-      Labels : constant array (0 .. 4) of String_t (1 .. 14) :=
+      Labels : constant array (0 .. 5) of String_t (1 .. 14) :=
         ["    HTop      ",
          "  Text Editor ",
          "   Flexbox    ",
          " Sort Visual  ",
+         "  Sine Wave   ",
          "   Keyboard   "];
 
       -- Dynamically generates help text depending on active tab/mode
@@ -108,6 +116,10 @@ procedure Thuja_Demo is
          elsif Current_Tab = 3 then
             return Sort_Demo.Help_Text;
          elsif Current_Tab = 4 then
+            return
+              " [ Prev  ] Next  |  w/s: amp   a/d: freq   q/e: speed"
+              & "                       ";
+         elsif Current_Tab = 5 then
             return
               " [ Prev  ] Next  |  Press any key or Ctrl+letter"
               & "                            ";
@@ -146,7 +158,7 @@ procedure Thuja_Demo is
          Col : TUI_Width := 2;
       begin
          Fill_Row (W.Render_Buffer, 1, Tab_BG_Inactive);
-         for D in 0 .. 4 loop
+         for D in 0 .. 5 loop
             declare
                Lbl    : constant String_t := Labels (D);
                Is_Act : constant Boolean_t := (D = Current_Tab);
@@ -433,7 +445,7 @@ begin
    Ada.Wide_Wide_Text_IO.Flush;
 
    -- Initialize ECS world and UI chrome
-   Initialize_World (World, Term_Width, Term_Height, Tab_Count => 5);
+   Initialize_World (World, Term_Width, Term_Height, Tab_Count => 6);
    Create_Chrome;
 
    -- Initialize all tabs via polymorphic dispatch
@@ -585,11 +597,20 @@ begin
                      exit;
                   end if;
             end case;
+         
+         elsif Get_Active_Tab (World) = 4 then
+            if Event.Cmd = Quit or else Event.Char_Value = Character_t'Val (27)
+            then
+               Running := False;
+               exit;
+            else
+               Sine_Tab.Handle_Input (Event.Char_Value);
+            end if;
 
          -- Keyboard demo: forward every event to the tab so it can
          -- highlight keys and detect Ctrl/Alt shortcuts.  Double-ESC
          -- still quits via Event.Cmd = Quit.
-         elsif Get_Active_Tab (World) = 4 then
+         elsif Get_Active_Tab (World) = 5 then
             if Event.Cmd = Quit
               and then Event.Char_Value = Character_t'Val (27)
             then
