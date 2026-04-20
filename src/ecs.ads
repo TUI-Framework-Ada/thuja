@@ -94,6 +94,10 @@ package ECS is
      (Self : in Components; Component_Tag : in Ada.Tags.Tag)
       return Component_T'Class;
 
+   function Get_Unlocked_Component_Ptr
+     (Self : Components_Ptr; Component_Key : Component_Id)
+      return Component_Class_Ptr;
+
    function Get_Component_Ptr
      (Self : Components_Ptr; Component_Key : Component_Id)
       return Component_Class_Ref;
@@ -217,7 +221,7 @@ package ECS is
    procedure SelectionSystem(Entity_List_PO : in out Entity_Components_PO; Tab_Pressed : in Boolean);
    procedure TabInitSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure TabSwitchSystem(Entity_List_PO : in out Entity_Components_PO; Direction : in Tab_Direction);
-   
+
    --===========================================================================
    -- HELPER PROCEDURES
    --===========================================================================

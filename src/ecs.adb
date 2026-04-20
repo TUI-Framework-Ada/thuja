@@ -179,6 +179,17 @@ package body ECS is
       return Result;
    end Get_Component_IDs;
 
+   function Get_Unlocked_Component_Ptr
+     (Self : Components_Ptr; Component_Key : Component_Id)
+      return Component_Class_Ptr
+   is
+      Map : Component_Map renames Self.all.Components_Map;
+      Ptr : Component_Class_Ptr :=
+        Map.Reference (Component_Key).Element;
+   begin
+      return Ptr;
+   end Get_Unlocked_Component_Ptr;
+
    function Get_Component_Ptr
      (Self : Components_Ptr; Component_Key : Component_Id)
       return Component_Class_Ref
@@ -463,6 +474,7 @@ package body ECS is
       Search_Component_Tags : Component_Tag_Vector.Vector;
       Matched_Entities      : Entity_ID_Vector.Vector;
       RI_Components         : Components_Ptr;
+      Mark_Dirty            : Boolean := False;
    begin
       Entity_List_PO.Claim_Writing (Entity_List);
       Search_Component_Tags.Append (Render_Info_Component_T'Tag);
@@ -472,11 +484,17 @@ package body ECS is
       for RI_Entity_ID of Matched_Entities loop
          RI_Components :=
            Get_Entity_Components (Entity_List.all, RI_Entity_ID);
+
+         --  Use list lock before deallocating/reallocating buffers.
+         --  Claim_List waits for all Claim_Element holders to release,
+         --  preventing any concurrent reader from accessing freed memory.
+         RI_Components.PO.Claim_List; -- Updated
          declare
+            --  Avoid basic Get_Component_Ptr as it uses and creates an element lock on the entity
             RI : Render_Info_Component_T renames
               Render_Info_Component_T
-                (Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag)
-                   .Data.all);
+                (Get_Unlocked_Component_Ptr (RI_Components, Get_Component_ID (RI_Components.all, Render_Info_Component_T'Tag))
+                   .all);
          begin
             if RI.Terminal_Width /= New_Width
               or else RI.Terminal_Height /= New_Height
@@ -485,11 +503,6 @@ package body ECS is
                RI.Terminal_Height := New_Height;
                RI.Prev_Terminal_Width := Natural (New_Width);
                RI.Prev_Terminal_Height := Natural (New_Height);
-
-               --  Upgrade to list lock before deallocating/reallocating buffers.
-               --  Claim_List waits for all Claim_Element holders to release,
-               --  preventing any concurrent reader from accessing freed memory.
-               RI_Components.PO.Claim_List; -- Updated
                declare
                   Old_0 : Pixel_Array_Ptr := RI.Buffers (0).Data;
                   Old_1 : Pixel_Array_Ptr := RI.Buffers (1).Data;
@@ -499,12 +512,16 @@ package body ECS is
                end;
                RI.Buffers (0) := Create_Buffer (New_Width, New_Height);
                RI.Buffers (1) := Create_Buffer (New_Width, New_Height);
-               RI_Components.PO.Release_List; -- Updated
 
-               Mark_All_Flex_Dirty (Entity_List.all);
+               Mark_Dirty := True;
             end if;
          end;
+         RI_Components.PO.Release_List; -- Updated
       end loop;
+
+      if Mark_Dirty then
+         Mark_All_Flex_Dirty (Entity_List.all);
+      end if;
 
       declare
          Root_CP : constant Components_Ptr :=
