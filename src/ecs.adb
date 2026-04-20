@@ -472,35 +472,49 @@ package body ECS is
       for RI_Entity_ID of Matched_Entities loop
          RI_Components :=
            Get_Entity_Components (Entity_List.all, RI_Entity_ID);
+
+         --  Claim the list lock up front.  We must NOT hold a
+         --  Component_Class_Ref (Claim_Element) into the same PO while
+         --  trying to acquire Claim_List — the list-entry guard
+         --  (Element_Using = 0) would then never open and the task
+         --  would deadlock against itself.  Accessing the component
+         --  directly through the Components_Map under the list lock
+         --  bypasses Get_Component_Ptr and avoids the element bump.
          declare
-            RI : Render_Info_Component_T renames
-              Render_Info_Component_T
-                (Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag)
-                   .Data.all);
+            Did_Resize : Boolean := False;
          begin
-            if RI.Terminal_Width /= New_Width
-              or else RI.Terminal_Height /= New_Height
-            then
-               RI.Terminal_Width := New_Width;
-               RI.Terminal_Height := New_Height;
-               RI.Prev_Terminal_Width := Natural (New_Width);
-               RI.Prev_Terminal_Height := Natural (New_Height);
+            RI_Components.PO.Claim_List;
+            declare
+               CID : constant Component_Id :=
+                 Get_Component_ID
+                   (RI_Components.all, Render_Info_Component_T'Tag);
+               RI  : Render_Info_Component_T renames
+                 Render_Info_Component_T
+                   (RI_Components.all.Components_Map.Reference (CID)
+                      .Element.all);
+            begin
+               if RI.Terminal_Width /= New_Width
+                 or else RI.Terminal_Height /= New_Height
+               then
+                  declare
+                     Old_0 : Pixel_Array_Ptr := RI.Buffers (0).Data;
+                     Old_1 : Pixel_Array_Ptr := RI.Buffers (1).Data;
+                  begin
+                     Free_Pixel_Array (Old_0);
+                     Free_Pixel_Array (Old_1);
+                  end;
+                  RI.Terminal_Width := New_Width;
+                  RI.Terminal_Height := New_Height;
+                  RI.Prev_Terminal_Width := Natural (New_Width);
+                  RI.Prev_Terminal_Height := Natural (New_Height);
+                  RI.Buffers (0) := Create_Buffer (New_Width, New_Height);
+                  RI.Buffers (1) := Create_Buffer (New_Width, New_Height);
+                  Did_Resize := True;
+               end if;
+            end;
+            RI_Components.PO.Release_List;
 
-               --  Upgrade to list lock before deallocating/reallocating buffers.
-               --  Claim_List waits for all Claim_Element holders to release,
-               --  preventing any concurrent reader from accessing freed memory.
-               RI_Components.PO.Claim_List; -- Updated
-               declare
-                  Old_0 : Pixel_Array_Ptr := RI.Buffers (0).Data;
-                  Old_1 : Pixel_Array_Ptr := RI.Buffers (1).Data;
-               begin
-                  Free_Pixel_Array (Old_0);
-                  Free_Pixel_Array (Old_1);
-               end;
-               RI.Buffers (0) := Create_Buffer (New_Width, New_Height);
-               RI.Buffers (1) := Create_Buffer (New_Width, New_Height);
-               RI_Components.PO.Release_List; -- Updated
-
+            if Did_Resize then
                Mark_All_Flex_Dirty (Entity_List.all);
             end if;
          end;

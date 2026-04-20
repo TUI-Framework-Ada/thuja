@@ -504,8 +504,14 @@ begin
 
    -- Poll for terminal resize each frame
       declare
-         New_W : constant TUI_Width := TUI_Width (Terminal_Size.Get_Width);
-         New_H : constant TUI_Height := TUI_Height (Terminal_Size.Get_Height);
+         New_W : constant TUI_Width :=
+           TUI_Width
+             (Natural'Min
+                (Terminal_Size.Get_Width, Natural (TUI_Width'Last)));
+         New_H : constant TUI_Height :=
+           TUI_Height
+             (Natural'Min
+                (Terminal_Size.Get_Height, Natural (TUI_Height'Last)));
       begin
          if New_W /= Term_Width or else New_H /= Term_Height then
             Term_Width := New_W;
