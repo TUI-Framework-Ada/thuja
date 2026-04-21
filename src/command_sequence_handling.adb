@@ -192,6 +192,18 @@ begin
       (Command_Entry_t'(Keys => SU.To_Unbounded_String ("efg"),
                         Name => SU.To_Unbounded_String ("E -> F -> G")));
 
+   --  4-key sequence reusing the 'a' starter.  Second letter is 's',
+   --  so "ab" is not a prefix of "asdf" — passes the validator.
+   Command_Table.Append
+      (Command_Entry_t'(Keys => SU.To_Unbounded_String ("asdf"),
+                        Name => SU.To_Unbounded_String ("Quick Save")));
+
+   --  5-key sequence reusing the 'e' starter.  Second letter is 'd',
+   --  so "efg" is not a prefix of "edcba" — passes the validator.
+   Command_Table.Append
+      (Command_Entry_t'(Keys => SU.To_Unbounded_String ("edcba"),
+                        Name => SU.To_Unbounded_String ("Reverse Mode")));
+
    --  Validate: no command may be a prefix of another.
    --  This fires at elaboration time (before main starts).
    Validate_No_Prefix_Conflicts;

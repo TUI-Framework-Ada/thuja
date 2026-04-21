@@ -14,6 +14,8 @@ use type IDs.Component_Tag_Vector.Vector;
 with Ada.Text_IO;
 with Ada.Tags; use Ada.Tags;
 with Selection;
+-- Prevents any unwanted heap memory when we redraw.
+with Ada.Unchecked_Deallocation;
 
 package body ECS is
 
@@ -450,16 +452,19 @@ package body ECS is
    --===========================================================================
 
    procedure TerminalResizeSystem
-     (Entity_List_PO : in out Entity_Components_PO)
+     (Entity_List_PO : in out Entity_Components_PO;
+      New_Width      : in TUI_Width;
+      New_Height     : in TUI_Height)
    is
+      procedure Free_Pixel_Array is new
+        Ada.Unchecked_Deallocation (Pixel_Array, Pixel_Array_Ptr);
+
       Entity_List           : Entity_Components_Ptr;
       Search_Component_Tags : Component_Tag_Vector.Vector;
       Matched_Entities      : Entity_ID_Vector.Vector;
-
-      RI_Components : Components_Ptr;
+      RI_Components         : Components_Ptr;
    begin
-      Entity_List_PO.Claim_Reading (Entity_List);
-
+      Entity_List_PO.Claim_Writing (Entity_List);
       Search_Component_Tags.Append (Render_Info_Component_T'Tag);
       Matched_Entities :=
         Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
@@ -467,23 +472,72 @@ package body ECS is
       for RI_Entity_ID of Matched_Entities loop
          RI_Components :=
            Get_Entity_Components (Entity_List.all, RI_Entity_ID);
-         declare
-            RI : Render_Info_Component_T renames
-              Render_Info_Component_T
-                (Get_Component_Ptr (RI_Components, Render_Info_Component_T'Tag)
-                   .Data.all);
-         begin
-            if RI.Terminal_Width /= TUI_Width (RI.Prev_Terminal_Width)
-              or RI.Terminal_Height /= TUI_Height (RI.Prev_Terminal_Height)
-            then
-               Mark_All_Flex_Dirty (Entity_List.all);
 
-               RI.Prev_Terminal_Width := Natural (RI.Terminal_Width);
-               RI.Prev_Terminal_Height := Natural (RI.Terminal_Height);
+         --  Claim the list lock up front.  We must NOT hold a
+         --  Component_Class_Ref (Claim_Element) into the same PO while
+         --  trying to acquire Claim_List — the list-entry guard
+         --  (Element_Using = 0) would then never open and the task
+         --  would deadlock against itself.  Accessing the component
+         --  directly through the Components_Map under the list lock
+         --  bypasses Get_Component_Ptr and avoids the element bump.
+         declare
+            Did_Resize : Boolean := False;
+         begin
+            RI_Components.PO.Claim_List;
+            declare
+               CID : constant Component_Id :=
+                 Get_Component_ID
+                   (RI_Components.all, Render_Info_Component_T'Tag);
+               RI  : Render_Info_Component_T renames
+                 Render_Info_Component_T
+                   (RI_Components.all.Components_Map.Reference (CID)
+                      .Element.all);
+            begin
+               if RI.Terminal_Width /= New_Width
+                 or else RI.Terminal_Height /= New_Height
+               then
+                  declare
+                     Old_0 : Pixel_Array_Ptr := RI.Buffers (0).Data;
+                     Old_1 : Pixel_Array_Ptr := RI.Buffers (1).Data;
+                  begin
+                     Free_Pixel_Array (Old_0);
+                     Free_Pixel_Array (Old_1);
+                  end;
+                  RI.Terminal_Width := New_Width;
+                  RI.Terminal_Height := New_Height;
+                  RI.Prev_Terminal_Width := Natural (New_Width);
+                  RI.Prev_Terminal_Height := Natural (New_Height);
+                  RI.Buffers (0) := Create_Buffer (New_Width, New_Height);
+                  RI.Buffers (1) := Create_Buffer (New_Width, New_Height);
+                  Did_Resize := True;
+               end if;
+            end;
+            RI_Components.PO.Release_List;
+
+            if Did_Resize then
+               Mark_All_Flex_Dirty (Entity_List.all);
             end if;
          end;
       end loop;
-      Entity_List_PO.Release_Reading;
+
+      declare
+         Root_CP : constant Components_Ptr :=
+           Get_Entity_Components (Entity_List.all, To_EID ("root"));
+      begin
+         if Root_CP /= null then
+            declare
+               RW : Widget_Component_T renames
+                 Widget_Component_T
+                   (Get_Component_Ptr (Root_CP, Widget_Component_T'Tag)
+                      .Data.all);
+            begin
+               RW.Size_Width := New_Width;
+               RW.Size_Height := New_Height;
+            end;
+         end if;
+      end;
+
+      Entity_List_PO.Release_Writing;
    end TerminalResizeSystem;
 
    --===========================================================================

@@ -31,7 +31,10 @@ package Standardized_tab_interface is
 
    --  Called every frame when this tab is the active tab.
    procedure Update
-     (Tab : in out Tab_T; World : in out ECS.Entity_Components_PO)
+     (Tab         : in out Tab_T;
+      World       : in out ECS.Entity_Components_PO;
+      Term_Width  : in TUI_Width;
+      Term_Height : in TUI_Height)
    is abstract;
 
 end Standardized_tab_interface;
