@@ -26,8 +26,6 @@ with Graphics;
 with Ada.Strings.Unbounded;
 use Graphics;
 with IDs;
-with Flexbox;
-
 procedure Resize_And_Movement_Demo is
 
    Loop_Count : constant Positive := 200;
@@ -49,10 +47,10 @@ procedure Resize_And_Movement_Demo is
       Terminal_Height      => 24,
       Prev_Terminal_Width  => 80,
       Prev_Terminal_Height => 24,
-      Framebuffer_1        => (Width => 80, Height => 24, Data => <>),
-      Framebuffer_2        => (Width => 80, Height => 24, Data => <>),
+      Framebuffer_1        => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_2        => (Width => 80, Height => 24, Data => new Pixel_Array),
       Drawing_FB           => new Graphics.Protected_DB,
-      Backbuffer           => (Width => 80, Height => 24, Data => <>)
+      Backbuffer           => (Width => 80, Height => 24, Data => new Pixel_Array)
    );
 
    Comp_Root_Widget : constant Components.Widget_Component_T := (
@@ -60,22 +58,22 @@ procedure Resize_And_Movement_Demo is
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 24,
-      Children      => [E_Bouncer],
-      Render_Buffer => (Width => 80, Height => 24, Data => <>),
+      Children      => IDs.Entity_ID_Vector.To_Vector (E_Bouncer, 1),
+      Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
    );
 
-   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (others => <>);
+   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (null record);
 
-   Comp_Bouncer_Widget : Components.Widget_Component_T := (
+   Comp_Bouncer_Widget : constant Components.Widget_Component_T := (
       Position_X    => 10,
       Position_Y    => 6,
       Size_Width    => 3,
       Size_Height   => 1,
-      Children      => [],
-      Render_Buffer => (Width => 3, Height => 1, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 3, Height => 1, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -153,10 +151,10 @@ begin
 
          -- If the terminal is smaller than the bouncer, shrink the widget and its render buffer to fit
          declare
-            RI_Comps : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_RenderInfo);
+            RI_Comps : constant ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_RenderInfo);
             RenderInfo_C : Components.Render_Info_Component_T renames Components.Render_Info_Component_T (
                ECS.Get_Component_Ptr (RI_Comps, "RenderInfo").all);
-            B_Comps : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_Bouncer);
+            B_Comps : constant ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_Bouncer);
             B_Widget : Components.Widget_Component_T;
             NewW_Int : Integer;
             NewH_Int : Integer;
@@ -191,12 +189,12 @@ begin
 
          -- Compute movement constrained to current terminal size so widget cannot escape
          declare
-            RI_Comps : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_RenderInfo);
+            RI_Comps : constant ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_RenderInfo);
             RenderInfo_C : Components.Render_Info_Component_T renames Components.Render_Info_Component_T (
                ECS.Get_Component_Ptr (RI_Comps, "RenderInfo").all);
-            W : Integer := Integer (RenderInfo_C.Terminal_Width);
-            H : Integer := Integer (RenderInfo_C.Terminal_Height);
-            B_Comps2 : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_Bouncer);
+            W : constant Integer := Integer (RenderInfo_C.Terminal_Width);
+            H : constant Integer := Integer (RenderInfo_C.Terminal_Height);
+            B_Comps2 : constant ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List.all, E_Bouncer);
             BW : Integer;
             BH : Integer;
             Max_X_Int : Integer;
@@ -207,7 +205,7 @@ begin
             -- Determine bouncer's current size from ECS (it may have been resized at runtime)
             if ECS.Has_Component (B_Comps2.all, IDs.To_CID ("WidgetComponent")) then
                declare
-                  Live_B_Widget : Components.Widget_Component_T := Components.Widget_Component_T (
+                  Live_B_Widget : constant Components.Widget_Component_T := Components.Widget_Component_T (
                      ECS.Get_Component (B_Comps2.all, IDs.To_CID ("WidgetComponent"))
                   );
                begin

@@ -40,11 +40,27 @@ package ECS is
                             Component : in Component_Id;
                             Component_Struct : in Component_T'Class);
 
+   procedure Add_Component (Self : in out Components;
+                            Component_Str : in String;
+                            Component_Struct : in Component_T'Class);
+
    procedure Remove_Component (Self : in out Components;
                                Component : in Component_Id);
 
+   procedure Remove_Component (Self : in out Components;
+                               Component_Str : in String);
+
+   procedure Remove_Component (Self : in out Components;
+                               Component_Tag : in Ada.Tags.Tag);
+
    function Get_Component (Self : in out Components;
                            Component : in Component_Id) return Component_T'Class;
+
+   function Get_Component (Self : in out Components;
+                           Component_Str : in String) return Component_T'Class;
+
+   function Get_Component (Self : in Components;
+                           Component_Tag : in Ada.Tags.Tag) return Component_T'Class;
 
    function Get_Component_Ptr (Self : Components_Ptr;
                                Component_Key : Component_Id)
@@ -58,9 +74,6 @@ package ECS is
                                Component_Tag : in Ada.Tags.Tag)
                                return Component_Class_Ptr;
 
-   function Get_Component (Self : in Components;
-                           Component_Tag : in Ada.Tags.Tag) return Component_T'Class;
-
    function Get_Component_ID (Self : in Components;
                               Component_Tag : in Ada.Tags.Tag) return Component_Id;
 
@@ -70,6 +83,9 @@ package ECS is
 
    function Has_Component (Self : in Components;
                            Component : in Component_Id) return Boolean;
+
+   function Has_Component (Self : in Components;
+                           Component_Str : in String) return Boolean;
 
    function Has_Component (Self : in Components;
                            Component_Tag : in Ada.Tags.Tag) return Boolean;
@@ -134,6 +150,9 @@ package ECS is
    procedure ProgressBarRenderSystem (Entity_List_PO : in out Entity_Components_PO);
    procedure DoubleBufferFlagSystem (Entity_List_PO : in out Entity_Components_PO);
 
+   procedure SelectionSystem (Entity_List_PO : in out Entity_Components_PO;
+                              Tab_Pressed : in Boolean);
+
    --===========================================================================
    -- HELPER PROCEDURES
    --===========================================================================
@@ -149,5 +168,7 @@ package ECS is
                             Widget_Entity : Entity_Id;
                             Delta_X : Integer;
                             Delta_Y : Integer);
+
+   procedure CalendarDisplaySystem (Entity_List_PO : in out Entity_Components_PO);
 
 end ECS;

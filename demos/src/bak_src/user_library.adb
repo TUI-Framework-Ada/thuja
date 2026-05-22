@@ -21,7 +21,7 @@ package body User_Library is
       Gp : Float;
       Bp : Float;
    begin
-      Entity_List_PO.Claim_Reading (Entity_List);
+      Entity_List_PO.Claim_Writing (Entity_List);
       Search_Component_IDs.Append (IDs.To_CID ("TextComponent"));
       Search_Component_IDs.Append (IDs.To_CID ("RainbowTextComponent"));
       Matched_Entities := ECS.Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
@@ -62,7 +62,7 @@ package body User_Library is
             Text_C
                            );
       end loop;
-      Entity_List_PO.Release_Reading;
+      Entity_List_PO.Release_Writing;
    end RainbowTextSystem;
 
 
@@ -133,15 +133,15 @@ package body User_Library is
       PB_C     : Progress_Bar_Component_T;
       Clamped  : Float;
    begin
-      Entity_List_PO.Claim_Reading (Entity_List);
+      Entity_List_PO.Claim_Writing (Entity_List);
       Comp_Ptr := Get_Entity_Components (Entity_List.all, E_ID);
       if Comp_Ptr = null then
-         Entity_List_PO.Release_Reading;
+         Entity_List_PO.Release_Writing;
          return;
       end if;
 
       if not Has_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")) then
-         Entity_List_PO.Release_Reading;
+         Entity_List_PO.Release_Writing;
          return;
       end if;
 
@@ -159,7 +159,7 @@ package body User_Library is
          Get_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent")));
       PB_C.Value := Clamped;
       Add_Component (Comp_Ptr.all, To_CID ("ProgressBarComponent"), PB_C);
-      Entity_List_PO.Release_Reading;
+      Entity_List_PO.Release_Writing;
    end Set_Progress;
 
    function Get_Progress
@@ -281,6 +281,7 @@ package body User_Library is
          Size_Width => 15,
          Size_Height => 4,
          Has_Focus => True,
+         Render_Buffer => Create_Buffer (15, 4),
          others => <>);
       Background_Color_C : constant Background_Color_Component_T :=
         (Background_Color => (96, 96, 96));

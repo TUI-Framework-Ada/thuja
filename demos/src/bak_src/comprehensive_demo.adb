@@ -34,15 +34,19 @@
 --  • Multi-threaded rendering at 30 FPS
 ------------------------------------------------------------------------------
 
+with Ada.Calendar;
+with Ada.Strings.Fixed;
 with Ada.Text_IO;
 with Ada.Wide_Wide_Text_IO;
 with Components;
+with Console;
 with ECS;
 with Graphics;
 with Ada.Strings;
 with Ada.Strings.Unbounded;
 use Graphics;
 with IDs;
+use type IDs.Entity_ID_Vector.Vector;
 with Flexbox;
 with Console; use Console;
 
@@ -52,7 +56,8 @@ procedure Comprehensive_Demo is
    Loop_Count : constant Positive := 300;  -- 10 seconds at 30 FPS
 
    --  ECS Entity storage
-   Entities_PO : ECS.Entity_Components_PO;
+   Entities_PO  : ECS.Entity_Components_PO;
+   Entities_Ptr : ECS.Entity_Components_Ptr;
 
    --------------------------------------------------------
    -- ENTITY DEFINITIONS
@@ -62,9 +67,9 @@ procedure Comprehensive_Demo is
    E_Header       : constant IDs.Entity_Id := IDs.To_EID ("Header");
    E_ProgressBar  : constant IDs.Entity_Id := IDs.To_EID ("ProgressBar");
    E_Sidebar      : constant IDs.Entity_Id := IDs.To_EID ("Sidebar");
+   E_Calendar     : constant IDs.Entity_Id := IDs.To_EID ("Calendar");
    E_Content      : constant IDs.Entity_Id := IDs.To_EID ("Content");
    E_MovingDot    : constant IDs.Entity_Id := IDs.To_EID ("MovingDot");
-   E_Middle : constant IDs.Entity_Id := IDs.To_EID ("Middle");
    --------------------------------------------------------
 
    --  Register entities
@@ -73,10 +78,10 @@ procedure Comprehensive_Demo is
    C_Header       : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Header);
    C_ProgressBar  : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_ProgressBar);
    C_Sidebar      : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Sidebar);
+   C_Calendar     : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Calendar);
    C_Content      : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Content);
    C_MovingDot    : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_MovingDot);
-   C_Middle : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E_Middle);
-   
+
    --------------------------------------------------------
    -- COMPONENT DEFINITIONS
    --------------------------------------------------------
@@ -87,10 +92,10 @@ procedure Comprehensive_Demo is
       Terminal_Height     => 24,
       Prev_Terminal_Width => 80,
       Prev_Terminal_Height => 24,
-      Framebuffer_1       => (Width => 80, Height => 24, Data => <>),
-      Framebuffer_2       => (Width => 80, Height => 24, Data => <>),
+      Framebuffer_1       => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_2       => (Width => 80, Height => 24, Data => new Pixel_Array),
       Drawing_FB          => new Graphics.Protected_DB,
-      Backbuffer          => (Width => 80, Height => 24, Data => <>)
+      Backbuffer          => (Width => 80, Height => 24, Data => new Pixel_Array)
    );
 
    --  Root Widget: Main container using Column layout
@@ -99,15 +104,14 @@ procedure Comprehensive_Demo is
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 24,
-      Children      => [E_Header, E_ProgressBar, E_Sidebar, E_Content, E_MovingDot],
-      --Children      => [E_Header, E_ProgressBar, E_Middle, E_MovingDot],
-      Render_Buffer => (Width => 80, Height => 24, Data => <>),
+      Children      => IDs.Entity_ID_Vector.To_Vector (E_Header, 1) & E_ProgressBar & E_Sidebar & E_Content & E_MovingDot,
+      Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
    );
 
-   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (others => <>);
+   Comp_Root_Marker : constant Components.Root_Widget_Component_T := (null record);
 
    --  Root Flexbox Layout: Vertical stacking (Column)
    Comp_Root_Flex : constant Components.Flex_Layout_Component_T := (
@@ -174,8 +178,8 @@ procedure Comprehensive_Demo is
       Position_Y    => 1,
       Size_Width    => 80,
       Size_Height   => 3,
-      Children      => [],
-      Render_Buffer => (Width => 80, Height => 3, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 80, Height => 3, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -206,8 +210,8 @@ procedure Comprehensive_Demo is
       Position_Y    => 4,
       Size_Width    => 80,
       Size_Height   => 1,
-      Children      => [],
-      Render_Buffer => (Width => 80, Height => 1, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 80, Height => 1, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -233,13 +237,40 @@ procedure Comprehensive_Demo is
    );
 
    --  Sidebar Widget: Green, 20 columns wide
+
+   --  Sidebar Flexbox Layout: Horizontal stacking (Row, single child)
+   Comp_Sidebar_Flex : constant Components.Flex_Layout_Component_T := (
+      Flex_Container => (
+         Width      => 40,
+         Height     => 10,
+         Direction  => Flexbox.Row,
+         Justify    => Flexbox.Flex_Start,
+         Align      => Flexbox.Flex_Start,
+         Item_Count => 1,  --  Calendar
+         Items      => new Flexbox.Flex_Item_Array'(
+            --  Calendar child
+            1 => (
+               Related_Entity => E_Calendar,
+               Flex_Basis     => 10,
+               Flex_Grow      => 1.0,
+               Flex_Shrink    => 1.0,
+               Computed_Size  => 10,
+               Cross_Size     => 40,
+               Position_X     => 0,
+               Position_Y     => 0
+            )
+         )
+      ),
+      Is_Dirty => True
+   );
+
    Comp_Sidebar_Widget : constant Components.Widget_Component_T := (
       Position_X    => 1,
       Position_Y    => 5,
       Size_Width    => 20,
       Size_Height   => 10,
-      Children      => [],
-      Render_Buffer => (Width => 20, Height => 10, Data => <>),
+      Children      => IDs.Entity_ID_Vector.To_Vector (E_Calendar, 1),
+      Render_Buffer => (Width => 20, Height => 10, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -250,7 +281,7 @@ procedure Comprehensive_Demo is
    );
 
    Comp_Sidebar_Text : constant Components.Text_Component_T := (
-      Text          => Ada.Strings.Unbounded.To_Unbounded_String ("SIDEBAR"),
+      Text          => Ada.Strings.Unbounded.To_Unbounded_String (Ada.Strings.Fixed."*" (70, "") & "SIDEBAR"),
       Text_Color    => Graphics.Black,
       Offset_X      => 1,
       Offset_Y      => 2,
@@ -264,14 +295,42 @@ procedure Comprehensive_Demo is
       Mode => Components.Flex
    );
 
+   --  Calendar Widget: Black, 20 columns wide
+   Comp_Calendar_Widget : constant Components.Widget_Component_T := (
+      Position_X    => 1,
+      Position_Y    => 5,
+      Size_Width    => 20,
+      Size_Height   => 10,
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 20, Height => 10, Data => new Pixel_Array),
+      Has_Focus     => False,
+      Is_Visible    => True,
+      Is_Enabled    => True
+   );
+
+   Comp_Calendar_BG : constant Components.Background_Color_Component_T := (
+      Background_Color => Graphics.Black
+   );
+
+   Comp_Calendar_Calendar : constant Components.Calendar_Component_T := (
+      Display_Mode => Components.Month_Page,
+      Year => Ada.Calendar.Year (Ada.Calendar.Clock),
+      Month => Ada.Calendar.Month (Ada.Calendar.Clock),
+      Day => Ada.Calendar.Day (Ada.Calendar.Clock)
+   );
+
+   Comp_Calendar_PositionMode : constant Components.Position_Mode_Component_T := (
+      Mode => Components.Flex
+   );
+
    --  Content Area Widget: Red, grows to fill space
    Comp_Content_Widget : constant Components.Widget_Component_T := (
       Position_X    => 21,
       Position_Y    => 5,
       Size_Width    => 60,
       Size_Height   => 10,
-      Children      => [],
-      Render_Buffer => (Width => 60, Height => 10, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 60, Height => 10, Data => new Pixel_Array),
       Has_Focus     => False,
       Is_Visible    => True,
       Is_Enabled    => True
@@ -297,20 +356,20 @@ procedure Comprehensive_Demo is
    );
 
    --  Moving Dot Widget: Yellow, uses ABSOLUTE positioning
-   Comp_MovingDot_Widget : Components.Widget_Component_T := (
+   Comp_MovingDot_Widget : constant Components.Widget_Component_T := (
       Position_X    => 40,
       Position_Y    => 12,
       Size_Width    => 1,
       Size_Height   => 1,
-      Children      => [],
-      Render_Buffer => (Width => 1, Height => 1, Data => <>),
+      Children      => IDs.Entity_ID_Vector.Empty_Vector,
+      Render_Buffer => (Width => 1, Height => 1, Data => new Pixel_Array),
       Has_Focus     => True,
       Is_Visible    => True,
       Is_Enabled    => True
    );
 
    Comp_MovingDot_BG : constant Components.Background_Color_Component_T := (
-      Background_Color => Graphics.Black
+      Background_Color => Graphics.Yellow
    );
 
    Comp_MovingDot_PositionMode : constant Components.Position_Mode_Component_T := (
@@ -350,7 +409,6 @@ procedure Comprehensive_Demo is
    task Render_Thread;
 
    task body Render_Thread is
-      Entity_List : ECS.Entity_Components_Ptr;
    begin
       Graphics.Clear_Screen;
       loop
@@ -368,13 +426,14 @@ procedure Comprehensive_Demo is
 begin
 
    -- VT_PROCESSING with new Set_Cursor_Visible
-   -- NOTE: Hide_Cursor/Show_Cursor cannot be mixed with Set_Cursor_Visible otherwise
-   -- it may over all just be ignored and show cursor regardless of command
-   -- If running windows demo utilize Set_Cursor_Visible otherwise utilize
-   -- Hide_Cursor/Show_Cursor on Linux? Confirm this with Linux users.
+   -- NOTE: Enable_VT_Processing and Set_Cursor_Visible now use OS-specific
+   -- .adb files, defined under /os, in the package Console.
+   -- If running on Windows, alire will pull from /os/windows,
+   -- otherwise it will use /os/others.
+   -- On non-Windows platforms, Enable_VT_Processing does nothing, and
+   -- the Set_Cursor_Visible subprogram will just use Graphics.Hide/Show_Cursor
    Console.Enable_VT_Processing;
    Console.Set_Cursor_Visible (False);
-   -- Graphics.Hide_Cursor;
    Graphics.Save_Cursor_Position;
    Graphics.Clear_Screen;
    Ada.Wide_Wide_Text_IO.Flush;
@@ -382,6 +441,9 @@ begin
    --------------------------------------------------------
    -- REGISTER ALL COMPONENTS
    --------------------------------------------------------
+
+   --  Claim entity list during setup
+   Entities_PO.Claim_Writing (Entities_Ptr);
 
    --  RenderInfo
    ECS.Add_Component (C_RenderInfo.all, IDs.To_CID ("RenderInfo"), Comp_RenderInfo);
@@ -408,6 +470,13 @@ begin
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Sidebar_BG);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("TextComponent"), Comp_Sidebar_Text);
    ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("PositionMode"), Comp_Sidebar_PositionMode);
+   ECS.Add_Component (C_Sidebar.all, IDs.To_CID ("FlexLayoutComponent"), Comp_Sidebar_Flex);
+
+   --  Calendar
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("WidgetComponent"), Comp_Calendar_Widget);
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("BackgroundColorComponent"), Comp_Calendar_BG);
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("TextComponent"), Comp_Calendar_Calendar);
+   ECS.Add_Component (C_Calendar.all, IDs.To_CID ("PositionMode"), Comp_Calendar_PositionMode);
 
    --  Content
    ECS.Add_Component (C_Content.all, IDs.To_CID ("WidgetComponent"), Comp_Content_Widget);
@@ -420,14 +489,13 @@ begin
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("BackgroundColorComponent"), Comp_MovingDot_BG);
    ECS.Add_Component (C_MovingDot.all, IDs.To_CID ("PositionMode"), Comp_MovingDot_PositionMode);
 
+   --  Release entity list after setup
+   Entities_PO.Release_Writing;
+
    --------------------------------------------------------
    -- MAIN LOOP
    --------------------------------------------------------
    for Loop_Index in 1 .. Loop_Count loop
-      declare
-         Entity_List : ECS.Entity_Components_Ptr;
-      begin
-
          --  SYSTEM 1: Terminal Resize Detection (NEW FEATURE!)
          ECS.TerminalResizeSystem (Entities_PO);
 
@@ -437,7 +505,9 @@ begin
          --  UPDATE PROGRESS BAR (Animate from 0% to 100%)
          Progress := Float (Loop_Index) / Float (Loop_Count);
          Comp_ProgressBar.Value := Progress;
+         Entities_PO.Claim_Writing (Entities_Ptr);
          ECS.Add_Component (C_ProgressBar.all, IDs.To_CID ("ProgressBarComponent"), Comp_ProgressBar);
+         Entities_PO.Release_Writing;
 
          --  MOVE THE DOT (keep it constrained inside the SIDEBAR)
          --  Compute next position then clamp/bounce against the live Sidebar widget bounds
@@ -477,7 +547,7 @@ begin
             -- Bounce and clamp: ensure the entire moving widget fits inside target bounds
             -- If the moving widget has width/height > 1, account for that by using its size
             declare
-               Mov_Comps : ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List_Write.all, E_MovingDot);
+               Mov_Comps : constant ECS.Components_Ptr := ECS.Get_Entity_Components (Entity_List_Write.all, E_MovingDot);
                Mov_W : Integer := 1;
                Mov_H : Integer := 1;
             begin
@@ -535,13 +605,13 @@ begin
 
          --  SYSTEM 3-7: Rendering pipeline
          ECS.WidgetBackgroundSystem (Entities_PO);
+         ECS.CalendarDisplaySystem (Entities_PO); --  New, renders a calendar / date
          ECS.TextRenderSystem (Entities_PO);
          ECS.ProgressBarRenderSystem (Entities_PO);  -- NEW FEATURE!
          ECS.BufferCopySystem (Entities_PO);
          ECS.DoubleBufferFlagSystem (Entities_PO);
 
          delay Duration (0.033);  -- ~30 FPS
-      end;
    end loop;
 
    --  Stop render thread before applying manual screen updates

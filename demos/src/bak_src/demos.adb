@@ -47,8 +47,9 @@
 with Ada.Text_IO;
 with Components;
 with ECS;
-with Graphics;
+with Graphics; use Graphics;
 with IDs;
+use type IDs.Entity_ID_Vector.Vector;
 -- FLEXBOX INTEGRATION: Import Flexbox to configure the layout
 with Flexbox;
 
@@ -58,7 +59,7 @@ procedure Demos is
    Loop_Count : constant Positive := 100;
 
    --  Variables for Thuja
-   Entities : ECS.Entity_Components;
+   Entities_PO : ECS.Entity_Components_PO;
 
    --------------------------------------------------------
    -- 1. DEFINE ENTITIES
@@ -69,10 +70,10 @@ procedure Demos is
    E4_ID : constant IDs.Entity_Id := IDs.To_EID ("Red Content");
 
    --  Register entities
-   E1_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E1_ID);
-   E2_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E2_ID);
-   E3_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E3_ID);
-   E4_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities, E4_ID);
+   E1_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E1_ID);
+   E2_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E2_ID);
+   E3_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E3_ID);
+   E4_C : constant ECS.Components_Ptr := ECS.Add_Entity (Entities_PO, E4_ID);
 
    --------------------------------------------------------
    -- 2. DEFINE COMPONENTS
@@ -80,12 +81,14 @@ procedure Demos is
 
    -- E1: Render Info (Standard)
    E1_RIC : constant Components.Render_Info_Component_T := (
-      Terminal_Width => 80,
-      Terminal_Height => 24,
-      Framebuffer_1 => (Width => 80, Height => 24, Data => <>),
-      Framebuffer_2 => (Width => 80, Height => 24, Data => <>),
+      Terminal_Width       => 80,
+      Terminal_Height      => 24,
+      Prev_Terminal_Width  => 80,
+      Prev_Terminal_Height => 24,
+      Framebuffer_1 => (Width => 80, Height => 24, Data => new Pixel_Array),
+      Framebuffer_2 => (Width => 80, Height => 24, Data => new Pixel_Array),
       Drawing_FB => new Graphics.Protected_DB,
-      Backbuffer => (Width => 80, Height => 24, Data => <>)
+      Backbuffer => (Width => 80, Height => 24, Data => new Pixel_Array)
    );
 
    -- E2: Root Widget (The Container)
@@ -93,15 +96,14 @@ procedure Demos is
    E2_WC : constant Components.Widget_Component_T := (
       Position_X => 1, Position_Y => 1,
       Size_Width => 80, Size_Height => 24,
-      Children => [E3_ID, E4_ID], -- Render both children
-      Render_Buffer => (Width => 80, Height => 24, Data => <>),
+      Children => IDs.Entity_ID_Vector.To_Vector (E3_ID, 1) & E4_ID, -- Render both children
+      Render_Buffer => (Width => 80, Height => 24, Data => new Pixel_Array),
       Has_Focus => False,
       Is_Visible => True,    -- Required Field
       Is_Enabled => True     -- Required Field
    );
 
-   -- We can use others => <> here if the type has defaults for everything else
-   E2_RWC : constant Components.Root_Widget_Component_T := (others => <>);
+   E2_RWC : constant Components.Root_Widget_Component_T := (null record);
 
    -- FLEXBOX INTEGRATION: Define the Layout Logic
    -- PROOF OF WORK:
@@ -150,8 +152,8 @@ procedure Demos is
       Position_X => 1, Position_Y => 1,
       Size_Width => 1, Size_Height => 1,
       Has_Focus => True,
-      Render_Buffer => (Width => 20, Height => 24, Data => <>),
-      Children => [],
+      Render_Buffer => (Width => 20, Height => 24, Data => new Pixel_Array),
+      Children => IDs.Entity_ID_Vector.Empty_Vector,
       Is_Visible => True,    -- Required Field
       Is_Enabled => True     -- Required Field
    );
@@ -165,8 +167,8 @@ procedure Demos is
       Position_X => 1, Position_Y => 1,
       Size_Width => 1, Size_Height => 1,
       Has_Focus => False,
-      Render_Buffer => (Width => 60, Height => 24, Data => <>),
-      Children => [],
+      Render_Buffer => (Width => 60, Height => 24, Data => new Pixel_Array),
+      Children => IDs.Entity_ID_Vector.Empty_Vector,
       Is_Visible => True,    -- Required Field
       Is_Enabled => True     -- Required Field
    );
@@ -201,8 +203,6 @@ begin
    -- Child 1 (Green Sidebar)
    ECS.Add_Component (E3_C.all, IDs.To_CID ("WidgetComponent"), E3_WC);
    ECS.Add_Component (E3_C.all, IDs.To_CID ("BackgroundColorComponent"), E3_BCC);
-   ECS.Add_Component (E3_C.all, IDs.To_CID ("TextComponent"), E3_TC);
-   ECS.Add_Component (E3_C.all, IDs.To_CID ("RainbowTextComponent"), E3_CC);
 
    -- Child 2 (Red Content)
    ECS.Add_Component (E4_C.all, IDs.To_CID ("WidgetComponent"), E4_WC);
@@ -214,11 +214,11 @@ begin
    -- MAIN LOOP
    --------------------------------------------------------
    for Loop_Index in Positive'First .. Loop_Count loop
-      ECS.FlexLayoutSystem (Entities);
-      ECS.WidgetBackgroundSystem (Entities);
-      ECS.TextRenderSystem (Entities);
-      ECS.BufferCopySystem (Entities);
-      ECS.DoubleBufferFlagSystem (Entities);
+      ECS.FlexLayoutSystem (Entities_PO);
+      ECS.WidgetBackgroundSystem (Entities_PO);
+      ECS.TextRenderSystem (Entities_PO);
+      ECS.BufferCopySystem (Entities_PO);
+      ECS.DoubleBufferFlagSystem (Entities_PO);
 
       delay Duration (0.1);
    end loop;

@@ -2,13 +2,17 @@
 -- ECS.ADB - Entity Component System Implementation
 --==============================================================================
 
+with Ada.Calendar;
+with Ada.Calendar.Arithmetic;
+with Ada.Containers.Indefinite_Vectors;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
 with Graphics;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
-with Ada.Wide_Wide_Text_IO;
-with Ada.Characters.Conversions;
+with Ada.Text_IO;
 with Ada.Tags; use Ada.Tags;
+with Selection;
 
 package body ECS is
 
@@ -39,10 +43,30 @@ package body ECS is
       Self.Components_Map.Include (Component, Component_Struct);
    end Add_Component;
 
+   procedure Add_Component (Self : in out Components;
+                            Component_Str : in String;
+                            Component_Struct : in Component_T'Class) is
+   begin
+      Add_Component (Self, To_CID (Component_Str), Component_Struct);
+   end Add_Component;
+
    procedure Remove_Component (Self : in out Components;
                                Component : in Component_Id) is
    begin
       Self.Components_Map.Exclude (Component);
+   end Remove_Component;
+
+   procedure Remove_Component (Self : in out Components;
+                               Component_Str : in String) is
+   begin
+      Remove_Component (Self, To_CID (Component_Str));
+   end Remove_Component;
+
+   procedure Remove_Component (Self : in out Components;
+                               Component_Tag : in Ada.Tags.Tag) is
+      Component : Component_Id := Get_Component_ID (Self, Component_Tag);
+   begin
+      Remove_Component (Self, Component);
    end Remove_Component;
 
    function Get_Component (Self : in out Components;
@@ -50,6 +74,13 @@ package body ECS is
                            return Component_T'Class is
    begin
       return Self.Components_Map (Component);
+   end Get_Component;
+
+   function Get_Component (Self : in out Components;
+                           Component_Str : in String)
+                           return Component_T'Class is
+   begin
+      return Self.Components_Map (To_CID (Component_Str));
    end Get_Component;
 
    function Get_Component (Self : in Components;
@@ -126,6 +157,12 @@ package body ECS is
    end Has_Component;
 
    function Has_Component (Self : in Components;
+                           Component_Str : in String) return Boolean is
+   begin
+      return Has_Component (Self, To_CID (Component_Str));
+   end Has_Component;
+
+   function Has_Component (Self : in Components;
                            Component_Tag : in Ada.Tags.Tag) return Boolean is
    begin
       for Component_Cursor in Self.Components_Map.Iterate loop
@@ -148,14 +185,14 @@ package body ECS is
         when not Write_Using is
       begin
          Read_Using := Read_Using + 1;
-         Entity_List := Entities'Access;
+         Entity_List := Entities'Unchecked_Access;
       end Claim_Reading;
 
       entry Claim_Writing (Entity_List : in out Entity_Components_Ptr)
         when (Read_Using = 0) and (not Write_Using) is
       begin
          Write_Using := True;
-         Entity_List := Entities'Access;
+         Entity_List := Entities'Unchecked_Access;
       end Claim_Writing;
 
       procedure Release_Reading is
@@ -202,25 +239,19 @@ package body ECS is
             Search_Component_IDs : Component_ID_Vector.Vector;
             Matched_Entities : Entity_ID_Vector.Vector;
             Component_List : Components_Ptr;
-            Widget_C : Widget_Component_T;
          begin
             Search_Component_IDs.Append (To_CID ("WidgetComponent"));
             Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_IDs);
             for EID of Matched_Entities loop
                Component_List := Get_Entity_Components (Entity_List.all, EID);
-               Widget_C := Widget_Component_T (
-                  Get_Component (Component_List.all, To_CID ("WidgetComponent"))
-                                              );
-
-               if Widget_C.Children.Contains (Id) then
-                  Widget_C.Children.Delete (Widget_C.Children.Find_Index (Id));
-               end if;
-
-               Add_Component (
-                  Get_Entity_Components (Entity_List.all, EID).all,
-                  To_CID ("WidgetComponent"),
-                  Widget_C
-               );
+               declare
+                  Widget_C : Widget_Component_T renames Widget_Component_T (
+                     Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+               begin
+                  if Widget_C.Children.Contains (Id) then
+                     Widget_C.Children.Delete (Widget_C.Children.Find_Index (Id));
+                  end if;
+               end;
             end loop;
          end;
       end if;
@@ -377,7 +408,6 @@ package body ECS is
       Matched_Entities     : Entity_ID_Vector.Vector;
 
       Parent_Comps         : Components_Ptr;
-      Parent_Widget_C      : Widget_Component_T;
 
       Child_Comps          : Components_Ptr;
       Child_Id             : Entity_Id;
@@ -396,11 +426,9 @@ package body ECS is
          declare
             Flex_C : Flex_Layout_Component_T renames Flex_Layout_Component_T (
               Get_Component_Ptr (Parent_Comps, Flex_Layout_Component_T'Tag).all);
+            Parent_Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Parent_Comps, Widget_Component_T'Tag).all);
          begin
-
-            Parent_Widget_C := Widget_Component_T (
-               Get_Component (Parent_Comps.all, Widget_Component_T'Tag)
-            );
 
             Flex_C.Flex_Container.Width := Integer (Parent_Widget_C.Size_Width);
             Flex_C.Flex_Container.Height := Integer (Parent_Widget_C.Size_Height);
@@ -502,6 +530,17 @@ package body ECS is
                   Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
                end loop;
             end loop;
+
+            --  Focus indicator: asterisk at top-left when widget is focused and selectable
+            if Widget_C.Has_Focus
+              and then Has_Component (Component_List.all, Selectable_Component_T'Tag)
+            then
+               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer,
+                                       TUI_Width'First, TUI_Height'First);
+               Px.Char := '*';
+               Set_Buffer_Pixel (Widget_C.Render_Buffer,
+                                 TUI_Width'First, TUI_Height'First, Px);
+            end if;
          end;
       end loop;
 
@@ -546,21 +585,71 @@ package body ECS is
 
             for Text_Index in Positive'First .. SU.Length(Text) loop
                Char := SU.Element (Text, Text_Index);
-               Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
-               Px.Char := Char;
-               Px.Char_Color := Text_C.Text_Color;
+               if Char = Character'Val (16#09#) then --  \t
+                  --  Find next nearest index moduloing by 4 to 1
+                  declare
+                     Dist_To_Next_Tab : constant Natural := 4 - (Natural (Pos_W) - 1) mod 4;
+                     Tab_End_Index : constant Positive := Positive (Pos_W) + Dist_To_Next_Tab;
+                     End_On_New_Line : constant Boolean := Tab_End_Index > Positive (TUI_Width'Last)
+                       or else TUI_Width (Tab_End_Index) > Widget_C.Size_Width;
+                     Post_Loop_Index : constant TUI_Width := TUI_Width'Min ((if End_On_New_Line
+                       then TUI_Width'Last
+                       else TUI_Width (Tab_End_Index)), Widget_C.Size_Width);
+                     Loop_Last_Index : constant TUI_Width := (
+                       if End_On_New_Line
+                         then Post_Loop_Index
+                         else (if Post_Loop_Index /= TUI_Width'First
+                           then Post_Loop_Index - 1
+                           else Post_Loop_Index));
+                  begin
+                     for Space_Index in Pos_W .. Loop_Last_Index loop
+                        Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H);
+                        Px.Char := ' ';
+                        Px.Char_Color := Text_C.Text_Color;
 
-               Px.Is_Bold           := Text_C.Is_Bold;
-               Px.Is_Italic         := Text_C.Is_Italic;
-               Px.Is_Underline      := Text_C.Is_Underline;
-               Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+                        Px.Is_Underline     := Text_C.Is_Underline;
+                        Px.Is_Strikethrough := Text_C.Is_Strikethrough;
 
-               Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H, Px);
+                     end loop;
 
-               Pos_W := Pos_W + 1;
-               if Pos_W > Widget_C.Size_Width then
-                  Pos_W := 1;
+                     Pos_W := Loop_Last_Index;
+                  end;
+               elsif Char = Character'Val (16#0A#) then --  \n
+                  declare
+                     Loop_Last_Index : constant TUI_Width := TUI_Width'Min (TUI_Width'Last, Widget_C.Size_Width);
+                  begin
+                     for Space_Index in Pos_W .. Loop_Last_Index loop
+                        Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H);
+                        Px.Char := ' ';
+                        Px.Char_Color := Text_C.Text_Color;
+
+                        Px.Is_Underline     := Text_C.Is_Underline;
+                        Px.Is_Strikethrough := Text_C.Is_Strikethrough;
+
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, Space_Index, Pos_H, Px);
+                     end loop;
+
+                     Pos_W := Loop_Last_Index;
+                  end;
+               else
+                  Px := Get_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H);
+                  Px.Char := Char;
+                  Px.Char_Color := Text_C.Text_Color;
+
+                  Px.Is_Bold           := Text_C.Is_Bold;
+                  Px.Is_Italic         := Text_C.Is_Italic;
+                  Px.Is_Underline      := Text_C.Is_Underline;
+                  Px.Is_Strikethrough  := Text_C.Is_Strikethrough;
+
+                  Set_Buffer_Pixel (Widget_C.Render_Buffer, Pos_W, Pos_H, Px);
+               end if;
+
+               if Pos_W = TUI_Width'Last or Pos_W >= Widget_C.Size_Width then
+                  Pos_W := Text_C.Offset_X;
                   Pos_H := Pos_H + 1;
+               else
+                  Pos_W := Pos_W + 1;
                end if;
                exit when Pos_H > Widget_C.Size_Height;
             end loop;
@@ -729,7 +818,6 @@ package body ECS is
                                      Root : Widget_Component_T;
                                      Parent : Widget_Component_T) is
          Child_Component_List : Components_Ptr;
-         Child_Widget : Widget_Component_T;
          Root_Left, Root_Right, Parent_X : TUI_Width;
          Root_Top, Root_Bottom, Parent_Y : TUI_Height;
       begin
@@ -762,10 +850,12 @@ package body ECS is
             Child_Component_List := Get_Entity_Components (
                Entity_List.all, Child_Entity_ID
                                                           );
-            Child_Widget := Widget_Component_T (
-               Get_Component (Child_Component_List.all, Widget_Component_T'Tag)
-                                               );
-            RecursiveBufferCopy (Framebuffer, Parent, Child_Widget);
+            declare
+               Child_Widget : Widget_Component_T renames Widget_Component_T (
+                  Get_Component_Ptr (Child_Component_List, Widget_Component_T'Tag).all);
+            begin
+               RecursiveBufferCopy (Framebuffer, Parent, Child_Widget);
+            end;
          end loop;
       end RecursiveBufferCopy;
 
@@ -817,10 +907,17 @@ package body ECS is
    -- SYSTEM: BUFFER DRAW (TERMINAL OUTPUT)
    --===========================================================================
 
+   --  TODO: Move code of local functions (Trim, etc) into Graphics and make
+   --    them use constant, fixed-length strings
+   --  TODO: Undo stateful optimization, replace with separated checking,
+   --    string conversion, and printing (the hot loop issue)
+   --  TODO: Compare the current framebuffer against the other one & remove
+   --    mentions to backbuffer (backbuffer is unneeded and should eventually
+   --    be removed)
    procedure BufferDrawSystem (Entity_List_PO : in out Entity_Components_PO) is
-      
+
       package GFX renames Graphics;
-      
+
       function Trim (S : String) return String is (S (S'First + 1 .. S'Last));
       function FG (P : Pixel_t) return String is
         (GFX.CSI & "38;2;" & Trim (P.Char_Color.Red'Image) & ";"
@@ -838,18 +935,9 @@ package body ECS is
         (GFX.CSI & (if P.Is_Underline then "4m" else "24m"));
       function Strikethrough (P : Pixel_t) return String is
         (GFX.CSI & (if P.Is_Strikethrough then "9m" else "29m"));
-      function Format (P : Pixel_t) return String is
-         (FG (P) & BG (P) & Bold (P) & Italic (P) & Underline (P) & Strikethrough (P));
       function Move (Row : TUI_Height; Col : TUI_Width) return String is
         (GFX.CSI & Trim (Row'Image) & ";" & Trim (Col'Image) & "H");
       Reset : constant String := GFX.CSI & "0m";
-      function Convert (P : Pixel_t; Row : TUI_Height; Col : TUI_Width) return Wide_Wide_String is
-         use Ada.Characters.Conversions;
-         Result : constant String := Move (Row, Col) & Format (P) & P.Char & Reset;
-      begin 
-         return To_Wide_Wide_String (Result);
-      end Convert;
-
       Entity_List : Entity_Components_Ptr;
       Search_Components : constant Component_Tag_Vector.Vector :=
         Component_Tag_Vector.To_Vector (Render_Info_Component_T'Tag, 1);
@@ -878,8 +966,8 @@ package body ECS is
             -- Change Drawing to point to the correct framebuffer. For Skye if you want see if it can work with protected object fields.
             Drawing :=
               (if Drawing_From_FB_1
-               then RI.Framebuffer_1'Access
-               else RI.Framebuffer_2'Access);
+               then RI.Framebuffer_1'Unchecked_Access
+               else RI.Framebuffer_2'Unchecked_Access);
 
             --  Begin comparing FB to BB and drawing
             for Y in TUI_Height'First .. RI.Terminal_Height loop
@@ -900,8 +988,13 @@ package body ECS is
                      end if;
                   end;
                end loop;
-            end loop;
-            
+
+               if SU.Length (Frame_Output) > 0 then
+                  SU.Append (Frame_Output, Reset);
+                  Ada.Text_IO.Put (SU.To_String (Frame_Output));
+               end if;
+            end;
+
             --  Release RenderInfo
             RI.Drawing_FB.all.Post;
          end;
@@ -943,6 +1036,127 @@ package body ECS is
    end DoubleBufferFlagSystem;
 
    --===========================================================================
+   -- SYSTEM: SELECTION (TAB CYCLING)
+   --===========================================================================
+
+   procedure SelectionSystem (Entity_List_PO : in out Entity_Components_PO;
+                              Tab_Pressed : in Boolean) is
+      Entity_List : Entity_Components_Ptr;
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Widget_Component_T'Tag &
+        Selectable_Component_T'Tag;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+
+      --  Simple sorted list of selectable entities
+      Max_Selectables : constant := 64;
+      type Selectable_Info is record
+         EID   : Entity_Id;
+         Order : Natural;
+      end record;
+      Selectables : array (1 .. Max_Selectables) of Selectable_Info;
+      Count : Natural := 0;
+      Current_Focus : Natural := 0;
+
+      --  Temp for insertion sort
+      Temp : Selectable_Info;
+      J    : Natural;
+   begin
+      if not Tab_Pressed then
+         return;
+      end if;
+
+      Entity_List_PO.Claim_Reading (Entity_List);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
+
+      --  Build list of enabled selectable entities
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
+         declare
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+            Sel_C : Selectable_Component_T renames Selectable_Component_T (
+              Get_Component_Ptr (Component_List, Selectable_Component_T'Tag).all);
+         begin
+            if Widget_C.Is_Enabled and Count < Max_Selectables then
+               Count := Count + 1;
+               Selectables (Count) := (EID => EID, Order => Sel_C.Tab_Order);
+               if Widget_C.Has_Focus then
+                  Current_Focus := Count;
+               end if;
+            end if;
+         end;
+      end loop;
+
+      --  Sort by Tab_Order (insertion sort, small N)
+      for I in 2 .. Count loop
+         Temp := Selectables (I);
+         J := I - 1;
+         while J >= 1 and then Selectables (J).Order > Temp.Order loop
+            Selectables (J + 1) := Selectables (J);
+            J := J - 1;
+         end loop;
+         Selectables (J + 1) := Temp;
+      end loop;
+
+      --  Find Current_Focus in sorted order (index may have shifted)
+      Current_Focus := 0;
+      for I in 1 .. Count loop
+         Component_List := Get_Entity_Components (Entity_List.all, Selectables (I).EID);
+         declare
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+         begin
+            if Widget_C.Has_Focus then
+               Current_Focus := I;
+            end if;
+         end;
+      end loop;
+
+      if Count = 0 then
+         Entity_List_PO.Release_Reading;
+         return;
+      end if;
+
+      --  Compute next focus index
+      declare
+         Next_Focus : Natural;
+      begin
+         if Current_Focus = 0 or Current_Focus >= Count then
+            Next_Focus := 1;
+         else
+            Next_Focus := Current_Focus + 1;
+         end if;
+
+         --  Clear all Has_Focus, then set the next one
+         for I in 1 .. Count loop
+            Component_List := Get_Entity_Components (Entity_List.all, Selectables (I).EID);
+            declare
+               Widget_C : Widget_Component_T renames Widget_Component_T (
+                 Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+            begin
+               Widget_C.Has_Focus := (I = Next_Focus);
+            end;
+         end loop;
+
+         --  Swap widget command table based on new focus
+         Component_List := Get_Entity_Components (Entity_List.all, Selectables (Next_Focus).EID);
+         if Has_Component (Component_List.all, Command_Set_Component_T'Tag) then
+            declare
+               Cmd_Set : Command_Set_Component_T renames Command_Set_Component_T (
+                 Get_Component_Ptr (Component_List, Command_Set_Component_T'Tag).all);
+            begin
+               Selection.Activate_Widget_Commands (Cmd_Set.Commands);
+            end;
+         else
+            Selection.Deactivate_Widget_Commands;
+         end if;
+      end;
+
+      Entity_List_PO.Release_Reading;
+   end SelectionSystem;
+
+   --===========================================================================
    -- HELPER: WIDGET POSITIONING
    --===========================================================================
 
@@ -951,8 +1165,6 @@ package body ECS is
                           New_X : TUI_Width;
                           New_Y : TUI_Height) is
       Comps     : Components_Ptr;
-      Widget_ID : Component_Id;
-      Widget    : Widget_Component_T;
       Pos_Mode  : Position_Mode_Component_T;
    begin
       Comps := Get_Entity_Components (Entity_List, Widget_Entity);
@@ -968,13 +1180,13 @@ package body ECS is
       Pos_Mode.Mode := Absolute;
       Add_Component (Comps.all, To_CID ("PositionMode"), Pos_Mode);
 
-      Widget_ID := Get_Component_ID (Comps.all, Widget_Component_T'Tag);
-      Widget := Widget_Component_T (
-         Get_Component (Comps.all, Widget_ID)
-      );
-      Widget.Position_X := New_X;
-      Widget.Position_Y := New_Y;
-      Add_Component (Comps.all, Widget_ID, Widget);
+      declare
+         Widget : Widget_Component_T renames Widget_Component_T (
+            Get_Component_Ptr (Comps, Widget_Component_T'Tag).all);
+      begin
+         Widget.Position_X := New_X;
+         Widget.Position_Y := New_Y;
+      end;
    end Move_Widget;
 
    procedure Move_Widget_By (Entity_List : in out Entity_Components;
@@ -982,7 +1194,6 @@ package body ECS is
                              Delta_X : Integer;
                              Delta_Y : Integer) is
       Comps : Components_Ptr;
-      Widget : Widget_Component_T;
       New_X : Integer;
       New_Y : Integer;
    begin
@@ -996,17 +1207,236 @@ package body ECS is
          return;
       end if;
 
-      Widget := Widget_Component_T (
-         Get_Component (Comps.all, Widget_Component_T'Tag)
-      );
-
-      New_X := Integer(Widget.Position_X) + Delta_X;
-      New_Y := Integer(Widget.Position_Y) + Delta_Y;
+      declare
+         Widget : Widget_Component_T renames Widget_Component_T (
+            Get_Component_Ptr (Comps, Widget_Component_T'Tag).all);
+      begin
+         New_X := Integer(Widget.Position_X) + Delta_X;
+         New_Y := Integer(Widget.Position_Y) + Delta_Y;
+      end;
 
       New_X := Integer'Max(Integer(TUI_Width'First), New_X);
       New_Y := Integer'Max(Integer(TUI_Height'First), New_Y);
 
       Move_Widget (Entity_List, Widget_Entity, TUI_Width(New_X), TUI_Height(New_Y));
    end Move_Widget_By;
+
+   --  TODO: Remove dependency on text components, add custom rendering to
+   --    enable highlighting substrings for highlighting of cursor/chosen day
+   procedure CalendarDisplaySystem (Entity_List_PO : in out Entity_Components_PO) is
+      function Trim (S : String) return String is (
+         S (S'First + 1 .. S'Last)
+      );
+      function Pad (S : String; C : Character := '0') return String is (
+         (if S'Length = 1 then "" & C else "") & S
+      );
+      Entity_List : Entity_Components_Ptr;
+      --  Search for widgets with text and calendar components
+      Search_Component_Tags : constant Component_Tag_Vector.Vector :=
+        Widget_Component_T'Tag &
+        Calendar_Component_T'Tag;
+      Matched_Entities : Entity_ID_Vector.Vector;
+      Component_List : Components_Ptr;
+
+      package String_Vector_P is new
+        Ada.Containers.Indefinite_Vectors
+          (Index_Type => Natural,
+           Element_Type => String);
+      use String_Vector_P;
+
+      --  Values to strings
+      Weekdays : constant String_Vector_P.Vector := String_Vector_P.To_Vector ("Sunday", 1)
+        & "Monday" & "Tuesday" & "Wednesday" & "Thursday" & "Friday" & "Saturday";
+      Months : constant String_Vector_P.Vector := String_Vector_P.To_Vector ("Jan", 1)
+        & "Feb" & "Mar" & "Apr" & "May" & "Jun" & "Jul" & "Aug" & "Sep" & "Oct" & "Nov" & "Dec";
+
+      --  Values for Rata Die calculation of weekdays
+      --  Earliest date possible with Ada.Calendar.Time
+      Rata_Die_Date : constant Ada.Calendar.Time := Ada.Calendar.Time_Of (1901, 1, 1);
+      --  Weekday range 0-6, Sunday is 0
+      Rata_Die_Weekday : constant Natural := 2; --  Tuesday, Jan. 1, 1901
+   begin
+
+      --  Wait for inclusive lock for entity list
+      Entity_List_PO.Claim_Reading (Entity_List);
+      Matched_Entities := Get_Entities_Matching (Entity_List.all, Search_Component_Tags);
+
+      for EID of Matched_Entities loop
+         Component_List := Get_Entity_Components (Entity_List.all, EID);
+         declare
+            --  Obtain views to the components
+            Widget_C : Widget_Component_T renames Widget_Component_T (
+              Get_Component_Ptr (Component_List, Widget_Component_T'Tag).all);
+            Calendar_C : Calendar_Component_T renames Calendar_Component_T (
+              Get_Component_Ptr (Component_List, Calendar_Component_T'Tag).all);
+
+            Text_Width : constant Integer := Integer (Widget_C.Size_Width);
+            Text_Height : constant Integer := Integer (Widget_C.Size_Height);
+            Week_Length : constant Positive := 7;
+            --Date_Weekday : Natural := Natural (
+            --  (Ada.Calendar.Time_Of (Calendar_C.Year,
+            --                         Calendar_C.Month,
+            --                         Calendar_C.Day
+            --                        ) - Rata_Die_Date) / 86400) mod Week_Length + Rata_Die_Weekday;
+            Date_Weekday : constant Natural := Natural (Ada.Calendar.Arithmetic."-"
+              (Ada.Calendar.Time_Of (Calendar_C.Year,
+               Calendar_C.Month,
+               Calendar_C.Day), Rata_Die_Date)) mod Week_Length + Rata_Die_Weekday;
+            Space_After_Entry : Positive;
+            Trailing_Space : Natural;
+         begin
+
+            if Calendar_C.Display_Mode = Month_Page
+              and Text_Width >= 3*Week_Length-1 and Text_Height >= 9 then
+               --  Month_Page mode selected and enough size for it
+
+               declare
+                  First_Weekday : constant Natural := (Date_Weekday - Calendar_C.Day + 1) mod Week_Length;
+
+                  --  Year, row 1, left aligned
+                  Text_Year : constant String := Trim (Calendar_C.Year'Image);
+                  --  Padding. 7 = length of year + length of month abbreviation
+                  Text_Year_Pad : constant String := Ada.Strings.Fixed."*" ((Text_Width - 7), " ");
+                  --  Month, row 1, right aligned
+                  Text_Month : constant String := Months (Natural (Calendar_C.Month) - 1);
+                  --  Row 2, spacer
+                  Text_Spacer : constant String := Ada.Strings.Fixed."*" (Text_Width, "-");
+                  --  Row 3, weekday abbreviations
+                  Text_Weekdays : String (1 .. Text_Width) := Ada.Strings.Fixed."*" ((Text_Width), " ");
+                  Text_Weekdays_I : Positive := 1;
+                  --  Rows 4-9, month days
+                  Text_Days : String (1 .. Text_Width * 6) := Ada.Strings.Fixed."*" ((Text_Width * 6), " ");
+                  Text_Days_I : Positive := 1;
+                  Selected_Day_I : Positive;
+               begin
+                  --  Row 3, weekday abbreviations
+                  Space_After_Entry := (Text_Width-2*Week_Length) / (Week_Length-1);
+                  Trailing_Space := Text_Width - 2*Week_Length - Space_After_Entry*(Week_Length-1);
+                  for Weekday of Weekdays loop
+                     Text_Weekdays (Text_Weekdays_I .. Text_Weekdays_I + 1) :=
+                       Weekday (Weekday'First .. Weekday'First + 1);
+                     Text_Weekdays_I := Text_Weekdays_I + 2 + Space_After_Entry;
+                  end loop;
+
+                  --  Month-day section
+                  declare
+                     Weekday_Pos : Natural := 0;
+                     Month_End : constant Ada.Calendar.Time := Ada.Calendar.Arithmetic."-" (
+                       (if Calendar_C.Month = 12 then
+                           Ada.Calendar.Time_Of (Calendar_C.Year + 1, 1, 1)
+                        else
+                           Ada.Calendar.Time_Of (Calendar_C.Year, Calendar_C.Month + 1, 1)
+                       ), Ada.Calendar.Arithmetic.Day_Count (1));
+                     Day_Count : constant Ada.Calendar.Day_Number := Ada.Calendar.Day (Month_End);
+                  begin
+                     --  Row 4, padding to align month days to weekdays
+                     Weekday_Pos := First_Weekday;
+                     Text_Days_I := First_Weekday * (2 + Space_After_Entry) + 1;
+
+                     --  Rows 4-9, month days
+                     for Month_Day in 1 .. Positive (Day_Count) loop
+                        Text_Days (Text_Days_I .. Text_Days_I + 1) := Pad (Trim (Month_Day'Image), ' ');
+
+                        --  Record text index of selected day
+                        if Month_Day = Calendar_C.Day then
+                           Selected_Day_I := Text_Days_I;
+                        end if;
+
+                        Weekday_Pos := Weekday_Pos + 1;
+                        Text_Days_I := Text_Days_I + 2;
+
+                        if Weekday_Pos mod 7 = 0 then
+                           Text_Days_I := Text_Days_I + Trailing_Space;
+                        else
+                           Text_Days_I := Text_Days_I + Space_After_Entry;
+                        end if;
+                     end loop;
+                  end;
+
+                  --  Render text to pixels
+                  declare
+                     Combined_Text : constant String :=
+                       Text_Year & Text_Year_Pad & Text_Month &
+                       Text_Spacer &
+                       Text_Weekdays &
+                       Text_Days;
+                     Buffer_X : TUI_Width := TUI_Width'First;
+                     Buffer_Y : TUI_Height := TUI_Height'First;
+                     Current_Pixel : Pixel_t;
+                  begin
+                     for Combined_Text_Index in Combined_Text'First .. Combined_Text'Last loop
+                        --  Update pixel
+                        Current_Pixel := Get_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y);
+                        Current_Pixel.Char := Combined_Text (Combined_Text_Index);
+                        Current_Pixel.Char_Color := Graphics.White;
+                        Current_Pixel.Background_Color := Graphics.Black;
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y, Current_Pixel);
+
+                        --  Update buffer position
+                        if (Buffer_X = TUI_Width'Last
+                            or Buffer_X = TUI_Width (Text_Width)) then
+                           Buffer_X := TUI_Width'First;
+                           Buffer_Y := Buffer_Y + 1;
+                        else
+                           Buffer_X := Buffer_X + 1;
+                        end if;
+                     end loop;
+                  end;
+
+                  --  Show highlight on selected day
+                  declare
+                     Selection_X : constant TUI_Width := TUI_Width ((Natural (Selected_Day_I) - 1) mod Text_Width + 1);
+                     --  Magic 3 = # of rows preceeding the first row of days
+                     Selection_Y : constant TUI_Height := TUI_Height ((Natural (Selected_Day_I) - 1) / Text_Width + 1 + 3);
+                     Current_Pixel : Pixel_t;
+                     Swap_Color : Color_t;
+                  begin
+                     --  Invert FG and BG of selected day's pixels
+                     for X in Selection_X .. Selection_X + 1 loop
+                        Current_Pixel := Get_Buffer_Pixel (Widget_C.Render_Buffer, X, Selection_Y);
+                        Current_Pixel.Char_Color := Graphics.Black;
+                        Current_Pixel.Background_Color := Graphics.White;
+                        Set_Buffer_Pixel (Widget_C.Render_Buffer, X, Selection_Y, Current_Pixel);
+                     end loop;
+                  end;
+               end;
+            else
+               --  Not enough size or Date_String mode selected
+
+               declare
+                  Combined_Text : constant String :=
+                    Pad (Trim (Calendar_C.Year'Image) & "/") &
+                    Pad (Trim (Calendar_C.Month'Image) & "/") &
+                    Pad (Trim (Calendar_C.Day'Image) & ", ") &
+                    Weekdays (Date_Weekday);
+                  Buffer_X : TUI_Width := TUI_Width'First;
+                  Buffer_Y : TUI_Height := TUI_Height'First;
+                  Current_Pixel : Pixel_t;
+               begin
+                  for Combined_Text_Index in Combined_Text'First .. Combined_Text'Last loop
+                     --  Update pixel
+                     Current_Pixel := Get_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y);
+                     Current_Pixel.Char := Combined_Text (Combined_Text_Index);
+                     Set_Buffer_Pixel (Widget_C.Render_Buffer, Buffer_X, Buffer_Y, Current_Pixel);
+
+                     --  Update buffer position
+                     if (Buffer_X = TUI_Width'Last
+                        or Buffer_X = TUI_Width (Text_Width)) then
+                        exit when Buffer_Y = TUI_Height'Last
+                          or Buffer_Y = TUI_Height (Text_Height);
+                        Buffer_X := TUI_Width'First;
+                        Buffer_Y := Buffer_Y + 1;
+                     else
+                        Buffer_X := Buffer_X + 1;
+                     end if;
+                  end loop;
+               end;
+            end if;
+         end;
+      end loop;
+
+      --  Release lock on entity list
+      Entity_List_PO.Release_Reading;
+   end CalendarDisplaySystem;
 
 end ECS;

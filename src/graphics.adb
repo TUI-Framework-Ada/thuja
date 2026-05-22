@@ -8,7 +8,6 @@ with Ada.Characters.Conversions;
 package body Graphics is
 
    use Ada.Characters.Conversions;
-   
    --  Protected object for Buffer_Ptr for thread-safe access
    protected body Protected_DB is
       entry Wait (V : out Boolean)
@@ -108,7 +107,7 @@ package body Graphics is
    -- do not need to be re-called
    procedure Clear_Screen is
    begin
-      -- Enable VT processing first so ANSI sequences are honoured 
+      -- Enable VT processing first so ANSI sequences are honoured
       -- VT_Processing only needs to be run once at start of any demo
       -- Enable_VT_Processing;
       Ada.Wide_Wide_Text_IO.Put (To_Wide_Wide_String (

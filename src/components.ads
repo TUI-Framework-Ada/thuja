@@ -1,7 +1,9 @@
 --  components.ads
 --  Component definitions for the TUI ECS framework
 
+with Ada.Calendar;
 with Ada.Strings.Unbounded;
+with Ada.Containers.Vectors;
 with Graphics; use Graphics;
 with IDs; use IDs;
 with Flexbox; use Flexbox;
@@ -124,6 +126,47 @@ package Components is
       Show_Percentage : Boolean := True;     --  Whether to show percentage text
       Border_Left     : Character := '[';    --  Left border character
       Border_Right    : Character := ']';    --  Right border character
+   end record;
+
+   --  Selectable Component
+   --  Marks an entity as participating in Tab-cycle focus selection.
+   --  Tab_Order controls the cycling sequence (0 = auto, nonzero = explicit).
+   --  The actual focus state is stored in Widget_Component_T.Has_Focus.
+   type Selectable_Component_T is new Component_T with record
+      Tab_Order : Natural := 0;
+   end record;
+
+   --  Widget Command Entry, a single key sequence + display name pair
+   type Widget_Command_Entry_T is record
+      Keys : SU.Unbounded_String;
+      Name : SU.Unbounded_String;
+   end record;
+
+   package Widget_Command_Vectors is new Ada.Containers.Vectors
+      (Index_Type => Natural, Element_Type => Widget_Command_Entry_T);
+
+   --  Command Set Component
+   --  Attach to a selectable widget to give it its own set of key-sequence commands.
+   --  When the widget gains focus, these commands become active.
+   --  When the widget loses focus, they are deactivated.
+   type Command_Set_Component_T is new Component_T with record
+      Commands : Widget_Command_Vectors.Vector;
+   end record;
+
+   --  Controls how a calendar component displays its preview
+   type Calendar_Display_Mode is (
+      --  Include all days of the month in a formatted preview, requires at least 20h x 9v pixels
+      Month_Page,
+      --  Minimal formatting of "YYYY/MM/DD, Weekday"
+      Date_String
+   );
+
+   type Calendar_Component_T is new Component_T with record
+      Display_Mode : Calendar_Display_Mode := Month_Page; --  How to render the calendar
+
+      Year  : Ada.Calendar.Year_Number;
+      Month : Ada.Calendar.Month_Number;
+      Day   : Ada.Calendar.Day_Number;
    end record;
 
 end Components;

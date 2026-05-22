@@ -85,7 +85,7 @@ procedure Command_Palette is
    Flash_Color   : constant Color_t := (Red => 255, Green => 255, Blue => 100);
    Flash_Panel   : Natural := 0;    --  0 = no flash active
    Flash_Start   : Ada.Calendar.Time;
-   Flash_Duration : constant Duration := 2.0;
+   Flash_Duration : constant Duration := 0.5;
 
    ---------------------------------------------------------------------------
    --  Command set helpers
@@ -113,23 +113,23 @@ procedure Command_Palette is
             V.Append (Cmd ("i", "Zoom In"));
             V.Append (Cmd ("o", "Zoom Out"));
             V.Append (Cmd ("d", "Dark Mode"));
-            V.Append (Cmd ("gt", "Grid"));
-            V.Append (Cmd ("jl", "Jump Ln"));
+            V.Append (Cmd ("gt", "Grid Toggle"));
+            V.Append (Cmd ("jl", "Jump To Line"));
             V.Append (Cmd ("max", "Fullscreen"));
          when 3 =>  --  Sensors
             V.Append (Cmd ("u", "Update"));
-            V.Append (Cmd ("r", "Read"));
+            V.Append (Cmd ("r", "Read Sensor"));
             V.Append (Cmd ("l", "List All"));
             V.Append (Cmd ("pl", "Plot Data"));
-            V.Append (Cmd ("nm", "Marker"));
+            V.Append (Cmd ("nm", "New Marker"));
             V.Append (Cmd ("cal", "Calibrate"));
          when 4 =>  --  Network
-            V.Append (Cmd ("t", "Trace Rt"));
+            V.Append (Cmd ("t", "Trace Route"));
             V.Append (Cmd ("p", "Ping Host"));
             V.Append (Cmd ("h", "Host Info"));
-            V.Append (Cmd ("dn", "DNS"));
-            V.Append (Cmd ("cv", "Conn VPN"));
-            V.Append (Cmd ("lsn", "Nodes"));
+            V.Append (Cmd ("dn", "DNS Lookup"));
+            V.Append (Cmd ("cv", "Connect VPN"));
+            V.Append (Cmd ("lsn", "List Nodes"));
          when 5 =>  --  Build
             V.Append (Cmd ("m", "Make"));
             V.Append (Cmd ("r", "Run"));
@@ -139,11 +139,11 @@ procedure Command_Palette is
             V.Append (Cmd ("log", "View Log"));
          when 6 =>  --  Config
             V.Append (Cmd ("v", "Validate"));
-            V.Append (Cmd ("e", "Edit"));
+            V.Append (Cmd ("e", "Edit Config"));
             V.Append (Cmd ("s", "Show All"));
             V.Append (Cmd ("as", "Auto Save"));
-            V.Append (Cmd ("qw", "Wizard"));
-            V.Append (Cmd ("rst", "Reset"));
+            V.Append (Cmd ("qw", "Quick Wizard"));
+            V.Append (Cmd ("rst", "Reset Defaults"));
          when others =>
             null;
       end case;
@@ -563,7 +563,7 @@ begin
    Create_Render_Info;
 
    --  Create status lines before panels (panels register them as children)
-   Create_Text_Entity ("commands_line", 2, 18, 78,
+   Create_Text_Entity ("commands_line", 2, 18, 76,
       "[Files] " & Format_Commands (1), White, Black);
    Create_Text_Entity ("buffer_line", 2, 20, 76, "Buffer:", Gray, Black);
    Create_Text_Entity ("status_line", 2, 22, 76, "Ready.", White, Black);
