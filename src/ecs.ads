@@ -102,6 +102,7 @@ package ECS is
       Write_Using : Boolean := False;
       Entities : aliased Entity_Components;
    end Entity_Components_PO;
+   type Entity_Components_PO_Ptr is access all Entity_Components_PO;
 
    --===========================================================================
    -- ENTITY OPERATIONS

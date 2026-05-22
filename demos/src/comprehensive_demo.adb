@@ -44,6 +44,7 @@ with Ada.Strings.Unbounded;
 use Graphics;
 with IDs;
 with Flexbox;
+with Console; use Console;
 
 procedure Comprehensive_Demo is
 
@@ -281,7 +282,7 @@ procedure Comprehensive_Demo is
    );
 
    Comp_Content_Text : constant Components.Text_Component_T := (
-      Text          => Ada.Strings.Unbounded.To_Unbounded_String ("CONTENT AREA - Watch the yellow dot or the progress bar maybe!"),
+      Text          => Ada.Strings.Unbounded.To_Unbounded_String ("CONTENT AREA - Watch the dot or the progress bar maybe!"),
       Text_Color    => Graphics.White,
       Offset_X      => 1,
       Offset_Y      => 2,
@@ -371,8 +372,8 @@ begin
    -- it may over all just be ignored and show cursor regardless of command
    -- If running windows demo utilize Set_Cursor_Visible otherwise utilize
    -- Hide_Cursor/Show_Cursor on Linux? Confirm this with Linux users.
-   Graphics.Enable_VT_Processing;
-   Graphics.Set_Cursor_Visible (False);
+   Console.Enable_VT_Processing;
+   Console.Set_Cursor_Visible (False);
    -- Graphics.Hide_Cursor;
    Graphics.Save_Cursor_Position;
    Graphics.Clear_Screen;
@@ -562,7 +563,7 @@ begin
    Ada.Text_IO.Put_Line ("Thank you for using Thuja!");
 
    -- VT_PROCESSING with new Set_Cursor_Visible
-   Graphics.Set_Cursor_Visible (True);
+   Console.Set_Cursor_Visible (True);
    --Graphics.Show_Cursor;
    Graphics.Restore_Cursor_Position;
    Ada.Wide_Wide_Text_IO.Flush;

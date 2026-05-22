@@ -4,6 +4,7 @@
 
 with Ada.Strings.Unbounded;
 with Flexbox; use Flexbox;
+with Graphics;
 with IDs; use type IDs.Component_Tag_Vector.Vector;
 with Ada.Wide_Wide_Text_IO;
 with Ada.Characters.Conversions;
@@ -883,18 +884,21 @@ package body ECS is
             --  Begin comparing FB to BB and drawing
             for Y in TUI_Height'First .. RI.Terminal_Height loop
                for X in TUI_Width'First .. RI.Terminal_Width loop
-                  if Get_Buffer_Pixel (Drawing.all, X, Y)
-                    /= Get_Buffer_Pixel (RI.Backbuffer, X, Y)
-                  then
-                     --  Fetch buffer pixels
-                     FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
+                  declare
+                     P0 : Graphics.Pixel_t := Get_Buffer_Pixel (Drawing.all, X, Y);
+                     P1 : Graphics.Pixel_t := Get_Buffer_Pixel (RI.Backbuffer, X, Y);
+                  begin
+                     if P0 /= P1 then
+                        --  Fetch buffer pixels
+                        FB_Pixel := Get_Buffer_Pixel (Drawing.all, X, Y);
 
-                     -- Draw to terminal
-                     Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
+                        -- Draw to terminal
+                        Ada.Wide_Wide_Text_IO.Put (Convert (FB_Pixel, Y, X));
 
-                     -- Update backbuffer
-                     Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
-                  end if;
+                        -- Update backbuffer
+                        Set_Buffer_Pixel (RI.Backbuffer, X, Y, FB_Pixel);
+                     end if;
+                  end;
                end loop;
             end loop;
             

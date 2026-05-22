@@ -20,7 +20,7 @@ procedure HTop_Demo is
    use type SS.Process_Array_Ptr;
 
    --  Main entity system
-   Entity_System : Entity_Components_PO;
+   Entity_System : Entity_Components_PO_Ptr := new Entity_Components_PO;
    
    --  Entity IDs
    Render_Info_Entity : Entity_Id;
@@ -96,7 +96,7 @@ procedure HTop_Demo is
       
       --  Create RenderInfo entity
       Render_Info_Entity := To_EID("RenderInfo");
-      Comps := Add_Entity(Entity_System, Render_Info_Entity);
+      Comps := Add_Entity(Entity_System.all, Render_Info_Entity);
       
       RI.Framebuffer_1 := Create_Buffer(80, 50);
       RI.Framebuffer_2 := Create_Buffer(80, 50);
@@ -111,7 +111,7 @@ procedure HTop_Demo is
       
       --  Create root widget
       Root_Widget_Entity := To_EID("RootWidget");
-      Comps := Add_Entity(Entity_System, Root_Widget_Entity);
+      Comps := Add_Entity(Entity_System.all, Root_Widget_Entity);
       
       Root_Widget.Position_X := 1;
       Root_Widget.Position_Y := 1;
@@ -128,7 +128,7 @@ procedure HTop_Demo is
       
       --  Title Widget
       Title_Entity := To_EID("Title");
-      Comps := Add_Entity(Entity_System, Title_Entity);
+      Comps := Add_Entity(Entity_System.all, Title_Entity);
       
       Widget_C.Position_X := 2;
       Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -169,7 +169,7 @@ procedure HTop_Demo is
       for C in 0 .. Num_Cores - 1 loop
          --  Label
          CPU_Label_Entities(C) := To_EID("CPULabel" & Img(C));
-         Comps := Add_Entity(Entity_System, CPU_Label_Entities(C));
+         Comps := Add_Entity(Entity_System.all, CPU_Label_Entities(C));
          
          Widget_C.Position_X := 2;
          Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -204,7 +204,7 @@ procedure HTop_Demo is
          
          --  Bar
          CPU_Bar_Entities(C) := To_EID("CPUBar" & Img(C));
-         Comps := Add_Entity(Entity_System, CPU_Bar_Entities(C));
+         Comps := Add_Entity(Entity_System.all, CPU_Bar_Entities(C));
          
          Widget_C.Position_X := 13;
          Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -245,7 +245,7 @@ procedure HTop_Demo is
       
       --  Memory Label
       Mem_Label_Entity := To_EID("MemLabel");
-      Comps := Add_Entity(Entity_System, Mem_Label_Entity);
+      Comps := Add_Entity(Entity_System.all, Mem_Label_Entity);
       
       Widget_C.Position_X := 2;
       Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -282,7 +282,7 @@ procedure HTop_Demo is
       
       --  RAM Bar
       RAM_Bar_Entity := To_EID("RAMBar");
-      Comps := Add_Entity(Entity_System, RAM_Bar_Entity);
+      Comps := Add_Entity(Entity_System.all, RAM_Bar_Entity);
       
       Widget_C.Position_X := 2;
       Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -316,7 +316,7 @@ procedure HTop_Demo is
       
       --  Swap Bar
       SWP_Bar_Entity := To_EID("SWPBar");
-      Comps := Add_Entity(Entity_System, SWP_Bar_Entity);
+      Comps := Add_Entity(Entity_System.all, SWP_Bar_Entity);
       
       Widget_C.Position_X := 2;
       Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -350,7 +350,7 @@ procedure HTop_Demo is
       
       --  Disk Label
       Disk_Label_Entity := To_EID("DiskLabel");
-      Comps := Add_Entity(Entity_System, Disk_Label_Entity);
+      Comps := Add_Entity(Entity_System.all, Disk_Label_Entity);
       
       Widget_C.Position_X := 2;
       Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -387,7 +387,7 @@ procedure HTop_Demo is
       
       --  Disk Bar
       Disk_Bar_Entity := To_EID("DiskBar");
-      Comps := Add_Entity(Entity_System, Disk_Bar_Entity);
+      Comps := Add_Entity(Entity_System.all, Disk_Bar_Entity);
       
       Widget_C.Position_X := 2;
       Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -421,7 +421,7 @@ procedure HTop_Demo is
       
       --  Process Header
       Proc_Header_Entity := To_EID("ProcHeader");
-      Comps := Add_Entity(Entity_System, Proc_Header_Entity);
+      Comps := Add_Entity(Entity_System.all, Proc_Header_Entity);
       
       Widget_C.Position_X := 2;
       Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -462,7 +462,7 @@ procedure HTop_Demo is
       --  Process Rows
       for R in 0 .. 9 loop
          Proc_Row_Entities(R) := To_EID("ProcRow" & Img(R));
-         Comps := Add_Entity(Entity_System, Proc_Row_Entities(R));
+         Comps := Add_Entity(Entity_System.all, Proc_Row_Entities(R));
          
          Widget_C.Position_X := 2;
          Widget_C.Position_Y := TUI_Height(Current_Row);
@@ -685,32 +685,43 @@ procedure HTop_Demo is
       end if;
    end Check_Keyboard;
    
-   task Display_Task;
+   task type Display_Task is
+      entry Start;
+   end Display_Task;
+
    task body Display_Task is
-      Next_Update : Time := Clock;
    begin
-      while Running loop
-         Update_Stats;
-         WidgetBackgroundSystem(Entity_System);
-         TextRenderSystem(Entity_System);
-         ProgressBarRenderSystem(Entity_System);
-         BufferCopySystem(Entity_System);
-         BufferDrawSystem(Entity_System);
-         DoubleBufferFlagSystem(Entity_System);
-         Next_Update := Next_Update + Update_Interval;
-         delay until Next_Update;
-      end loop;
+      accept Start;
+      declare
+         Next_Update : Time := Clock;
+      begin
+         loop
+            exit when not Running;
+            Update_Stats;
+            WidgetBackgroundSystem (Entity_System.all);
+            TextRenderSystem (Entity_System.all);
+            ProgressBarRenderSystem (Entity_System.all);
+            BufferCopySystem (Entity_System.all);
+            BufferDrawSystem (Entity_System.all);
+            DoubleBufferFlagSystem (Entity_System.all);
+            Next_Update := Next_Update + Update_Interval;
+            delay until Next_Update;
+         end loop;
+      end;
    end Display_Task;
 
    --------------------------------------------------------
    -- Main Loop
    --------------------------------------------------------
    Next_Update : Time := Clock;
+
+   DT : Display_Task;
    
 begin
    Initialize_Demo;
    Input_Handling.Input_Reader.Start;
-   
+   Dt.Start;
+
    while Running loop
       Check_Keyboard;
       delay 0.05;
