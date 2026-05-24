@@ -466,6 +466,7 @@ procedure Thuja_Demo is
    ---------------------------------------------------------------------------
    Event   : Input_Event_t;
    Running : Boolean_t := True;
+   Tab_Just_Switched : Boolean_t := False; --Added
 
 begin
    -- Initialize subsystems
@@ -537,6 +538,7 @@ begin
             else
                TabSwitchSystem (World, Next);
             end if;
+            Tab_Just_Switched := True; --Added
 
          -- HTop display controls
          elsif Get_Active_Tab (World) = 0 then
@@ -686,6 +688,12 @@ begin
             end if;
          end if;
       end loop;
+
+      -- Reset backbuffer on the frame after a tab switch
+      if Tab_Just_Switched then
+         ResetBackbufferSystem (World);
+         Tab_Just_Switched := False;
+      end if;
 
       -- Update active tab and re-render
       declare
