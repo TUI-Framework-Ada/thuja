@@ -1,4 +1,5 @@
 {
     "sarif-viewer.connectToGithubCodeScanning": "off",
-    "editor.formatOnPaste": true
+    "editor.formatOnPaste": true,
+    "ada.projectFile": "demos/demos.gpr"
 }
