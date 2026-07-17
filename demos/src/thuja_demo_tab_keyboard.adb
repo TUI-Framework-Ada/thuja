@@ -55,6 +55,7 @@ package body Thuja_demo_tab_keyboard is
 
    --  Persistent tab state
    Pressed_Key      : Character_t         := Character_t'Val (0);
+   Pressed_Cmd      : Command_t           := None;
    Pending_Keys     : SU.Unbounded_String := SU.Null_Unbounded_String;
    Initialized      : Boolean             := False;
 
@@ -423,6 +424,9 @@ package body Thuja_demo_tab_keyboard is
          or Pressed_Key = Character_t'Val (127)
       then
          Set_Key_Color (Entity_List, "BKSP", Color_Pressed_Key);
+      elsif Pressed_Cmd = Up or Pressed_Cmd = Down or Pressed_Cmd = Right
+        or Pressed_Cmd = Left then
+         null;
       elsif Pressed_Key >= ' ' and Pressed_Key <= '~' then
          declare
             Lower : constant Character_t :=
@@ -540,7 +544,15 @@ package body Thuja_demo_tab_keyboard is
       Hex_Str   : constant String_t :=
         "0x" & Hex_Chars (Hi + 1) & Hex_Chars (Lo + 1);
    begin
-      if Pressed_Key >= ' ' and Pressed_Key <= '~' then
+      if Pressed_Cmd = Up then
+         Write ("Last key: UP  [" & Hex_Str & "]");
+      elsif Pressed_Cmd = Down then
+         Write ("Last key: DOWN  [" & Hex_Str & "]");
+      elsif Pressed_Cmd = Right then
+         Write ("Last key: RIGHT  [" & Hex_Str & "]");
+      elsif Pressed_Cmd = Left then
+         Write ("Last key: LEFT  [" & Hex_Str & "]");
+      elsif Pressed_Key >= ' ' and Pressed_Key <= '~' then
          Write ("Last key: '" & Pressed_Key & "'  [" & Hex_Str & "]");
       elsif Pressed_Key = Character_t'Val (9) then
          Write ("Last key: TAB  [0x09]");
@@ -1136,7 +1148,21 @@ package body Thuja_demo_tab_keyboard is
       end if;
 
       Last_Byte := Character_t'Pos (Event.Char_Value);
-      Cmd_Result := Command_Sequence_Handling.Process_Key (Event.Char_Value);
+      --  Inputs that should ignore command sequences
+      if Event.Cmd   = Up
+        or Event.Cmd = Down
+        or Event.Cmd = Right
+        or Event.Cmd = Left
+      then
+         --  Process a null character to clear the command sequence
+         Cmd_Result := Command_Sequence_Handling.Process_Key (Character_t'Val (0));
+         --  Produce result indicating passthrough
+         Cmd_Result := (Kind => Command_Sequence_Handling.Keys_Passed_Through,
+                        Keys => SU."&" (SU.Null_Unbounded_String, Event.Char_Value),
+                        Command_Index => <>);
+      else
+         Cmd_Result := Command_Sequence_Handling.Process_Key (Event.Char_Value);
+      end if;
 
       World.Claim_Writing (Entity_List);
 
@@ -1162,6 +1188,7 @@ package body Thuja_demo_tab_keyboard is
             if SU.Length (Cmd_Result.Keys) > 0 then
                Pressed_Key := SU.Element
                  (Cmd_Result.Keys, SU.Length (Cmd_Result.Keys));
+               Pressed_Cmd := Event.Cmd;
                Update_Key_Colors (Entity_List);
                Update_Ordinary_Status (Entity_List);
             end if;
