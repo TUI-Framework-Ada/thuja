@@ -27,6 +27,23 @@ package body Input_Handling is
       return True;
    end Dequeue;
 
+   --  Remove and return the newest event from the back of the buffer
+   function Pop_Last (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean_t is
+   begin
+      --  Check if buffer is empty
+      if Buffer.Events.Is_Empty then
+         return False;
+      end if;
+
+      --  Get the last (newest) event
+      Event := Buffer.Events.Last_Element;
+
+      --  Remove it from the front
+      Buffer.Events.Delete_Last;
+
+      return True;
+   end Pop_Last;
+
    --  Protected object implementation
    protected body Protected_Input_Buffer_t is
 
@@ -46,6 +63,17 @@ package body Input_Handling is
             Event := (Char_Value => Character_t'Val (0), Modifier => None, Cmd => None);
          end if;
       end Consume;
+
+      --  Remove the most recent event from the buffer (called by input reader)
+      procedure Remove_Last (Event : out Input_Event_t) is
+         Success : Boolean_t;
+      begin
+         Success := Pop_Last (Events, Event);
+         if not Success then
+            --  Use NUL character to indicate no input (not space!)
+            Event := (Char_Value => Character_t'Val (0), Modifier => None, Cmd => None);
+         end if;
+      end Remove_Last;
 
    end Protected_Input_Buffer_t;
 
@@ -81,6 +109,14 @@ package body Input_Handling is
       ASCII_LF  : constant Character_t := Character_t'Val (10);
       ASCII_CR  : constant Character_t := Character_t'Val (13);
       ASCII_ESC : constant Character_t := Character_t'Val (27);
+
+      ARROW_PREFIX      : constant Character_t := Character_t'('[');
+      ARROW_UP          : constant Character_t := Character_t'('A');
+      ARROW_DOWN        : constant Character_t := Character_t'('B');
+      ARROW_RIGHT       : constant Character_t := Character_t'('C');
+      ARROW_LEFT        : constant Character_t := Character_t'('D');
+      Last_Event        : Input_Event_t;
+      Second_Last_Event : Input_Event_t;
 
       Pos : constant Natural_t := Character_t'Pos (C);
    begin
@@ -119,6 +155,41 @@ package body Input_Handling is
          when ASCII_ESC =>
             --  Single ESC quits immediately.
             Cmd := Quit;
+
+         when ARROW_UP .. ARROW_LEFT =>
+            --  Check the last two inputs to see if this is an arrow or not.
+            Input_Buffer.Remove_Last (Last_Event);
+            Input_Buffer.Remove_Last (Second_Last_Event);
+            if Last_Event.Cmd = None and Last_Event.Char_Value = ARROW_PREFIX
+              and Second_Last_Event.Cmd = Quit then
+               --  It was an arrow, switch to the correct arrow direction
+               case C is
+                  when ARROW_UP =>
+                     Cmd := Up;
+
+                  when ARROW_DOWN =>
+                     Cmd := Down;
+
+                  when ARROW_RIGHT =>
+                     Cmd := Right;
+
+                  when ARROW_LEFT =>
+                     Cmd := Left;
+
+                  when others =>
+                     null;
+               end case;
+            else
+               --  Not an arrow, resend the last two events if they exist
+               if Second_Last_Event.Cmd /= None
+                 or Second_Last_Event.Char_Value /= Character_t'Val (0) then
+                  Input_Buffer.Produce (Second_Last_Event);
+               end if;
+               if Last_Event.Cmd /= None
+                 or Last_Event.Char_Value /= Character_t'Val (0) then
+                  Input_Buffer.Produce (Last_Event);
+               end if;
+            end if;
 
          when others =>
             null;  --  Cmd stays None; Has_Command is True.

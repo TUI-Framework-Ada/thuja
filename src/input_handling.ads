@@ -8,7 +8,7 @@ package Input_Handling is
    subtype Natural_t is Natural;
 
    --  Command types that can be generated from input
-   type Command_t is (Tab, Quit, Enter, None);
+   type Command_t is (Tab, Quit, Enter, Up, Down, Right, Left, None);
 
    --  Modifier keys that can accompany a character.
    --  None   : no modifier held (ordinary keypress)
@@ -55,6 +55,10 @@ package Input_Handling is
    --  Returns True if an event was available, False if buffer was empty
    function Dequeue (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean_t;
 
+   --  Remove and return the newest event from the back of the buffer
+   --  Returns True if an event was available, False if buffer was empty
+   function Pop_Last (Buffer : in out Event_Buffer_t; Event : out Input_Event_t) return Boolean_t;
+
    --  Protected object for thread-safe input buffer access
    protected type Protected_Input_Buffer_t is
       --  Add an input event to the buffer
@@ -62,6 +66,9 @@ package Input_Handling is
 
       --  Get the next input event from the buffer
       procedure Consume (Event : out Input_Event_t);
+
+      --  Remove the most recent event from the buffer
+      procedure Remove_Last (Event : out Input_Event_t);
 
    private
       Events : Event_Buffer_t;
