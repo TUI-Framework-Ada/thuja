@@ -576,6 +576,18 @@ begin
                   when Tab    =>
                      Text_Editor.Handle_Tab;
 
+                  when Up     =>
+                     Text_Editor.Handle_Navigation (Character_t'('w'));
+
+                  when Left   =>
+                     Text_Editor.Handle_Navigation (Character_t'('a'));
+
+                  when Down   =>
+                     Text_Editor.Handle_Navigation (Character_t'('s'));
+
+                  when Right  =>
+                     Text_Editor.Handle_Navigation (Character_t'('d'));
+
                   when others =>
                      if Event.Char_Value = Character_t'Val (127)
                        or else Event.Char_Value = Character_t'Val (8)
@@ -590,6 +602,18 @@ begin
                   when Quit   =>
                      Running := False;
                      exit;
+
+                  when Up     =>
+                     Text_Editor.Handle_Navigation (Character_t'('w'));
+
+                  when Left   =>
+                     Text_Editor.Handle_Navigation (Character_t'('a'));
+
+                  when Down   =>
+                     Text_Editor.Handle_Navigation (Character_t'('s'));
+
+                  when Right  =>
+                     Text_Editor.Handle_Navigation (Character_t'('d'));
 
                   when others =>
                      Text_Editor.Handle_Navigation (Event.Char_Value);
@@ -657,7 +681,7 @@ begin
                      exit;
                   end if;
             end case;
-         
+
          elsif Get_Active_Tab (World) = 4 then
             if Event.Cmd = Quit or else Event.Char_Value = Character_t'Val (27)
             then
